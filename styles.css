@@ -678,3 +678,19 @@ body {
         opacity: 1;
     }
 }
+
+/* Video element inside seats */
+[id^="video-"] {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    position: relative;
+}
+
+[id^="video-"] video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
