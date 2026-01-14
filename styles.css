@@ -386,10 +386,9 @@ body {
     background: rgba(0, 0, 0, 0.9);
     padding: 15px;
     border-radius: 10px;
-    min-width: 200px;
-    max-width: 250px;
+    width: 240px; /* Fixed width */
     border: 2px solid rgba(255, 255, 255, 0.3);
-    z-index: 50; /* Above video circle */
+    z-index: 50;
 }
 
 .waiting-lobby-display h3 {
