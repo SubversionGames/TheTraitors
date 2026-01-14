@@ -346,12 +346,24 @@
 
         // Game Phase Functions
         function startGame() {
+            console.log('Start Game clicked!');
+            
             if (confirm('Start the game? This will allow players to select seats.')) {
-                database.ref('game/status').set('started');
-                database.ref('game/phase').set('lobby');
+                console.log('User confirmed, setting game status...');
+                
+                database.ref('game/status').set('started').then(() => {
+                    console.log('Game status set to started');
+                });
+                
+                database.ref('game/phase').set('lobby').then(() => {
+                    console.log('Game phase set to lobby');
+                });
+                
                 document.getElementById('start-game-btn').textContent = 'Game Started';
                 document.getElementById('start-game-btn').disabled = true;
                 alert('Game started! Players can now join and select seats.');
+            } else {
+                console.log('User cancelled');
             }
         }
 
