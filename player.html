@@ -324,8 +324,15 @@
             if (phase === 'lobby' && !currentUser.seat) {
                 modal.classList.add('visible');
                 modal.querySelector('p:last-child').textContent = 'Click an empty seat to join!';
-            } else if (currentUser.seat) {
+            } else {
                 modal.classList.remove('visible');
+            }
+        });
+        
+        // Also hide modal when seat is claimed
+        database.ref('players/' + currentUser.id + '/seat').on('value', (snapshot) => {
+            if (snapshot.val()) {
+                document.getElementById('seat-selection-modal').classList.remove('visible');
             }
         });
 
