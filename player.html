@@ -204,10 +204,14 @@
             if (isMuted) {
                 btn.textContent = '🔇 Unmute';
                 btn.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
-                // Will integrate with Jitsi
             } else {
                 btn.textContent = '🔇 Mute';
                 btn.style.background = 'rgba(255, 255, 255, 0.2)';
+            }
+            
+            // Control Jitsi audio
+            if (window.jitsiAPI) {
+                window.jitsiAPI.executeCommand('toggleAudio');
             }
         }
 
@@ -219,10 +223,14 @@
             if (isVideoOff) {
                 btn.textContent = '📹 Video On';
                 btn.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
-                // Will integrate with Jitsi
             } else {
                 btn.textContent = '📹 Video Off';
                 btn.style.background = 'rgba(255, 255, 255, 0.2)';
+            }
+            
+            // Control Jitsi video
+            if (window.jitsiAPI) {
+                window.jitsiAPI.executeCommand('toggleVideo');
             }
         }
 
