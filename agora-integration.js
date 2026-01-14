@@ -76,7 +76,15 @@ async function initializeAgora() {
         // Play local video in own seat
         const localVideoDiv = document.getElementById(`video-${currentUser.seat}`);
         if (localVideoDiv) {
-            localVideoTrack.play(localVideoDiv);
+            // Clear any existing content
+            localVideoDiv.innerHTML = '';
+            
+            // Play video directly in the div
+            localVideoTrack.play(localVideoDiv, { fit: 'cover' });
+            
+            console.log('Playing local video in seat', currentUser.seat);
+        } else {
+            console.error('Could not find video div for seat', currentUser.seat);
         }
         
         // Update Firebase with video status
@@ -106,8 +114,14 @@ async function handleUserPublished(user, mediaType) {
         const remoteVideoDiv = document.getElementById(`video-${seatNumber}`);
         
         if (remoteVideoDiv) {
-            user.videoTrack.play(remoteVideoDiv);
+            // Clear any existing content
+            remoteVideoDiv.innerHTML = '';
+            
+            // Play video directly in the div
+            user.videoTrack.play(remoteVideoDiv, { fit: 'cover' });
             console.log('Playing video for seat', seatNumber);
+        } else {
+            console.error('Could not find video div for seat', seatNumber);
         }
     }
     
