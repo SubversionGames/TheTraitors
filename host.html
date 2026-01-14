@@ -519,6 +519,26 @@
         // Initialize
         updateHostModeDisplay();
         
+        // Auto-assign host to Seat 1
+        currentUser.seat = 1;
+        currentUser.name = 'Host';
+        sessionStorage.setItem('playerSeat', '1');
+        sessionStorage.setItem('playerName', 'Host');
+        
+        // Register host in Firebase
+        database.ref('players/host').set({
+            id: 'host',
+            name: 'Host',
+            seat: 1,
+            room: 'main',
+            status: 'active',
+            isHost: true,
+            joinedAt: Date.now()
+        });
+        
+        // Listen for timer updates
+        database.ref('game/timer').on('value', (snapshot) => {
+        
         // Listen for timer updates
         database.ref('game/timer').on('value', (snapshot) => {
             const timer = snapshot.val();
