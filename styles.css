@@ -232,20 +232,20 @@ body {
     flex: 1;
     width: 100%;
     display: flex;
-    justify-content: flex-start; /* Changed from center to flex-start */
+    justify-content: center;
     align-items: center;
     position: relative;
-    padding: 20px 20px 20px 10px; /* Less padding on left */
+    padding: 40px; /* Increased from 20px */
     overflow: visible;
 }
 
 .video-circle {
     position: relative;
-    width: 98%;
-    max-width: 1800px;
-    height: 95%;
-    max-height: 1200px;
-    margin-left: 0; /* Align to left instead of center */
+    width: 92%; /* Reduced from 98% */
+    max-width: 1600px;
+    height: 88%; /* Reduced from 95% */
+    max-height: 1000px;
+    margin: 0 auto;
 }
 
 /* Individual Video Seats */
