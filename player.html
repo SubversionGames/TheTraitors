@@ -152,8 +152,7 @@
 
     <!-- Game Logic -->
     <script src="game.js"></script>
-    <script src="video-placeholder.js"></script>
-    <script src="jitsi-integration.js"></script>
+    <script src="agora-integration.js"></script>
 
     <!-- Player-Specific Logic -->
     <script>
@@ -201,8 +200,8 @@
         }
 
         // Mute toggle
-        function toggleMute() {
-            isMuted = !isMuted;
+        async function toggleMute() {
+            const isMuted = await toggleAudio();
             const btn = document.getElementById('mute-btn');
             
             if (isMuted) {
@@ -212,16 +211,11 @@
                 btn.textContent = '🔇 Mute';
                 btn.style.background = 'rgba(255, 255, 255, 0.2)';
             }
-            
-            // Control Jitsi audio
-            if (window.jitsiAPI) {
-                window.jitsiAPI.executeCommand('toggleAudio');
-            }
         }
 
         // Video toggle
-        function toggleVideo() {
-            isVideoOff = !isVideoOff;
+        async function toggleVideo() {
+            const isVideoOff = await toggleVideo();
             const btn = document.getElementById('video-btn');
             
             if (isVideoOff) {
@@ -230,11 +224,6 @@
             } else {
                 btn.textContent = '📹 Video Off';
                 btn.style.background = 'rgba(255, 255, 255, 0.2)';
-            }
-            
-            // Control Jitsi video
-            if (window.jitsiAPI) {
-                window.jitsiAPI.executeCommand('toggleVideo');
             }
         }
 
