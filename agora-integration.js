@@ -10,6 +10,11 @@ let remoteUsers = {};
 
 // Initialize Agora
 async function initializeAgora() {
+    console.log('=== AGORA INIT START ===');
+    console.log('Current user role:', currentUser.role);
+    console.log('Current user seat:', currentUser.seat);
+    console.log('Current user name:', currentUser.name);
+    
     const role = currentUser.role;
     
     if (role === 'viewer' || (role === 'player' && currentUser.status === 'ghost')) {
@@ -25,6 +30,14 @@ async function initializeAgora() {
                 initializeAgora();
             }
         });
+        return;
+    }
+    
+    // Host should have seat by now
+    if (!currentUser.seat) {
+        console.error('ERROR: No seat assigned! Cannot join video.');
+        console.log('Waiting 2 seconds and trying again...');
+        setTimeout(initializeAgora, 2000);
         return;
     }
     
@@ -163,5 +176,5 @@ async function leaveAgoraCall() {
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         initializeAgora();
-    }, 1000);
+    }, 2000);
 });
