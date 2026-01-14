@@ -251,8 +251,8 @@ body {
 /* Individual Video Seats */
 .video-seat {
     position: absolute;
-    width: 210px; /* Half of 420px */
-    height: 210px; /* Half of 420px */
+    width: 175px; /* Reduced from 210px */
+    height: 175px; /* Reduced from 210px */
     border: 4px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     overflow: visible;
@@ -271,12 +271,11 @@ body {
 }
 
 .video-seat.host {
-    width: 210px; /* Same size as players now */
-    height: 210px; /* Same size as players now */
+    width: 175px; /* Same size as players */
+    height: 175px; /* Same size as players */
     border-color: #667eea;
     border-width: 5px;
     box-shadow: 0 0 30px rgba(102, 126, 234, 0.5);
-    /* Position set inline in HTML - top left */
     z-index: 10;
 }
 
@@ -322,12 +321,11 @@ body {
     border-radius: 50%;
 }
 
-/* When seat is empty, show text */
 .video-seat.empty::before {
     content: 'EMPTY';
     position: absolute;
     color: rgba(255, 255, 255, 0.5);
-    font-size: 1.2rem;
+    font-size: 1rem;
     font-weight: bold;
     text-align: center;
     z-index: 1;
@@ -335,13 +333,13 @@ body {
 
 .seat-label {
     position: absolute;
-    bottom: -45px;
+    bottom: -40px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.9);
-    padding: 6px 12px;
+    padding: 5px 10px;
     border-radius: 6px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     white-space: nowrap;
     pointer-events: none;
     z-index: 100;
@@ -349,7 +347,7 @@ body {
 }
 
 .seat-number {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: #999;
     display: block;
     margin-bottom: 2px;
@@ -358,20 +356,19 @@ body {
 .player-name {
     font-weight: bold;
     color: #fff;
-    font-size: 1rem;
+    font-size: 0.9rem;
     display: block;
 }
 
-/* Vote indicator under name */
 .vote-indicator {
     position: absolute;
-    bottom: -70px;
+    bottom: -65px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.9);
-    padding: 5px 12px;
+    padding: 4px 10px;
     border-radius: 6px;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     display: none;
     z-index: 100;
 }
@@ -380,46 +377,112 @@ body {
     display: block;
 }
 
-/* Waiting Lobby Display */
-.waiting-lobby-display {
+/* Tab System (Right Side) */
+.tab-container {
     position: fixed;
-    top: 100px; /* Starting position */
-    left: 20px; /* Starting position */
-    background: rgba(0, 0, 0, 0.95);
-    padding: 15px;
-    border-radius: 10px;
-    width: 240px;
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    z-index: 150; /* Above everything */
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.7);
-    transition: width 0.3s ease, height 0.3s ease;
+    right: 0;
+    top: 80px;
+    bottom: 0;
+    z-index: 100;
+    display: flex;
 }
 
-.waiting-lobby-display.collapsed {
-    width: 240px;
-    height: auto;
+/* Tab Buttons */
+.tab-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: rgba(0, 0, 0, 0.9);
+    border-left: 2px solid rgba(255, 255, 255, 0.2);
 }
 
-.waiting-lobby-display h3 {
-    margin: 0 0 10px 0;
-    font-size: 1rem;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
-    padding-bottom: 5px;
+.tab-button {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    padding: 20px 12px;
+    background: rgba(0, 0, 0, 0.8);
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     color: #fff;
-    user-select: none; /* Prevent text selection while dragging */
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    min-height: 150px;
 }
 
-#lobby-list {
+.tab-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.tab-button.active {
+    background: rgba(102, 126, 234, 0.3);
+    border-left: 3px solid #667eea;
+}
+
+/* Tab Content Panel */
+.tab-content-panel {
+    width: 0;
+    background: rgba(0, 0, 0, 0.95);
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: width 0.3s ease;
+    box-shadow: -5px 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.tab-content-panel.open {
+    width: 320px;
+    padding: 20px;
+    border-left: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.tab-content h3 {
+    margin: 0 0 15px 0;
+    font-size: 1.2rem;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 10px;
+}
+
+.control-section {
+    margin-bottom: 20px;
+}
+
+.control-section h4 {
+    font-size: 0.95rem;
+    color: #bbb;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+/* Floating Windows (Waiting Lobby & Vote Count in tabs) */
+.floating-window {
+    margin-bottom: 15px;
+}
+
+.floating-window h4 {
+    font-size: 1rem;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.floating-window-content {
     font-size: 0.85rem;
     color: #bbb;
+    max-height: 200px;
+    overflow-y: auto;
 }
 
-#lobby-list div {
+.floating-window-content div {
     padding: 5px 0;
-}
-
-.window-content {
-    transition: all 0.3s ease;
 }
 
 /* Overlay Screens */
@@ -498,53 +561,6 @@ body {
     display: flex;
     gap: 10px;
     justify-content: flex-end;
-}
-
-/* Vote Tally Display */
-.vote-tally {
-    position: fixed;
-    top: 100px; /* Starting position */
-    right: 20px; /* Starting position */
-    background: rgba(0, 0, 0, 0.95);
-    padding: 15px;
-    border-radius: 10px;
-    min-width: 200px;
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    display: none;
-    z-index: 150; /* Above everything */
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.7);
-    transition: width 0.3s ease, height 0.3s ease;
-}
-
-.vote-tally.visible {
-    display: block;
-}
-
-.vote-tally.collapsed {
-    width: 200px;
-    height: auto;
-}
-
-.vote-tally h3 {
-    margin: 0 0 10px 0;
-    font-size: 1rem;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
-    padding-bottom: 5px;
-    user-select: none; /* Prevent text selection while dragging */
-}
-
-.vote-item {
-    padding: 5px 0;
-    font-size: 0.9rem;
-    font-weight: bold;
-}
-
-.collapse-btn {
-    transition: transform 0.3s ease;
-}
-
-.collapse-btn:hover {
-    transform: scale(1.2);
 }
 
 /* Responsive Design */
