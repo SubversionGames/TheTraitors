@@ -236,11 +236,11 @@ function generateVideoSeats() {
     if (!circle) return;
     
     // Seat 1 (Host) is already in HTML at top left
-    // Generate seats 2-25 with maximum spacing to prevent overlap
+    // Generate seats 2-25 with proper spacing that fits on screen
     
     const totalSeats = 24; // Seats 2-25 (24 player seats)
-    const radiusX = 49.5; // Maximum horizontal spread
-    const radiusY = 47; // Maximum vertical spread  
+    const radiusX = 45; // Reduced from 49.5
+    const radiusY = 43; // Reduced from 47
     const centerX = 50;
     const centerY = 50;
     
@@ -279,7 +279,7 @@ function generateVideoSeats() {
         circle.appendChild(seat);
     }
     
-    console.log('Generated 24 player seats at 175px with maximum spacing');
+    console.log('Generated 24 player seats at 175px with proper fit');
 }
 
 function handleSeatClick(seatNumber) {
