@@ -130,7 +130,41 @@ function createJitsiContainer() {
         border-radius: 10px;
         overflow: hidden;
         box-shadow: 0 5px 30px rgba(0,0,0,0.5);
+        display: none;
     `;
+    
+    // Add toggle button
+    const toggleBtn = document.createElement('button');
+    toggleBtn.id = 'jitsi-toggle';
+    toggleBtn.textContent = '📹 Show Video';
+    toggleBtn.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+        z-index: 10000;
+        box-shadow: 0 3px 15px rgba(0,0,0,0.3);
+    `;
+    
+    toggleBtn.onclick = () => {
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            toggleBtn.textContent = '📹 Hide Video';
+            toggleBtn.style.bottom = '340px'; // Move button above video
+        } else {
+            container.style.display = 'none';
+            toggleBtn.textContent = '📹 Show Video';
+            toggleBtn.style.bottom = '20px'; // Move button back down
+        }
+    };
+    
+    document.body.appendChild(toggleBtn);
     document.body.appendChild(container);
     return container;
 }
