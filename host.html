@@ -346,8 +346,10 @@
         // Game Phase Functions
         function startGame() {
             if (confirm('Start the game? This will allow players to select seats.')) {
-                database.ref('game/status').set('lobby');
+                database.ref('game/status').set('started');
                 database.ref('game/phase').set('lobby');
+                document.getElementById('start-game-btn').textContent = 'Game Started';
+                document.getElementById('start-game-btn').disabled = true;
                 alert('Game started! Players can now join and select seats.');
             }
         }
