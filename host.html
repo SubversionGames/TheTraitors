@@ -239,6 +239,15 @@
             window.location.href = 'index.html';
         }
 
+        // Reset game state when host first loads (ADD THIS SECTION)
+        database.ref('game/status').once('value', (snapshot) => {
+            if (!snapshot.val() || snapshot.val() === 'started') {
+                // Reset to waiting state
+                database.ref('game/status').set('waiting');
+                database.ref('game/phase').set('waiting');
+            }
+        });
+
         // Initialize host interface
         let isProduction = sessionStorage.getItem('isProduction') === 'true';
         
