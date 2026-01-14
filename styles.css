@@ -230,7 +230,7 @@ body {
 /* Video Circle Container */
 .video-circle-container {
     flex: 1;
-    width: 100%; /* Take full width now */
+    width: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -241,10 +241,10 @@ body {
 
 .video-circle {
     position: relative;
-    width: 95%; /* Increased from 90% */
-    max-width: 1600px; /* Increased */
-    height: 90%; /* Increased */
-    max-height: 1000px; /* Increased */
+    width: 98%; /* Increased to nearly full width */
+    max-width: 1800px; /* Increased */
+    height: 95%; /* Increased to nearly full height */
+    max-height: 1200px; /* Increased */
     margin: 0 auto;
 }
 
@@ -382,16 +382,22 @@ body {
 
 /* Waiting Lobby Display */
 .waiting-lobby-display {
-    position: fixed; /* Changed from absolute */
-    top: 80px; /* Below top bar */
-    left: 20px;
-    background: rgba(0, 0, 0, 0.95); /* More opaque */
+    position: fixed;
+    top: 100px; /* Starting position */
+    left: 20px; /* Starting position */
+    background: rgba(0, 0, 0, 0.95);
     padding: 15px;
     border-radius: 10px;
     width: 240px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    z-index: 100; /* Float above video seats */
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    z-index: 150; /* Above everything */
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.7);
+    transition: width 0.3s ease, height 0.3s ease;
+}
+
+.waiting-lobby-display.collapsed {
+    width: 240px;
+    height: auto;
 }
 
 .waiting-lobby-display h3 {
@@ -400,6 +406,7 @@ body {
     border-bottom: 2px solid rgba(255, 255, 255, 0.2);
     padding-bottom: 5px;
     color: #fff;
+    user-select: none; /* Prevent text selection while dragging */
 }
 
 #lobby-list {
@@ -409,6 +416,10 @@ body {
 
 #lobby-list div {
     padding: 5px 0;
+}
+
+.window-content {
+    transition: all 0.3s ease;
 }
 
 /* Side Panel for Rooms/Controls */
@@ -548,21 +559,27 @@ body {
 
 /* Vote Tally Display */
 .vote-tally {
-    position: fixed; /* Changed from absolute */
-    top: 80px; /* Below top bar */
-    right: 320px; /* Next to side panel */
-    background: rgba(0, 0, 0, 0.95); /* More opaque */
+    position: fixed;
+    top: 100px; /* Starting position */
+    right: 20px; /* Starting position */
+    background: rgba(0, 0, 0, 0.95);
     padding: 15px;
     border-radius: 10px;
     min-width: 200px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.4);
     display: none;
-    z-index: 100; /* Float above video seats */
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+    z-index: 150; /* Above everything */
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.7);
+    transition: width 0.3s ease, height 0.3s ease;
 }
 
 .vote-tally.visible {
     display: block;
+}
+
+.vote-tally.collapsed {
+    width: 200px;
+    height: auto;
 }
 
 .vote-tally h3 {
@@ -570,12 +587,21 @@ body {
     font-size: 1rem;
     border-bottom: 2px solid rgba(255, 255, 255, 0.2);
     padding-bottom: 5px;
+    user-select: none; /* Prevent text selection while dragging */
 }
 
 .vote-item {
     padding: 5px 0;
     font-size: 0.9rem;
     font-weight: bold;
+}
+
+.collapse-btn {
+    transition: transform 0.3s ease;
+}
+
+.collapse-btn:hover {
+    transform: scale(1.2);
 }
 
 /* Responsive Design */
