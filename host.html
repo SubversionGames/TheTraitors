@@ -564,9 +564,6 @@
         
         // Listen for timer updates
         database.ref('game/timer').on('value', (snapshot) => {
-        
-        // Listen for timer updates
-        database.ref('game/timer').on('value', (snapshot) => {
             const timer = snapshot.val();
             if (timer) {
                 document.getElementById('phase-name').textContent = timer.phase;
