@@ -1,1 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subversion: The Traitors</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="landing-page">
+    <div class="landing-container">
+        <h1 class="game-title">SUBVERSION: THE TRAITORS</h1>
+        <p class="game-subtitle">Choose Your Role</p>
+        
+        <div class="role-selection">
+            <!-- Host Login -->
+            <div class="role-card">
+                <h2>🎭 Host</h2>
+                <p>Control the game and manage players</p>
+                <input type="password" id="host-password" placeholder="Enter Host Password" class="password-input">
+                <button onclick="loginAsHost()" class="role-button host-button">Enter as Host</button>
+                <p class="error-message" id="host-error"></p>
+            </div>
 
+            <!-- Player Login -->
+            <div class="role-card">
+                <h2>🎮 Player</h2>
+                <p>Join the game and compete</p>
+                <input type="password" id="player-password" placeholder="Enter Player Password" class="password-input">
+                <button onclick="loginAsPlayer()" class="role-button player-button">Enter as Player</button>
+                <p class="error-message" id="player-error"></p>
+            </div>
+
+            <!-- Viewer Login (No Password) -->
+            <div class="role-card">
+                <h2>👁️ Viewer</h2>
+                <p>Watch the game unfold</p>
+                <input type="text" id="viewer-name" placeholder="Enter Your Name" class="password-input" maxlength="12">
+                <button onclick="loginAsViewer()" class="role-button viewer-button">Enter as Viewer</button>
+                <p class="error-message" id="viewer-error"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <!-- Firebase Config -->
+    <script src="firebase-config.js"></script>
+
+    <!-- Landing Page Logic -->
+    <script>
+        function loginAsHost() {
+            const password = document.getElementById('host-password').value;
+            const errorElement = document.getElementById('host-error');
+            
+            if (password === window.gamePasswords.host) {
+                // Store role in sessionStorage
+                sessionStorage.setItem('userRole', 'host');
+                sessionStorage.setItem('isProduction', 'false'); // Default to Main Host
+                window.location.href = 'host.html';
+            } else {
+                errorElement.textContent = 'Incorrect password';
+                errorElement.style.display = 'block';
+            }
+        }
+
+        function loginAsPlayer() {
+            const password = document.getElementById('player-password').value;
+            const errorElement = document.getElementById('player-error');
+            
+            if (password === window.gamePasswords.player) {
+                // Store role in sessionStorage
+                sessionStorage.setItem('userRole', 'player');
+                window.location.href = 'player.html';
+            } else {
+                errorElement.textContent = 'Incorrect password';
+                errorElement.style.display = 'block';
+            }
+        }
+
+        function loginAsViewer() {
+            const name = document.getElementById('viewer-name').value.trim();
+            const errorElement = document.getElementById('viewer-error');
+            
+            if (name.length === 0) {
+                errorElement.textContent = 'Please enter your name';
+                errorElement.style.display = 'block';
+                return;
+            }
+            
+            if (name.length > 12) {
+                errorElement.textContent = 'Name must be 12 characters or less';
+                errorElement.style.display = 'block';
+                return;
+            }
+            
+            // Store role and name in sessionStorage
+            sessionStorage.setItem('userRole', 'viewer');
+            sessionStorage.setItem('viewerName', name);
+            window.location.href = 'viewer.html';
+        }
+
+        // Allow Enter key to submit
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('host-password').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') loginAsHost();
+            });
+            
+            document.getElementById('player-password').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') loginAsPlayer();
+            });
+            
+            document.getElementById('viewer-name').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') loginAsViewer();
+            });
+        });
+    </script>
+</body>
+</html>
