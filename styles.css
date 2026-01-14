@@ -249,9 +249,9 @@ body {
 /* Individual Video Seats */
 .video-seat {
     position: absolute;
-    width: 140px; /* Increased from 100px */
-    height: 140px; /* Increased from 100px */
-    border: 3px solid rgba(255, 255, 255, 0.3);
+    width: 420px; /* 3x of 140px */
+    height: 420px; /* 3x of 140px */
+    border: 4px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     overflow: visible;
     background: rgba(0, 0, 0, 0.7);
@@ -265,17 +265,21 @@ body {
 
 .video-seat:hover {
     border-color: rgba(255, 255, 255, 0.6);
-    transform: translate(-50%, -50%) scale(1.1) !important;
+    box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
 }
 
 .video-seat.host {
-    width: 160px;
-    height: 160px;
+    width: 400px; /* 2.5x of 160px */
+    height: 400px; /* 2.5x of 160px */
     border-color: #667eea;
-    box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
-    top: 5% !important; /* Separate from oval - top center */
-    left: 50% !important; /* Centered horizontally */
+    border-width: 5px;
+    box-shadow: 0 0 30px rgba(102, 126, 234, 0.5);
+    /* Position set inline in HTML - top left next to waiting lobby */
     z-index: 10;
+}
+
+.video-seat.host:hover {
+    box-shadow: 0 0 40px rgba(102, 126, 234, 0.7);
 }
 
 .video-seat.empty {
@@ -294,13 +298,19 @@ body {
 
 .video-seat.speaking {
     border-color: #FFD700;
-    box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
     animation: pulse 1s infinite;
 }
 
 @keyframes pulse {
-    0%, 100% { transform: translate(-50%, -50%) scale(1); }
-    50% { transform: translate(-50%, -50%) scale(1.08); }
+    0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+    }
+    50% { 
+        transform: scale(1.05);
+        box-shadow: 0 0 50px rgba(255, 215, 0, 1);
+    }
 }
 
 .video-seat video {
@@ -315,7 +325,7 @@ body {
     content: 'EMPTY';
     position: absolute;
     color: rgba(255, 255, 255, 0.5);
-    font-size: 0.8rem;
+    font-size: 2rem; /* Increased from 0.8rem */
     font-weight: bold;
     text-align: center;
     z-index: 1;
@@ -323,13 +333,13 @@ body {
 
 .seat-label {
     position: absolute;
-    bottom: -35px;
+    bottom: -50px; /* Moved further down */
     left: 50%;
     transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.9);
-    padding: 5px 12px;
-    border-radius: 5px;
-    font-size: 0.8rem;
+    padding: 8px 16px; /* Larger padding */
+    border-radius: 8px;
+    font-size: 1.2rem; /* Increased from 0.8rem */
     white-space: nowrap;
     pointer-events: none;
     z-index: 100;
@@ -337,28 +347,29 @@ body {
 }
 
 .seat-number {
-    font-size: 0.75rem;
+    font-size: 1rem; /* Increased from 0.75rem */
     color: #999;
     display: block;
-    margin-bottom: 2px;
+    margin-bottom: 3px;
 }
 
 .player-name {
     font-weight: bold;
     color: #fff;
+    font-size: 1.3rem; /* Increased */
     display: block;
 }
 
 /* Vote indicator under name */
 .vote-indicator {
     position: absolute;
-    bottom: -60px;
+    bottom: -80px; /* Moved further down */
     left: 50%;
     transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.9);
-    padding: 4px 10px;
-    border-radius: 5px;
-    font-size: 0.75rem;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 1.1rem; /* Increased from 0.75rem */
     display: none;
     z-index: 100;
 }
