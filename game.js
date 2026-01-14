@@ -235,14 +235,14 @@ function generateVideoSeats() {
     const circle = document.getElementById('video-circle');
     if (!circle) return;
     
-    // Seat 1 (Host) is already in HTML at top center
-    // Generate seats 2-25 in an oval
+    // Seat 1 (Host) is already in HTML at top left
+    // Generate seats 2-25 in a large oval with more spacing
     
     const totalSeats = 24; // Seats 2-25 (24 player seats)
-    const radiusX = 42; // Horizontal radius (percentage)
-    const radiusY = 38; // Vertical radius (percentage) - creates oval
+    const radiusX = 48; // Horizontal radius (percentage) - increased for spacing
+    const radiusY = 44; // Vertical radius (percentage) - increased for spacing
     const centerX = 50;
-    const centerY = 55; // Shifted down from center to make room for host
+    const centerY = 50; // Back to true center since host is now separate
     
     // Start from top and go clockwise
     const startAngle = -90; // Start at top
@@ -279,7 +279,7 @@ function generateVideoSeats() {
         circle.appendChild(seat);
     }
     
-    console.log('Generated 24 player seats in oval formation');
+    console.log('Generated 24 player seats in large oval formation');
 }
 
 function handleSeatClick(seatNumber) {
