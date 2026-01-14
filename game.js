@@ -239,8 +239,8 @@ function generateVideoSeats() {
     // Generate seats 2-25 with proper spacing that fits on screen
     
     const totalSeats = 24; // Seats 2-25 (24 player seats)
-    const radiusX = 45; // Reduced from 49.5
-    const radiusY = 43; // Reduced from 47
+    const radiusX = 49.5; // Reduced from 49.5
+    const radiusY = 47; // Reduced from 47
     const centerX = 50;
     const centerY = 50;
     
