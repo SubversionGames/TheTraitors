@@ -1,3 +1,4 @@
+/*
 // ============================================
 // JITSI MEET VIDEO INTEGRATION
 // ============================================
@@ -197,3 +198,4 @@ document.addEventListener('DOMContentLoaded', () => {
         initializeJitsi();
     }, 1000);
 });
+*/
