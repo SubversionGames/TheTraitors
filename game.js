@@ -239,8 +239,8 @@ function generateVideoSeats() {
     // Generate seats 2-25 in a very large oval with maximum spacing
     
     const totalSeats = 24; // Seats 2-25 (24 player seats)
-    const radiusX = 48; // Horizontal radius (percentage)
-    const radiusY = 46; // Vertical radius (percentage)
+    const radiusX = 49; // Horizontal radius (percentage) - nearly full width
+    const radiusY = 48; // Vertical radius (percentage) - nearly full height
     const centerX = 50;
     const centerY = 50;
     
@@ -279,7 +279,7 @@ function generateVideoSeats() {
         circle.appendChild(seat);
     }
     
-    console.log('Generated 24 player seats in large oval - overlays float above');
+    console.log('Generated 24 player seats in maximum-size oval');
 }
 
 function handleSeatClick(seatNumber) {
