@@ -235,15 +235,15 @@ body {
     justify-content: center;
     align-items: center;
     position: relative;
-    padding: 40px; /* Increased from 20px */
+    padding: 10px; /* Increased from 20px */
     overflow: visible;
 }
 
 .video-circle {
     position: relative;
-    width: 92%; /* Reduced from 98% */
+    width: 98%; /* Reduced from 98% */
     max-width: 1600px;
-    height: 88%; /* Reduced from 95% */
+    height: 95%; /* Reduced from 95% */
     max-height: 1000px;
     margin: 0 auto;
 }
