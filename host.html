@@ -69,88 +69,117 @@
                 </div>
             </div>
 
-            <!-- Side Panel -->
-            <div class="side-panel">
-                <h3>Game Controls</h3>
+            <!-- Tab System (Right Side) -->
+            <div class="tab-container">
+                <!-- Tab Buttons -->
+                <div class="tab-buttons">
+                    <button class="tab-button active" onclick="switchTab('game-controls')">Game Controls</button>
+                    <button class="tab-button" onclick="switchTab('waiting-lobby')">Waiting Lobby</button>
+                    <button class="tab-button" onclick="switchTab('vote-count')">Vote Count</button>
+                </div>
                 
-                <!-- Phase Controls -->
-                <div class="control-section">
-                    <h4>Phase Control</h4>
-                    <button onclick="setPhase('breakfast')" class="control-button" style="width: 100%; margin-bottom: 10px;">
-                        Begin Breakfast
-                    </button>
-                    <button onclick="setPhase('talk')" class="control-button" style="width: 100%; margin-bottom: 10px;">
-                        Talk Phase
-                    </button>
-                    <button onclick="setPhase('deliberation')" class="control-button" style="width: 100%; margin-bottom: 10px;">
-                        Deliberation
-                    </button>
-                    <button onclick="setPhase('night')" class="control-button danger" style="width: 100%; margin-bottom: 10px;">
-                        Go To Night
-                    </button>
-                </div>
-
-                <!-- Voting Controls -->
-                <div class="control-section" style="margin-top: 20px;">
-                    <h4>Voting</h4>
-                    <button onclick="startVoting()" class="control-button primary" style="width: 100%; margin-bottom: 10px;">
-                        Start Vote
-                    </button>
-                    <button onclick="revealVotes()" class="control-button" style="width: 100%; margin-bottom: 10px;" id="reveal-votes-btn" disabled>
-                        Reveal Votes
-                    </button>
-                    <button onclick="selectFirstRevealer()" class="control-button" style="width: 100%; margin-bottom: 10px;" id="select-revealer-btn" disabled>
-                        Select First Revealer
-                    </button>
-                </div>
-
-                <!-- Circle of Truth -->
-                <div class="control-section" style="margin-top: 20px;">
-                    <h4>Circle of Truth</h4>
-                    <button onclick="selectForCircleOfTruth()" class="control-button danger" style="width: 100%; margin-bottom: 10px;">
-                        Select Player
-                    </button>
-                    <button onclick="makeGhost()" class="control-button" style="width: 100%; margin-bottom: 10px;" id="make-ghost-btn" disabled>
-                        Make Ghost
-                    </button>
-                </div>
-
-                <!-- Turret Controls -->
-                <div class="control-section" style="margin-top: 20px;">
-                    <h4>Turret</h4>
-                    <button onclick="inviteToTurret()" class="control-button" style="width: 100%; margin-bottom: 10px;">
-                        Invite to Turret
-                    </button>
-                    <div id="turret-list" style="margin-top: 10px; font-size: 0.85rem; color: #bbb;">
-                        <strong>In Turret:</strong>
-                        <div id="turret-players">None</div>
+                <!-- Tab Content Panel -->
+                <div class="tab-content-panel" id="tab-panel">
+                    <!-- Game Controls Tab -->
+                    <div class="tab-content active" id="game-controls">
+                        <h3>Game Controls</h3>
+                        
+                        <!-- Phase Controls -->
+                        <div class="control-section">
+                            <h4>Phase Control</h4>
+                            <button onclick="setPhase('breakfast')" class="control-button" style="width: 100%; margin-bottom: 10px;">
+                                Begin Breakfast
+                            </button>
+                            <button onclick="setPhase('talk')" class="control-button" style="width: 100%; margin-bottom: 10px;">
+                                Talk Phase
+                            </button>
+                            <button onclick="setPhase('deliberation')" class="control-button" style="width: 100%; margin-bottom: 10px;">
+                                Deliberation
+                            </button>
+                            <button onclick="setPhase('night')" class="control-button danger" style="width: 100%; margin-bottom: 10px;">
+                                Go To Night
+                            </button>
+                        </div>
+    
+                        <!-- Voting Controls -->
+                        <div class="control-section">
+                            <h4>Voting</h4>
+                            <button onclick="startVoting()" class="control-button primary" style="width: 100%; margin-bottom: 10px;">
+                                Start Vote
+                            </button>
+                            <button onclick="revealVotes()" class="control-button" style="width: 100%; margin-bottom: 10px;" id="reveal-votes-btn" disabled>
+                                Reveal Votes
+                            </button>
+                            <button onclick="selectFirstRevealer()" class="control-button" style="width: 100%; margin-bottom: 10px;" id="select-revealer-btn" disabled>
+                                Select First Revealer
+                            </button>
+                        </div>
+    
+                        <!-- Circle of Truth -->
+                        <div class="control-section">
+                            <h4>Circle of Truth</h4>
+                            <button onclick="selectForCircleOfTruth()" class="control-button danger" style="width: 100%; margin-bottom: 10px;">
+                                Select Player
+                            </button>
+                            <button onclick="makeGhost()" class="control-button" style="width: 100%; margin-bottom: 10px;" id="make-ghost-btn" disabled>
+                                Make Ghost
+                            </button>
+                        </div>
+    
+                        <!-- Turret Controls -->
+                        <div class="control-section">
+                            <h4>Turret</h4>
+                            <button onclick="inviteToTurret()" class="control-button" style="width: 100%; margin-bottom: 10px;">
+                                Invite to Turret
+                            </button>
+                            <div id="turret-list" style="margin-top: 10px; font-size: 0.85rem; color: #bbb;">
+                                <strong>In Turret:</strong>
+                                <div id="turret-players">None</div>
+                            </div>
+                        </div>
+    
+                        <!-- Room Limits -->
+                        <div class="control-section">
+                            <h4>Room Limits</h4>
+                            <div style="font-size: 0.85rem; color: #bbb;">
+                                <div>Main: <input type="number" id="limit-main" value="24" min="1" max="24" style="width: 50px;"></div>
+                                <div>Kitchen: <input type="number" id="limit-kitchen" value="5" min="1" max="10" style="width: 50px;"></div>
+                                <div>Library: <input type="number" id="limit-library" value="5" min="1" max="10" style="width: 50px;"></div>
+                                <div>Living Room: <input type="number" id="limit-living" value="5" min="1" max="10" style="width: 50px;"></div>
+                                <div>Courtyard: <input type="number" id="limit-courtyard" value="5" min="1" max="10" style="width: 50px;"></div>
+                                <div>Bathroom: <input type="number" id="limit-bathroom" value="3" min="1" max="10" style="width: 50px;"></div>
+                                <div>Gym: <input type="number" id="limit-gym" value="5" min="1" max="10" style="width: 50px;"></div>
+                            </div>
+                            <button onclick="saveRoomLimits()" class="control-button" style="width: 100%; margin-top: 10px;">
+                                Save Limits
+                            </button>
+                        </div>
+    
+                        <!-- Announcement -->
+                        <div class="control-section">
+                            <h4>Announcement</h4>
+                            <textarea id="announcement-text" placeholder="Type announcement..." style="width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 5px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3); min-height: 60px;"></textarea>
+                            <button onclick="sendAnnouncement()" class="control-button primary" style="width: 100%;">
+                                Send to All Rooms
+                            </button>
+                        </div>
                     </div>
-                </div>
-
-                <!-- Room Limits -->
-                <div class="control-section" style="margin-top: 20px;">
-                    <h4>Room Limits</h4>
-                    <div style="font-size: 0.85rem; color: #bbb;">
-                        <div>Main Roundtable: <input type="number" id="limit-main" value="24" min="1" max="24" style="width: 50px;"></div>
-                        <div>Kitchen: <input type="number" id="limit-kitchen" value="5" min="1" max="10" style="width: 50px;"></div>
-                        <div>Library: <input type="number" id="limit-library" value="5" min="1" max="10" style="width: 50px;"></div>
-                        <div>Living Room: <input type="number" id="limit-living" value="5" min="1" max="10" style="width: 50px;"></div>
-                        <div>Courtyard: <input type="number" id="limit-courtyard" value="5" min="1" max="10" style="width: 50px;"></div>
-                        <div>Bathroom: <input type="number" id="limit-bathroom" value="3" min="1" max="10" style="width: 50px;"></div>
-                        <div>Gym: <input type="number" id="limit-gym" value="5" min="1" max="10" style="width: 50px;"></div>
+    
+                    <!-- Waiting Lobby Tab -->
+                    <div class="tab-content" id="waiting-lobby">
+                        <h3>Waiting Lobby</h3>
+                        <div class="floating-window-content" id="lobby-list">
+                            <div style="color: #666;">No players in lobby</div>
+                        </div>
                     </div>
-                    <button onclick="saveRoomLimits()" class="control-button" style="width: 100%; margin-top: 10px;">
-                        Save Limits
-                    </button>
-                </div>
-
-                <!-- Announcement -->
-                <div class="control-section" style="margin-top: 20px;">
-                    <h4>Announcement</h4>
-                    <textarea id="announcement-text" placeholder="Type announcement..." style="width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 5px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3);"></textarea>
-                    <button onclick="sendAnnouncement()" class="control-button primary" style="width: 100%;">
-                        Send to All Rooms
-                    </button>
+    
+                    <!-- Vote Count Tab -->
+                    <div class="tab-content" id="vote-count">
+                        <h3>Vote Count</h3>
+                        <div class="floating-window-content" id="vote-tally-content">
+                            <div style="color: #666;">No active votes</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -499,6 +528,46 @@
                 const secs = timer.remainingSeconds % 60;
                 document.getElementById('timer').textContent = 
                     `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            }
+        });
+
+        // Tab System
+        function switchTab(tabId) {
+            // Get panel
+            const panel = document.getElementById('tab-panel');
+            
+            // Check if clicking the active tab (to close)
+            const currentTab = document.querySelector('.tab-content.active');
+            if (currentTab && currentTab.id === tabId && panel.classList.contains('open')) {
+                // Close the panel
+                panel.classList.remove('open');
+                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                return;
+            }
+            
+            // Open panel if closed
+            if (!panel.classList.contains('open')) {
+                panel.classList.add('open');
+            }
+            
+            // Update active tab button
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Update active tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        // Initialize - start with panel closed
+        document.addEventListener('DOMContentLoaded', () => {
+            const panel = document.getElementById('tab-panel');
+            if (panel) {
+                panel.classList.add('open'); // Start with Game Controls open
             }
         });
     </script>
