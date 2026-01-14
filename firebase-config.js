@@ -1,12 +1,11 @@
 // Firebase Configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "your-project.firebaseapp.com",
-  databaseURL: "https://your-project.firebaseio.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAXU44lHWMQlAYF9m8fi3cKg_Bo-3OwqL0",
+  authDomain: "subversion-the-traitors.firebaseapp.com",
+  projectId: "subversion-the-traitors",
+  storageBucket: "subversion-the-traitors.firebasestorage.app",
+  messagingSenderId: "119241773958",
+  appId: "1:119241773958:web:7cddc5f72f9be96458d207"
 };
 
 // Initialize Firebase
