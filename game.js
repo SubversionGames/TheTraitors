@@ -317,7 +317,6 @@ function generateVideoSeats() {
         seatElement.innerHTML = `
             <div id="video-${seat.number}"></div>
             <div class="seat-label" style="${labelStyle}">
-                <span class="seat-number">Seat ${seat.number}</span>
                 <span class="player-name clickable-name" id="name-${seat.number}">Empty</span>
             </div>
             <div class="vote-indicator" id="vote-${seat.number}"></div>
