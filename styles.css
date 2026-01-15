@@ -235,17 +235,18 @@ body {
     justify-content: center;
     align-items: center;
     position: relative;
-    padding: 10px; /* Increased from 20px */
-    overflow: visible;
+    padding: 20px;
+    overflow: visible; /* Make sure this is visible, not hidden */
 }
 
 .video-circle {
     position: relative;
-    width: 98%; /* Reduced from 98% */
+    width: 95%;
     max-width: 1600px;
-    height: 95%; /* Reduced from 95% */
+    height: 92%;
     max-height: 1000px;
     margin: 0 auto;
+    overflow: visible; /* ADD THIS - allows seats to extend beyond */
 }
 
 /* Individual Video Seats */
