@@ -189,36 +189,60 @@
                         <h3>Travel to Room</h3>
                         <div class="room-list">
                             <div class="room-item" onclick="hostJoinRoom('main')">
-                                <div class="room-name">Main Roundtable</div>
-                                <div class="room-count" id="host-count-main">0/24</div>
+                                <div class="room-name">
+                                    <span>Main Roundtable</span>
+                                    <span class="room-count" id="host-count-main">0/24</span>
+                                </div>
+                                <div class="room-players" id="players-main"></div>
                             </div>
                             <div class="room-item" onclick="hostJoinRoom('kitchen')">
-                                <div class="room-name">Kitchen</div>
-                                <div class="room-count" id="host-count-kitchen">0/5</div>
+                                <div class="room-name">
+                                    <span>Kitchen</span>
+                                    <span class="room-count" id="host-count-kitchen">0/5</span>
+                                </div>
+                                <div class="room-players" id="players-kitchen"></div>
                             </div>
                             <div class="room-item" onclick="hostJoinRoom('library')">
-                                <div class="room-name">Library</div>
-                                <div class="room-count" id="host-count-library">0/5</div>
+                                <div class="room-name">
+                                    <span>Library</span>
+                                    <span class="room-count" id="host-count-library">0/5</span>
+                                </div>
+                                <div class="room-players" id="players-library"></div>
                             </div>
                             <div class="room-item" onclick="hostJoinRoom('living')">
-                                <div class="room-name">Living Room</div>
-                                <div class="room-count" id="host-count-living">0/5</div>
+                                <div class="room-name">
+                                    <span>Living Room</span>
+                                    <span class="room-count" id="host-count-living">0/5</span>
+                                </div>
+                                <div class="room-players" id="players-living"></div>
                             </div>
                             <div class="room-item" onclick="hostJoinRoom('courtyard')">
-                                <div class="room-name">Courtyard</div>
-                                <div class="room-count" id="host-count-courtyard">0/5</div>
+                                <div class="room-name">
+                                    <span>Courtyard</span>
+                                    <span class="room-count" id="host-count-courtyard">0/5</span>
+                                </div>
+                                <div class="room-players" id="players-courtyard"></div>
                             </div>
                             <div class="room-item" onclick="hostJoinRoom('bathroom')">
-                                <div class="room-name">Bathroom</div>
-                                <div class="room-count" id="host-count-bathroom">0/3</div>
+                                <div class="room-name">
+                                    <span>Bathroom</span>
+                                    <span class="room-count" id="host-count-bathroom">0/3</span>
+                                </div>
+                                <div class="room-players" id="players-bathroom"></div>
                             </div>
                             <div class="room-item" onclick="hostJoinRoom('gym')">
-                                <div class="room-name">Gym</div>
-                                <div class="room-count" id="host-count-gym">0/5</div>
+                                <div class="room-name">
+                                    <span>Gym</span>
+                                    <span class="room-count" id="host-count-gym">0/5</span>
+                                </div>
+                                <div class="room-players" id="players-gym"></div>
                             </div>
                             <div class="room-item" onclick="hostJoinRoom('turret')">
-                                <div class="room-name">Turret</div>
-                                <div class="room-count" id="host-count-turret">0/10</div>
+                                <div class="room-name">
+                                    <span>Turret</span>
+                                    <span class="room-count" id="host-count-turret">0/10</span>
+                                </div>
+                                <div class="room-players" id="players-turret"></div>
                             </div>
                         </div>
                         <div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">
@@ -810,6 +834,58 @@
                 }
             });
         }
+
+        // Update room player lists
+        function updateRoomPlayerLists() {
+            const rooms = ['main', 'kitchen', 'library', 'living', 'courtyard', 'bathroom', 'gym', 'turret'];
+            
+            database.ref('players').on('value', (snapshot) => {
+                // Count players per room
+                const roomCounts = {};
+                const roomPlayers = {};
+                
+                rooms.forEach(room => {
+                    roomCounts[room] = 0;
+                    roomPlayers[room] = [];
+                });
+                
+                snapshot.forEach((childSnapshot) => {
+                    const player = childSnapshot.val();
+                    if (player.room && roomCounts.hasOwnProperty(player.room) && player.status !== 'ghost') {
+                        roomCounts[player.room]++;
+                        roomPlayers[player.room].push(player.name);
+                    }
+                });
+                
+                // Update counts and player lists
+                database.ref('game/roomLimits').once('value', (limitsSnapshot) => {
+                    const limits = limitsSnapshot.val() || {};
+                    
+                    rooms.forEach(room => {
+                        const countEl = document.getElementById(`host-count-${room}`);
+                        const playersEl = document.getElementById(`players-${room}`);
+                        
+                        if (countEl) {
+                            const limit = limits[room] || 24;
+                            countEl.textContent = `${roomCounts[room]}/${limit}`;
+                        }
+                        
+                        if (playersEl) {
+                            if (roomPlayers[room].length === 0) {
+                                playersEl.innerHTML = '<div style="color: #666;">Empty</div>';
+                            } else {
+                                playersEl.innerHTML = roomPlayers[room].map(name => 
+                                    `<div>• ${name}</div>`
+                                ).join('');
+                            }
+                        }
+                    });
+                });
+            });
+        }
+
+        // Initialize room player lists
+        updateRoomPlayerLists();
 
         // Initialize turret list updates
         updateTurretPlayersList();
