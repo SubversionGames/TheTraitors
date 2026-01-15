@@ -223,8 +223,8 @@ body {
 .main-content {
     display: flex;
     flex: 1;
-    overflow: hidden;
-    position: relative; /* Added for absolute positioning of side panel */
+    overflow: visible; /* Changed from hidden if it was */
+    position: relative;
 }
 
 /* Video Circle Container */
