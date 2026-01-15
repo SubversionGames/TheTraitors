@@ -242,15 +242,13 @@ body {
 }
 
 .video-circle {
-    position: absolute;
-    top: 0;
-    left: 220px; /* Offset for host */
-    right: 0;
-    bottom: 0;
-    width: calc(100vw - 220px);
-    height: calc(100vh - 70px);
-    max-height: 800px; /* Limit maximum height */
-    margin: 0 auto;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(90vw, 90vh * 1.5); /* Responsive to viewport, maintains aspect ratio */
+    height: min(90vh, 90vw / 1.5);
+    margin-left: 110px; /* Half the host seat width to account for it on left */
     padding: 0;
     overflow: visible !important;
 }
@@ -832,4 +830,13 @@ input[type="number"]::-webkit-outer-spin-button {
 
 input[type="number"] {
     -moz-appearance: textfield;
+}
+
+/* Mirror all video elements */
+[id^="video-"] video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 50%;
+    transform: scaleX(-1) !important; /* Mirror horizontally */
 }
