@@ -246,11 +246,26 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: min(90vw, 90vh * 1.5); /* Responsive to viewport, maintains aspect ratio */
-    height: min(90vh, 90vw / 1.5);
-    margin-left: 110px; /* Half the host seat width to account for it on left */
+    width: 1200px; /* Fixed width */
+    height: 700px; /* Fixed height */
+    margin: 0;
     padding: 0;
     overflow: visible !important;
+}
+
+/* Scale down on smaller screens */
+@media (max-width: 1400px) {
+    .video-circle {
+        width: 1000px;
+        height: 600px;
+    }
+}
+
+@media (max-width: 1200px) {
+    .video-circle {
+        width: 800px;
+        height: 500px;
+    }
 }
 
 /* Individual Video Seats */
@@ -309,7 +324,7 @@ body {
     position: absolute !important;
     top: 50% !important;
     left: 50% !important;
-    transform: translate(-50%, -50%) !important;
+    transform: translate(-50%, -50%) scaleX(-1) !important;
 }
 
 .video-seat.host:hover {
@@ -365,29 +380,26 @@ body {
 }
 
 .seat-label {
-    /* Position set dynamically by JavaScript */
     background: rgba(0, 0, 0, 0.9);
-    padding: 5px 10px;
+    padding: 5px 12px;
     border-radius: 6px;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     white-space: nowrap;
-    pointer-events: none;
+    pointer-events: auto; /* Changed to auto so clicks work */
     z-index: 100;
     text-align: center;
 }
 
+/* Remove seat-number styles since we're not using it anymore */
 .seat-number {
-    font-size: 0.75rem;
-    color: #999;
-    display: block;
-    margin-bottom: 2px;
+    display: none; /* Hide if it still exists */
 }
 
 .player-name {
     font-weight: bold;
     color: #fff;
     font-size: 0.9rem;
-    display: block;
+    cursor: pointer;
 }
 
 .vote-indicator {
@@ -832,13 +844,13 @@ input[type="number"] {
     -moz-appearance: textfield;
 }
 
-/* Mirror all video elements */
+/* Mirror ALL videos including host */
 [id^="video-"] video {
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
     border-radius: 50%;
-    transform: scaleX(-1) !important; /* Mirror horizontally */
+    transform: scaleX(-1) !important; /* THIS LINE MIRRORS THE VIDEO */
 }
 
 .player-name.clickable-name {
