@@ -124,20 +124,55 @@
     
                         <!-- Room Limits -->
                         <div class="control-section">
-                            <h4>Room Limits</h4>
-                            <div style="font-size: 0.85rem; color: #bbb;">
-                                <div>Main: <input type="number" id="limit-main" value="24" min="1" max="24" style="width: 50px;"></div>
-                                <div>Kitchen: <input type="number" id="limit-kitchen" value="5" min="1" max="10" style="width: 50px;"></div>
-                                <div>Library: <input type="number" id="limit-library" value="5" min="1" max="10" style="width: 50px;"></div>
-                                <div>Living Room: <input type="number" id="limit-living" value="5" min="1" max="10" style="width: 50px;"></div>
-                                <div>Courtyard: <input type="number" id="limit-courtyard" value="5" min="1" max="10" style="width: 50px;"></div>
-                                <div>Bathroom: <input type="number" id="limit-bathroom" value="3" min="1" max="10" style="width: 50px;"></div>
-                                <div>Gym: <input type="number" id="limit-gym" value="5" min="1" max="10" style="width: 50px;"></div>
-                            </div>
-                            <button onclick="saveRoomLimits()" class="control-button" style="width: 100%; margin-top: 10px;">
-                                Save Limits
-                            </button>
-                        </div>
+    <h4>Room Limits</h4>
+    <div style="font-size: 0.85rem; color: #bbb;">
+        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+            <span style="flex: 1;">Main:</span>
+            <button onclick="adjustLimit('main', -1)" class="limit-btn">−</button>
+            <input type="number" id="limit-main" value="24" min="1" max="30" style="width: 50px; text-align: center; margin: 0 5px;">
+            <button onclick="adjustLimit('main', 1)" class="limit-btn">+</button>
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+            <span style="flex: 1;">Kitchen:</span>
+            <button onclick="adjustLimit('kitchen', -1)" class="limit-btn">−</button>
+            <input type="number" id="limit-kitchen" value="5" min="1" max="15" style="width: 50px; text-align: center; margin: 0 5px;">
+            <button onclick="adjustLimit('kitchen', 1)" class="limit-btn">+</button>
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+            <span style="flex: 1;">Library:</span>
+            <button onclick="adjustLimit('library', -1)" class="limit-btn">−</button>
+            <input type="number" id="limit-library" value="5" min="1" max="15" style="width: 50px; text-align: center; margin: 0 5px;">
+            <button onclick="adjustLimit('library', 1)" class="limit-btn">+</button>
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+            <span style="flex: 1;">Living Room:</span>
+            <button onclick="adjustLimit('living', -1)" class="limit-btn">−</button>
+            <input type="number" id="limit-living" value="5" min="1" max="15" style="width: 50px; text-align: center; margin: 0 5px;">
+            <button onclick="adjustLimit('living', 1)" class="limit-btn">+</button>
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+            <span style="flex: 1;">Courtyard:</span>
+            <button onclick="adjustLimit('courtyard', -1)" class="limit-btn">−</button>
+            <input type="number" id="limit-courtyard" value="5" min="1" max="15" style="width: 50px; text-align: center; margin: 0 5px;">
+            <button onclick="adjustLimit('courtyard', 1)" class="limit-btn">+</button>
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+            <span style="flex: 1;">Bathroom:</span>
+            <button onclick="adjustLimit('bathroom', -1)" class="limit-btn">−</button>
+            <input type="number" id="limit-bathroom" value="3" min="1" max="10" style="width: 50px; text-align: center; margin: 0 5px;">
+            <button onclick="adjustLimit('bathroom', 1)" class="limit-btn">+</button>
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+            <span style="flex: 1;">Gym:</span>
+            <button onclick="adjustLimit('gym', -1)" class="limit-btn">−</button>
+            <input type="number" id="limit-gym" value="5" min="1" max="15" style="width: 50px; text-align: center; margin: 0 5px;">
+            <button onclick="adjustLimit('gym', 1)" class="limit-btn">+</button>
+        </div>
+    </div>
+    <button onclick="saveRoomLimits()" class="control-button" style="width: 100%; margin-top: 10px;">
+        Save Limits
+    </button>
+</div>
     
                         <!-- Announcement -->
                         <div class="control-section">
@@ -605,6 +640,13 @@
             
             database.ref('game/roomLimits').set(limits);
             alert('Room limits saved!');
+        }
+
+        function adjustLimit(room, delta) {
+            const input = document.getElementById(`limit-${room}`);
+            const currentValue = parseInt(input.value);
+            const newValue = Math.max(parseInt(input.min), Math.min(parseInt(input.max), currentValue + delta));
+            input.value = newValue;
         }
 
         // Announcements
