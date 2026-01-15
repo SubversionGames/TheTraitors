@@ -239,8 +239,8 @@ function generateVideoSeats() {
     // Generate seats 2-25 with conservative spacing
     
     const totalSeats = 24; // Seats 2-25 (24 player seats)
-    const radiusX = 42; // Conservative horizontal
-    const radiusY = 40; // Conservative vertical
+    const radiusX = 46; // Conservative horizontal
+    const radiusY = 44; // Conservative vertical
     const centerX = 50;
     const centerY = 50;
     
