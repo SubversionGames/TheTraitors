@@ -236,30 +236,57 @@ function generateVideoSeats() {
     if (!circle) return;
     
     // Seat 1 (Host) is already in HTML at top left
-    // Generate seats 2-25 around a rectangular table
+    // Generate seats 2-25 around a rectangular table with smart label positioning
     
     const seats = [];
-    const seatSize = 180; // Size of each seat in pixels (to calculate spacing)
+    
+    // Helper function to determine label position based on seat location
+    function getLabelPosition(x, y) {
+        // Determine which side of rectangle the seat is on
+        const isTop = y < 30;
+        const isBottom = y > 70;
+        const isLeft = x < 30;
+        const isRight = x > 70;
+        
+        // Corner seats (45° angle)
+        if (isTop && isLeft) return { bottom: 'auto', top: '100%', left: '100%', transform: 'rotate(45deg) translateX(-50%)', transformOrigin: 'left top' };
+        if (isTop && isRight) return { bottom: 'auto', top: '100%', right: '100%', transform: 'rotate(-45deg) translateX(50%)', transformOrigin: 'right top' };
+        if (isBottom && isLeft) return { top: 'auto', bottom: '100%', left: '100%', transform: 'rotate(-45deg) translateX(-50%)', transformOrigin: 'left bottom' };
+        if (isBottom && isRight) return { top: 'auto', bottom: '100%', right: '100%', transform: 'rotate(45deg) translateX(50%)', transformOrigin: 'right bottom' };
+        
+        // Side seats (point toward center)
+        if (isTop) return { bottom: 'auto', top: '100%', left: '50%', transform: 'translateX(-50%)' }; // Top - label below
+        if (isBottom) return { top: 'auto', bottom: '100%', left: '50%', transform: 'translateX(-50%)' }; // Bottom - label above
+        if (isLeft) return { top: '50%', left: '100%', transform: 'translateY(-50%)' }; // Left - label to right
+        if (isRight) return { top: '50%', right: '100%', transform: 'translateY(-50%)' }; // Right - label to left
+        
+        // Default (shouldn't happen)
+        return { bottom: '-35px', left: '50%', transform: 'translateX(-50%)' };
+    }
     
     // TOP ROW - Seats 2-9 (8 seats across top)
     const topSeats = 8;
     const topSpacing = 100 / (topSeats + 1);
     for (let i = 0; i < topSeats; i++) {
+        const x = topSpacing * (i + 1);
         seats.push({
             number: i + 2,
-            x: topSpacing * (i + 1),
-            y: 8 // 8% from top
+            x: x,
+            y: 8,
+            labelPos: getLabelPosition(x, 8)
         });
     }
     
     // RIGHT SIDE - Seats 10-13 (4 seats down right side)
     const rightSeats = 4;
-    const rightSpacing = 84 / (rightSeats + 1); // 84% = space between 8% top and 92% bottom
+    const rightSpacing = 84 / (rightSeats + 1);
     for (let i = 0; i < rightSeats; i++) {
+        const y = 8 + rightSpacing * (i + 1);
         seats.push({
             number: 10 + i,
-            x: 92, // 92% from left
-            y: 8 + rightSpacing * (i + 1)
+            x: 92,
+            y: y,
+            labelPos: getLabelPosition(92, y)
         });
     }
     
@@ -267,10 +294,12 @@ function generateVideoSeats() {
     const bottomSeats = 8;
     const bottomSpacing = 100 / (bottomSeats + 1);
     for (let i = 0; i < bottomSeats; i++) {
+        const x = 100 - (bottomSpacing * (i + 1));
         seats.push({
             number: 14 + i,
-            x: 100 - (bottomSpacing * (i + 1)), // Right to left
-            y: 92 // 92% from top
+            x: x,
+            y: 92,
+            labelPos: getLabelPosition(x, 92)
         });
     }
     
@@ -278,10 +307,12 @@ function generateVideoSeats() {
     const leftSeats = 4;
     const leftSpacing = 84 / (leftSeats + 1);
     for (let i = 0; i < leftSeats; i++) {
+        const y = 92 - (leftSpacing * (i + 1));
         seats.push({
             number: 22 + i,
-            x: 8, // 8% from left
-            y: 92 - (leftSpacing * (i + 1)) // Bottom to top
+            x: 8,
+            y: y,
+            labelPos: getLabelPosition(8, y)
         });
     }
     
@@ -294,9 +325,15 @@ function generateVideoSeats() {
         seatElement.style.top = `${seat.y}%`;
         seatElement.style.transform = 'translate(-50%, -50%)';
         
+        // Build label style string
+        let labelStyle = 'position: absolute;';
+        for (let prop in seat.labelPos) {
+            labelStyle += `${prop}: ${seat.labelPos[prop]};`;
+        }
+        
         seatElement.innerHTML = `
             <div id="video-${seat.number}"></div>
-            <div class="seat-label">
+            <div class="seat-label" style="${labelStyle}">
                 <span class="seat-number">Seat ${seat.number}</span>
                 <span class="player-name" id="name-${seat.number}">Empty</span>
             </div>
@@ -309,7 +346,7 @@ function generateVideoSeats() {
         circle.appendChild(seatElement);
     });
     
-    console.log('Generated 24 player seats in rectangular table layout');
+    console.log('Generated 24 player seats with smart label positioning');
 }
 
 function handleSeatClick(seatNumber) {
