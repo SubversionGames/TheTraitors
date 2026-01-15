@@ -318,7 +318,7 @@ function generateVideoSeats() {
             <div id="video-${seat.number}"></div>
             <div class="seat-label" style="${labelStyle}">
                 <span class="seat-number">Seat ${seat.number}</span>
-                <span class="player-name" id="name-${seat.number}">Empty</span>
+                <span class="player-name clickable-name" id="name-${seat.number}">Empty</span>
             </div>
             <div class="vote-indicator" id="vote-${seat.number}"></div>
         `;
@@ -431,12 +431,24 @@ function updatePlayerDisplay() {
             seatElement.classList.add('active');
             nameElement.textContent = playerInSeat.name;
             
+            // Make clickable if it's the current user's seat
+            if (currentUser.role === 'player' && playerInSeat.id === currentUser.id) {
+                nameElement.classList.add('clickable-name');
+                nameElement.style.cursor = 'pointer';
+                nameElement.onclick = renameSelf;
+            } else {
+                nameElement.classList.remove('clickable-name');
+                nameElement.style.cursor = 'default';
+                nameElement.onclick = null;
+            }
+            
             // Update seat display for video/room status
             updateSeatDisplay(i, playerInSeat);
         } else {
             seatElement.classList.add('empty');
             seatElement.classList.remove('active');
             nameElement.textContent = i === 1 ? 'Host' : 'Empty';
+            nameElement.onclick = null;
         }
     }
 }
@@ -692,3 +704,46 @@ function updateSeatDisplay(seatNumber, playerData) {
         if (overlay) overlay.remove();
     }
 }
+
+// ============================================
+// PLAYER RENAME FUNCTION
+// ============================================
+
+// Rename functionality - called when clicking own name
+function renameSelf() {
+    if (currentUser.role !== 'player') return;
+    
+    const currentName = currentUser.name;
+    const newName = prompt('Enter your new name:', currentName);
+    
+    if (newName && newName.trim().length > 0 && newName.trim().length <= 12) {
+        const trimmedName = newName.trim();
+        
+        // Check for duplicate names
+        database.ref('players').once('value', (snapshot) => {
+            let nameExists = false;
+            snapshot.forEach((child) => {
+                if (child.val().name === trimmedName && child.key !== currentUser.id) {
+                    nameExists = true;
+                }
+            });
+            
+            if (nameExists) {
+                alert('This name is already taken. Please choose another.');
+                return;
+            }
+            
+            // Update name
+            currentUser.name = trimmedName;
+            sessionStorage.setItem('playerName', trimmedName);
+            
+            // Update in Firebase
+            database.ref('players/' + currentUser.id + '/name').set(trimmedName);
+        });
+    } else if (newName !== null) {
+        alert('Name must be 1-12 characters.');
+    }
+}
+
+// Make rename available globally
+window.renameSelf = renameSelf;
