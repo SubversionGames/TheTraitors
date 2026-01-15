@@ -272,7 +272,7 @@ body {
     cursor: pointer;
 }
 
-/* Force host video to be perfectly circular */
+/* Host seat - ensure perfect circular alignment */
 .video-seat.host {
     width: 180px !important;
     height: 180px !important;
@@ -282,21 +282,36 @@ body {
     z-index: 10;
     border-radius: 50% !important;
     overflow: hidden !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    position: fixed !important;
 }
 
+/* Host video container - perfectly centered */
 .video-seat.host #video-1 {
     width: 100% !important;
     height: 100% !important;
     border-radius: 50% !important;
     overflow: hidden !important;
-    position: relative;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
 }
 
+/* Host video element - perfectly fitted */
 .video-seat.host #video-1 video {
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
     border-radius: 50% !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
 }
 
 .video-seat.host:hover {
