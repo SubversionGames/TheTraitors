@@ -236,43 +236,19 @@ function generateVideoSeats() {
     if (!circle) return;
     
     // Seat 1 (Host) is already in HTML at top left
-    // Generate seats 2-25 around a rectangular table with smart label positioning
+    // Generate seats 2-25 around a rectangular table
     
     const seats = [];
-    
-    // Helper function to determine label position based on seat location
-    function getLabelPosition(x, y) {
-        const isTop = y < 30;
-        const isBottom = y > 70;
-        const isLeft = x < 30;
-        const isRight = x > 70;
-        
-        // Top row - label below
-        if (isTop) return { top: 'calc(100% + 5px)', left: '50%', transform: 'translateX(-50%)' };
-        
-        // Bottom row - label above
-        if (isBottom) return { bottom: 'calc(100% + 5px)', left: '50%', transform: 'translateX(-50%)' };
-        
-        // Left side - label to right
-        if (isLeft) return { top: '50%', left: 'calc(100% + 5px)', transform: 'translateY(-50%)' };
-        
-        // Right side - label to left
-        if (isRight) return { top: '50%', right: 'calc(100% + 5px)', transform: 'translateY(-50%)' };
-        
-        // Default
-        return { top: 'calc(100% + 5px)', left: '50%', transform: 'translateX(-50%)' };
-    }
     
     // TOP ROW - Seats 2-9 (8 seats across top)
     const topSeats = 8;
     const topSpacing = 100 / (topSeats + 1);
     for (let i = 0; i < topSeats; i++) {
-        const x = topSpacing * (i + 1);
         seats.push({
             number: i + 2,
-            x: x,
+            x: topSpacing * (i + 1),
             y: 8,
-            labelPos: getLabelPosition(x, 8)
+            labelPosition: 'bottom' // Label below seat
         });
     }
     
@@ -280,12 +256,11 @@ function generateVideoSeats() {
     const rightSeats = 4;
     const rightSpacing = 84 / (rightSeats + 1);
     for (let i = 0; i < rightSeats; i++) {
-        const y = 8 + rightSpacing * (i + 1);
         seats.push({
             number: 10 + i,
             x: 92,
-            y: y,
-            labelPos: getLabelPosition(92, y)
+            y: 8 + rightSpacing * (i + 1),
+            labelPosition: 'left' // Label to left of seat
         });
     }
     
@@ -293,12 +268,11 @@ function generateVideoSeats() {
     const bottomSeats = 8;
     const bottomSpacing = 100 / (bottomSeats + 1);
     for (let i = 0; i < bottomSeats; i++) {
-        const x = 100 - (bottomSpacing * (i + 1));
         seats.push({
             number: 14 + i,
-            x: x,
+            x: 100 - (bottomSpacing * (i + 1)),
             y: 92,
-            labelPos: getLabelPosition(x, 92)
+            labelPosition: 'top' // Label above seat
         });
     }
     
@@ -306,12 +280,11 @@ function generateVideoSeats() {
     const leftSeats = 4;
     const leftSpacing = 84 / (leftSeats + 1);
     for (let i = 0; i < leftSeats; i++) {
-        const y = 92 - (leftSpacing * (i + 1));
         seats.push({
             number: 22 + i,
             x: 8,
-            y: y,
-            labelPos: getLabelPosition(8, y)
+            y: 92 - (leftSpacing * (i + 1)),
+            labelPosition: 'right' // Label to right of seat
         });
     }
     
@@ -324,10 +297,21 @@ function generateVideoSeats() {
         seatElement.style.top = `${seat.y}%`;
         seatElement.style.transform = 'translate(-50%, -50%)';
         
-        // Build label style string
-        let labelStyle = 'position: absolute;';
-        for (let prop in seat.labelPos) {
-            labelStyle += `${prop}: ${seat.labelPos[prop]};`;
+        // Determine label style based on position
+        let labelStyle = 'position: absolute; white-space: nowrap;';
+        switch(seat.labelPosition) {
+            case 'bottom':
+                labelStyle += 'top: calc(100% + 5px); left: 50%; transform: translateX(-50%);';
+                break;
+            case 'top':
+                labelStyle += 'bottom: calc(100% + 5px); left: 50%; transform: translateX(-50%);';
+                break;
+            case 'left':
+                labelStyle += 'top: 50%; right: calc(100% + 5px); transform: translateY(-50%);';
+                break;
+            case 'right':
+                labelStyle += 'top: 50%; left: calc(100% + 5px); transform: translateY(-50%);';
+                break;
         }
         
         seatElement.innerHTML = `
@@ -345,7 +329,7 @@ function generateVideoSeats() {
         circle.appendChild(seatElement);
     });
     
-    console.log('Generated 24 player seats with smart label positioning');
+    console.log('Generated 24 player seats in rectangular table layout');
 }
 
 function handleSeatClick(seatNumber) {
