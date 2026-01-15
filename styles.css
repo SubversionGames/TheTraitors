@@ -840,3 +840,13 @@ input[type="number"] {
     border-radius: 50%;
     transform: scaleX(-1) !important; /* Mirror horizontally */
 }
+
+.player-name.clickable-name {
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.player-name.clickable-name:hover {
+    color: #4CAF50;
+    text-decoration: underline;
+}
