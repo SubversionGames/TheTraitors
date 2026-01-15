@@ -464,6 +464,28 @@ body {
     font-weight: bold;
 }
 
+.limit-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.limit-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.limit-btn:active {
+    transform: scale(0.95);
+}
+
 /* Floating Windows (Waiting Lobby & Vote Count in tabs) */
 .floating-window {
     margin-bottom: 15px;
