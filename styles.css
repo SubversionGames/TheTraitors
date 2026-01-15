@@ -271,13 +271,31 @@ body {
     cursor: pointer;
 }
 
+/* Force host video to be perfectly circular */
 .video-seat.host {
-    width: 180px; /* Same as players */
-    height: 180px; /* Same as players */
+    width: 180px !important;
+    height: 180px !important;
     border-color: #667eea;
     border-width: 5px;
     box-shadow: 0 0 30px rgba(102, 126, 234, 0.5);
     z-index: 10;
+    border-radius: 50% !important;
+    overflow: hidden !important;
+}
+
+.video-seat.host #video-1 {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 50% !important;
+    overflow: hidden !important;
+    position: relative;
+}
+
+.video-seat.host #video-1 video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 50% !important;
 }
 
 .video-seat.host:hover {
@@ -671,6 +689,58 @@ body {
     color: #bbb;
 }
 
+.room-list .room-item {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    margin-bottom: 15px; /* More space between rooms */
+}
+
+.room-list .room-item:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: #4CAF50;
+}
+
+.room-list .room-item.active {
+    border-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.2);
+}
+
+.room-list .room-name {
+    font-weight: bold;
+    font-size: 1rem;
+    color: #ccc; /* Default color */
+    transition: color 0.3s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px; /* Space between name and player list */
+}
+
+.room-list .room-item:hover .room-name {
+    color: #4CAF50; /* Hover color */
+}
+
+.room-list .room-count {
+    font-size: 0.85rem;
+    color: #bbb;
+}
+
+.room-players {
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 5px;
+    padding-top: 5px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.room-players div {
+    padding: 2px 0;
+}
+
 /* Announcement Overlay */
 .announcement-overlay {
     position: fixed;
@@ -735,4 +805,15 @@ body {
     overflow: hidden;
     position: relative;
     aspect-ratio: 1 / 1; /* Force square */
+}
+
+/* Remove spinner arrows from number inputs */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
 }
