@@ -243,15 +243,14 @@ body {
 
 .video-circle {
     position: absolute;
-    top: 50%; /* Center vertically */
-    left: 50%;
-    transform: translate(-50%, -50%); /* Center both axes */
-    width: calc(100% - 240px); /* Account for host seat on left */
-    height: 90%;
-    max-width: 1400px; /* Prevent getting too wide */
-    max-height: 800px; /* Prevent getting too tall */
-    aspect-ratio: 16 / 9; /* Maintain aspect ratio */
-    margin: 0;
+    top: 0;
+    left: 220px; /* Offset for host */
+    right: 0;
+    bottom: 0;
+    width: calc(100vw - 220px);
+    height: calc(100vh - 70px);
+    max-height: 800px; /* Limit maximum height */
+    margin: 0 auto;
     padding: 0;
     overflow: visible !important;
 }
