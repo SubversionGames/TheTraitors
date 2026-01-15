@@ -162,11 +162,12 @@ body {
 /* Top Bar with Timer and Controls */
 .top-bar {
     background: rgba(0, 0, 0, 0.8);
-    padding: 15px 30px;
+    padding: 10px 30px; /* Reduced from 15px */
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+    height: 60px; /* Fixed height instead of auto */
 }
 
 .timer-display {
@@ -243,11 +244,11 @@ body {
 .video-circle {
     position: absolute;
     top: 0;
-    left: 220px; /* Offset for host seat (180px seat + 40px margin) */
+    left: 220px;
     right: 0;
     bottom: 0;
-    width: calc(100vw - 220px); /* Full width minus host offset */
-    height: calc(100vh - 80px); /* Full height minus top bar */
+    width: calc(100vw - 220px);
+    height: calc(100vh - 60px); /* Changed from 80px to match new top bar height */
     margin: 0 auto;
     padding: 20px;
     overflow: visible !important;
