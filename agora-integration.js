@@ -83,8 +83,15 @@ async function initializeAgora() {
             localVideoTrack.play(localVideoDiv, { fit: 'cover' });
             
             console.log('Playing local video in seat', currentUser.seat);
-        } else {
-            console.error('Could not find video div for seat', currentUser.seat);
+            
+            // Force mirror the video element
+            setTimeout(() => {
+                const videoElement = localVideoDiv.querySelector('video');
+                if (videoElement) {
+                    videoElement.style.transform = 'scaleX(-1)';
+                    console.log('Mirrored local video');
+                }
+            }, 100);
         }
         
         // Update Firebase with video status
