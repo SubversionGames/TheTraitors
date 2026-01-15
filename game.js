@@ -427,14 +427,12 @@ function claimSeat(seatNumber, playerName) {
 // ============================================
 
 function updatePlayerDisplay() {
-    // Update all seats based on current players
     for (let i = 1; i <= 25; i++) {
         const seatElement = document.getElementById(`seat-${i}`);
         const nameElement = document.getElementById(`name-${i}`);
         
         if (!seatElement || !nameElement) continue;
         
-        // Find player in this seat
         let playerInSeat = null;
         for (let playerId in gameState.players) {
             const player = gameState.players[playerId];
@@ -445,21 +443,13 @@ function updatePlayerDisplay() {
         }
         
         if (playerInSeat) {
-            // Seat is occupied
             seatElement.classList.remove('empty');
             seatElement.classList.add('active');
             nameElement.textContent = playerInSeat.name;
             
-            // Check if player is in different room
-            if (playerInSeat.room !== 'main' && playerInSeat.room !== currentUser.room) {
-                // Hide video but show name
-                const videoDiv = document.getElementById(`video-${i}`);
-                if (videoDiv) {
-                    videoDiv.style.opacity = '0.3';
-                }
-            }
+            // Update seat display for video/room status
+            updateSeatDisplay(i, playerInSeat);
         } else {
-            // Seat is empty
             seatElement.classList.add('empty');
             seatElement.classList.remove('active');
             nameElement.textContent = i === 1 ? 'Host' : 'Empty';
@@ -654,3 +644,67 @@ function showAnnouncement(text) {
 document.addEventListener('DOMContentLoaded', () => {
     initializeGame();
 });
+
+// ============================================
+// SEAT DISPLAY
+// ============================================
+
+// Update seat display based on video/room status
+function updateSeatDisplay(seatNumber, playerData) {
+    const videoDiv = document.getElementById(`video-${seatNumber}`);
+    if (!videoDiv) return;
+    
+    // Check if player is in different room
+    const isInDifferentRoom = playerData.room && playerData.room !== 'main';
+    
+    // Check if video is off (we'll track this in Firebase)
+    const isVideoOff = playerData.videoOff === true;
+    
+    if (isVideoOff || isInDifferentRoom) {
+        // Show name overlay
+        let overlayText = `<div style="font-size: 1.2rem; font-weight: bold;">${playerData.name}</div>`;
+        
+        if (isInDifferentRoom) {
+            const roomNames = {
+                'kitchen': 'Kitchen',
+                'library': 'Library',
+                'living': 'Living Room',
+                'courtyard': 'Courtyard',
+                'bathroom': 'Bathroom',
+                'gym': 'Gym',
+                'turret': 'Turret',
+                'lobby': 'Lobby'
+            };
+            overlayText += `<div style="font-size: 0.9rem; margin-top: 5px; color: #bbb;">${roomNames[playerData.room] || playerData.room}</div>`;
+        }
+        
+        // Create or update overlay
+        let overlay = videoDiv.querySelector('.name-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.className = 'name-overlay';
+            overlay.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                background: rgba(0, 0, 0, 0.8);
+                border-radius: 50%;
+                color: white;
+                z-index: 10;
+                pointer-events: none;
+            `;
+            videoDiv.appendChild(overlay);
+        }
+        overlay.innerHTML = overlayText;
+    } else {
+        // Remove overlay if it exists
+        const overlay = videoDiv.querySelector('.name-overlay');
+        if (overlay) overlay.remove();
+    }
+}
