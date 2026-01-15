@@ -242,26 +242,25 @@ function generateVideoSeats() {
     
     // Helper function to determine label position based on seat location
     function getLabelPosition(x, y) {
-        // Determine which side of rectangle the seat is on
         const isTop = y < 30;
         const isBottom = y > 70;
         const isLeft = x < 30;
         const isRight = x > 70;
         
-        // Corner seats (45° angle)
-        if (isTop && isLeft) return { bottom: 'auto', top: '100%', left: '100%', transform: 'rotate(45deg) translateX(-50%)', transformOrigin: 'left top' };
-        if (isTop && isRight) return { bottom: 'auto', top: '100%', right: '100%', transform: 'rotate(-45deg) translateX(50%)', transformOrigin: 'right top' };
-        if (isBottom && isLeft) return { top: 'auto', bottom: '100%', left: '100%', transform: 'rotate(-45deg) translateX(-50%)', transformOrigin: 'left bottom' };
-        if (isBottom && isRight) return { top: 'auto', bottom: '100%', right: '100%', transform: 'rotate(45deg) translateX(50%)', transformOrigin: 'right bottom' };
+        // Top row - label below
+        if (isTop) return { top: 'calc(100% + 5px)', left: '50%', transform: 'translateX(-50%)' };
         
-        // Side seats (point toward center)
-        if (isTop) return { bottom: 'auto', top: '100%', left: '50%', transform: 'translateX(-50%)' }; // Top - label below
-        if (isBottom) return { top: 'auto', bottom: '100%', left: '50%', transform: 'translateX(-50%)' }; // Bottom - label above
-        if (isLeft) return { top: '50%', left: '100%', transform: 'translateY(-50%)' }; // Left - label to right
-        if (isRight) return { top: '50%', right: '100%', transform: 'translateY(-50%)' }; // Right - label to left
+        // Bottom row - label above
+        if (isBottom) return { bottom: 'calc(100% + 5px)', left: '50%', transform: 'translateX(-50%)' };
         
-        // Default (shouldn't happen)
-        return { bottom: '-35px', left: '50%', transform: 'translateX(-50%)' };
+        // Left side - label to right
+        if (isLeft) return { top: '50%', left: 'calc(100% + 5px)', transform: 'translateY(-50%)' };
+        
+        // Right side - label to left
+        if (isRight) return { top: '50%', right: 'calc(100% + 5px)', transform: 'translateY(-50%)' };
+        
+        // Default
+        return { top: 'calc(100% + 5px)', left: '50%', transform: 'translateX(-50%)' };
     }
     
     // TOP ROW - Seats 2-9 (8 seats across top)
