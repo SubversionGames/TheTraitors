@@ -228,24 +228,26 @@ body {
 }
 
 /* Video Circle Container */
+/* Video Circle Container */
 .video-circle-container {
     flex: 1;
     width: 100%;
+    height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
     position: relative;
     padding: 20px;
-    overflow: visible; /* Make sure this is visible, not hidden */
+    overflow: visible;
 }
 
 .video-circle {
     position: relative;
-    width: 98%; /* Back to larger */
-    max-width: 1700px; /* Larger max */
-    height: 95%; /* Back to larger */
-    max-height: 1100px; /* Larger max */
-    margin: 0 auto;
+    width: 100%; /* Full width instead of percentage */
+    height: 100%; /* Full height instead of percentage */
+    max-width: none; /* Remove max-width constraint */
+    max-height: none; /* Remove max-height constraint */
+    margin: 0;
     overflow: visible;
 }
 
