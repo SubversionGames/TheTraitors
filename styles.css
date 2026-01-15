@@ -242,13 +242,14 @@ body {
 }
 
 .video-circle {
-    position: relative;
-    width: 100%; /* Full width instead of percentage */
-    height: 100%; /* Full height instead of percentage */
-    max-width: none; /* Remove max-width constraint */
-    max-height: none; /* Remove max-height constraint */
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw; /* Full viewport width */
+    height: 100vh; /* Full viewport height */
     margin: 0;
-    overflow: visible;
+    padding: 0;
+    overflow: visible !important;
 }
 
 /* Individual Video Seats */
