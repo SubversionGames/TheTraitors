@@ -228,27 +228,28 @@ body {
 }
 
 /* Video Circle Container */
-/* Video Circle Container */
 .video-circle-container {
     flex: 1;
     width: 100%;
     height: 100%;
     display: flex;
-    justify-content: center;
+    justify-content: flex-start; /* Align to left instead of center */
     align-items: center;
     position: relative;
-    padding: 20px;
+    padding: 0; /* Remove padding since we're handling spacing in .video-circle */
     overflow: visible;
 }
 
 .video-circle {
     position: absolute;
     top: 0;
-    left: 0;
-    width: 100vw; /* Full viewport width */
-    height: 100vh; /* Full viewport height */
-    margin: 0;
-    padding: 0;
+    left: 220px; /* Offset for host seat (180px seat + 40px margin) */
+    right: 0;
+    bottom: 0;
+    width: calc(100vw - 220px); /* Full width minus host offset */
+    height: calc(100vh - 80px); /* Full height minus top bar */
+    margin: 0 auto;
+    padding: 20px;
     overflow: visible !important;
 }
 
@@ -382,8 +383,9 @@ body {
     right: 0;
     top: 80px;
     bottom: 0;
-    z-index: 100;
+    z-index: 200; /* Increased to ensure it's above seats */
     display: flex;
+    pointer-events: auto; /* Ensure it's clickable */
 }
 
 /* Tab Buttons */
@@ -427,6 +429,7 @@ body {
     overflow-x: hidden;
     transition: width 0.3s ease;
     box-shadow: -5px 0 20px rgba(0, 0, 0, 0.5);
+    pointer-events: auto; /* Ensure panel is clickable when open */
 }
 
 .tab-content-panel.open {
