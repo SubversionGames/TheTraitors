@@ -13,7 +13,13 @@
             <div class="host-info">
                 <span id="host-mode-display">Main Host</span>
                 <button onclick="toggleProductionMode()" class="control-button" id="production-toggle">
-                    Switch to Production
+                    Switch to Production Viewer
+                </button>
+                <button onclick="toggleHostVideo()" class="control-button" id="host-video-btn">
+                    Video On
+                </button>
+                <button onclick="toggleHostAudio()" class="control-button" id="host-audio-btn">
+                    Mic On
                 </button>
             </div>
 
@@ -56,26 +62,16 @@
                 </div>
             </div>
 
-                <!-- Vote Tally Display -->
-                <div class="vote-tally" id="vote-tally">
-                    <h3>Vote Count</h3>
-                    <div id="vote-tally-content"></div>
-                </div>
-
-                <!-- Waiting Lobby Display -->
-                <div class="waiting-lobby-display" id="waiting-lobby-display">
-                    <h3>Waiting Lobby</h3>
-                    <div id="lobby-list"></div>
-                </div>
-            </div>
-
             <!-- Tab System (Right Side) -->
             <div class="tab-container">
                 <!-- Tab Buttons -->
                 <div class="tab-buttons">
                     <button class="tab-button active" onclick="switchTab('game-controls')">Game Controls</button>
-                    <button class="tab-button" onclick="switchTab('waiting-lobby')">Waiting Lobby</button>
+                    <button class="tab-button" onclick="switchTab('rooms')">Rooms</button>
                     <button class="tab-button" onclick="switchTab('vote-count')">Vote Count</button>
+                    <button class="tab-button" onclick="switchTab('waiting-lobby')">Waiting Room</button>
+                    <button class="tab-button" onclick="switchTab('viewers')">Viewers</button>
+                    <button class="tab-button" onclick="switchTab('turret')">Turret</button>
                 </div>
                 
                 <!-- Tab Content Panel -->
@@ -126,18 +122,6 @@
                             </button>
                         </div>
     
-                        <!-- Turret Controls -->
-                        <div class="control-section">
-                            <h4>Turret</h4>
-                            <button onclick="inviteToTurret()" class="control-button" style="width: 100%; margin-bottom: 10px;">
-                                Invite to Turret
-                            </button>
-                            <div id="turret-list" style="margin-top: 10px; font-size: 0.85rem; color: #bbb;">
-                                <strong>In Turret:</strong>
-                                <div id="turret-players">None</div>
-                            </div>
-                        </div>
-    
                         <!-- Room Limits -->
                         <div class="control-section">
                             <h4>Room Limits</h4>
@@ -165,11 +149,45 @@
                         </div>
                     </div>
     
-                    <!-- Waiting Lobby Tab -->
-                    <div class="tab-content" id="waiting-lobby">
-                        <h3>Waiting Lobby</h3>
-                        <div class="floating-window-content" id="lobby-list">
-                            <div style="color: #666;">No players in lobby</div>
+                    <!-- Rooms Tab -->
+                    <div class="tab-content" id="rooms">
+                        <h3>Travel to Room</h3>
+                        <div class="room-list">
+                            <div class="room-item" onclick="hostJoinRoom('main')">
+                                <div class="room-name">Main Roundtable</div>
+                                <div class="room-count" id="host-count-main">0/24</div>
+                            </div>
+                            <div class="room-item" onclick="hostJoinRoom('kitchen')">
+                                <div class="room-name">Kitchen</div>
+                                <div class="room-count" id="host-count-kitchen">0/5</div>
+                            </div>
+                            <div class="room-item" onclick="hostJoinRoom('library')">
+                                <div class="room-name">Library</div>
+                                <div class="room-count" id="host-count-library">0/5</div>
+                            </div>
+                            <div class="room-item" onclick="hostJoinRoom('living')">
+                                <div class="room-name">Living Room</div>
+                                <div class="room-count" id="host-count-living">0/5</div>
+                            </div>
+                            <div class="room-item" onclick="hostJoinRoom('courtyard')">
+                                <div class="room-name">Courtyard</div>
+                                <div class="room-count" id="host-count-courtyard">0/5</div>
+                            </div>
+                            <div class="room-item" onclick="hostJoinRoom('bathroom')">
+                                <div class="room-name">Bathroom</div>
+                                <div class="room-count" id="host-count-bathroom">0/3</div>
+                            </div>
+                            <div class="room-item" onclick="hostJoinRoom('gym')">
+                                <div class="room-name">Gym</div>
+                                <div class="room-count" id="host-count-gym">0/5</div>
+                            </div>
+                            <div class="room-item" onclick="hostJoinRoom('turret')">
+                                <div class="room-name">Turret</div>
+                                <div class="room-count" id="host-count-turret">0/10</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">
+                            <strong>Current Room:</strong> <span id="host-current-room">Main Roundtable</span>
                         </div>
                     </div>
     
@@ -178,6 +196,51 @@
                         <h3>Vote Count</h3>
                         <div class="floating-window-content" id="vote-tally-content">
                             <div style="color: #666;">No active votes</div>
+                        </div>
+                    </div>
+    
+                    <!-- Waiting Room Tab -->
+                    <div class="tab-content" id="waiting-lobby">
+                        <h3>Waiting Room</h3>
+                        <div class="floating-window-content" id="lobby-list">
+                            <div style="color: #666;">No players in lobby</div>
+                        </div>
+                    </div>
+    
+                    <!-- Viewers Tab -->
+                    <div class="tab-content" id="viewers">
+                        <h3>Viewers</h3>
+                        <div class="floating-window-content" id="viewer-list">
+                            <div style="color: #666;">No viewers connected</div>
+                        </div>
+                    </div>
+    
+                    <!-- Turret Tab -->
+                    <div class="tab-content" id="turret">
+                        <h3>Turret Controls</h3>
+                        
+                        <div class="control-section">
+                            <h4>Invite Player</h4>
+                            <button onclick="inviteToTurret()" class="control-button primary" style="width: 100%; margin-bottom: 10px;">
+                                Select Player to Invite
+                            </button>
+                        </div>
+    
+                        <div class="control-section">
+                            <h4>Players in Turret</h4>
+                            <div id="turret-players-list" style="font-size: 0.85rem; color: #bbb; margin-bottom: 15px;">
+                                None
+                            </div>
+                            <button onclick="clearTurret()" class="control-button danger" style="width: 100%;">
+                                Send All to Lobby
+                            </button>
+                        </div>
+    
+                        <div class="control-section">
+                            <h4>Turret Room</h4>
+                            <button onclick="hostJoinRoom('turret')" class="control-button" style="width: 100%;">
+                                Join Turret
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -331,6 +394,35 @@
         function showHostVideo() {
             // Will implement with Jitsi integration
             console.log('Showing host video');
+        }
+
+        // Host video/audio controls
+        async function toggleHostVideo() {
+            if (window.toggleVideo) {
+                const isOff = await window.toggleVideo();
+                const btn = document.getElementById('host-video-btn');
+                if (isOff) {
+                    btn.textContent = '📹 Video Off';
+                    btn.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+                } else {
+                    btn.textContent = '📹 Video On';
+                    btn.style.background = 'rgba(255, 255, 255, 0.2)';
+                }
+            }
+        }
+
+        async function toggleHostAudio() {
+            if (window.toggleAudio) {
+                const isMuted = await window.toggleAudio();
+                const btn = document.getElementById('host-audio-btn');
+                if (isMuted) {
+                    btn.textContent = '🎤 Mic Off';
+                    btn.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+                } else {
+                    btn.textContent = '🎤 Mic On';
+                    btn.style.background = 'rgba(255, 255, 255, 0.2)';
+                }
+            }
         }
 
         // Timer Modal Functions
@@ -625,6 +717,60 @@
                 panel.classList.add('open'); // Start with Game Controls open
             }
         });
+
+        // Host room travel
+        function hostJoinRoom(roomId) {
+            database.ref('players/host/room').set(roomId);
+            const roomNames = {
+                'main': 'Main Roundtable',
+                'kitchen': 'Kitchen',
+                'library': 'Library',
+                'living': 'Living Room',
+                'courtyard': 'Courtyard',
+                'bathroom': 'Bathroom',
+                'gym': 'Gym',
+                'turret': 'Turret'
+            };
+            document.getElementById('host-current-room').textContent = roomNames[roomId];
+        }
+
+        // Clear turret
+        function clearTurret() {
+            if (confirm('Send all players from Turret to Lobby?')) {
+                database.ref('players').once('value', (snapshot) => {
+                    snapshot.forEach((childSnapshot) => {
+                        const player = childSnapshot.val();
+                        if (player.room === 'turret') {
+                            database.ref('players/' + childSnapshot.key + '/room').set('lobby');
+                            database.ref('players/' + childSnapshot.key + '/turretInvited').set(false);
+                        }
+                    });
+                });
+            }
+        }
+
+        // Update turret list
+        function updateTurretPlayersList() {
+            database.ref('players').on('value', (snapshot) => {
+                const turretPlayers = [];
+                snapshot.forEach((childSnapshot) => {
+                    const player = childSnapshot.val();
+                    if (player.room === 'turret' && !player.isHost) {
+                        turretPlayers.push(player.name);
+                    }
+                });
+                
+                const listDiv = document.getElementById('turret-players-list');
+                if (turretPlayers.length === 0) {
+                    listDiv.textContent = 'None';
+                } else {
+                    listDiv.innerHTML = turretPlayers.map(name => `<div>• ${name}</div>`).join('');
+                }
+            });
+        }
+
+        // Initialize turret list updates
+        updateTurretPlayersList();
     </script>
 </body>
 </html>
