@@ -513,18 +513,15 @@
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
             
-            const leftBoundaryPercent = 10;
-            const topBoundaryPx = 90;
+            // Match boundaries from generateVideoSeats
+            const leftBoundary = 20; // Aligned with profile text
+            const topBoundary = 90;
             const panelWidth = 320;
             const tabWidth = 40;
             const panelLeft = 20;
-            const rightBoundaryPx = panelLeft + panelWidth + tabWidth + 50;
-            const bottomMarginPercent = 5;
-            
-            const leftBoundary = (viewportWidth * leftBoundaryPercent) / 100;
-            const rightBoundary = rightBoundaryPx;
-            const topBoundary = topBoundaryPx;
-            const bottomBoundary = viewportHeight - (viewportHeight * bottomMarginPercent / 100);
+            const rightBoundary = panelLeft + panelWidth + tabWidth + 50;
+            const bottomMargin = 50;
+            const bottomBoundary = viewportHeight - bottomMargin;
             
             const availableWidth = viewportWidth - leftBoundary - (viewportWidth - rightBoundary);
             const availableHeight = bottomBoundary - topBoundary;
@@ -532,8 +529,7 @@
             const centerX = leftBoundary + (availableWidth / 2);
             const centerY = topBoundary + (availableHeight / 2);
             
-            // Use stored sizes from generateVideoSeats
-            const hostSize = window.currentHostSize || 240; // Fallback
+            const hostSize = window.currentHostSize || 240;
             
             const hostSeat = document.getElementById('seat-1');
             if (hostSeat) {
@@ -543,6 +539,8 @@
                 hostSeat.style.height = `${hostSize}px`;
                 hostSeat.style.transform = 'translate(-50%, -50%)';
             }
+            
+            console.log(`Host positioned at: x=${centerX}, y=${centerY}, size=${hostSize}`);
         }
 
         // Call on load and resize
