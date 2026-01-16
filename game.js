@@ -235,20 +235,37 @@ function generateVideoSeats() {
     const circle = document.getElementById('video-circle');
     if (!circle) return;
     
-    // Fixed dimensions in pixels (not percentages)
-    const containerWidth = 1200;
-    const containerHeight = 650;
+    // FIXED POSITIONS - all in pixels relative to viewport
+    const hostTop = 100; // Host seat is at 100px from top
+    const hostLeft = 110; // Host seat center (20px left + 90px radius)
+    const seatSize = 180; // Seat diameter
+    
+    // TOP ROW - Same height as host seat
+    const topY = hostTop; // Same as host
+    
+    // BOTTOM ROW - Same distance from bottom as top from top
+    const viewportHeight = window.innerHeight;
+    const bottomY = viewportHeight - hostTop; // Mirror top position
+    
+    // LEFT SIDE - Vertically centered on host
+    const leftX = hostLeft; // Aligned with host center
+    
+    // RIGHT SIDE - Same distance from right edge as left from left edge
+    const viewportWidth = window.innerWidth;
+    const rightX = viewportWidth - hostLeft; // Mirror left position
     
     const seats = [];
     
-    // TOP ROW - 8 seats with fixed pixel spacing
+    // TOP ROW - 8 seats across
     const topSeats = 8;
-    const topY = 50; // 50px from top of container
-    const topSpacing = containerWidth / (topSeats + 1);
+    const topStartX = 300; // Start after host area
+    const topEndX = viewportWidth - 100; // End before right edge
+    const topSpacing = (topEndX - topStartX) / (topSeats - 1);
+    
     for (let i = 0; i < topSeats; i++) {
         seats.push({
             number: i + 2,
-            x: topSpacing * (i + 1),
+            x: topStartX + (topSpacing * i),
             y: topY,
             labelPosition: 'bottom'
         });
@@ -256,25 +273,25 @@ function generateVideoSeats() {
     
     // RIGHT SIDE - 4 seats
     const rightSeats = 4;
-    const rightX = containerWidth - 50; // 50px from right edge
-    const rightSpacing = (containerHeight - 100) / (rightSeats + 1); // 100 = top/bottom margins
+    const rightStartY = topY + 150; // Start below top row
+    const rightEndY = bottomY - 150; // End above bottom row
+    const rightSpacing = (rightEndY - rightStartY) / (rightSeats - 1);
+    
     for (let i = 0; i < rightSeats; i++) {
         seats.push({
             number: 10 + i,
             x: rightX,
-            y: 50 + rightSpacing * (i + 1),
+            y: rightStartY + (rightSpacing * i),
             labelPosition: 'left'
         });
     }
     
-    // BOTTOM ROW - 8 seats
+    // BOTTOM ROW - 8 seats across (right to left)
     const bottomSeats = 8;
-    const bottomY = containerHeight - 50; // 50px from bottom
-    const bottomSpacing = containerWidth / (bottomSeats + 1);
     for (let i = 0; i < bottomSeats; i++) {
         seats.push({
             number: 14 + i,
-            x: containerWidth - (bottomSpacing * (i + 1)),
+            x: topEndX - (topSpacing * i), // Mirror top row
             y: bottomY,
             labelPosition: 'top'
         });
@@ -282,24 +299,23 @@ function generateVideoSeats() {
     
     // LEFT SIDE - 4 seats
     const leftSeats = 4;
-    const leftX = 50; // 50px from left edge
-    const leftSpacing = (containerHeight - 100) / (leftSeats + 1);
     for (let i = 0; i < leftSeats; i++) {
         seats.push({
             number: 22 + i,
             x: leftX,
-            y: containerHeight - 50 - (leftSpacing * (i + 1)),
+            y: rightEndY - (rightSpacing * i), // Mirror right side
             labelPosition: 'right'
         });
     }
     
-    // Create all seats with PIXEL positioning
+    // Create all seats with absolute pixel positioning
     seats.forEach(seat => {
         const seatElement = document.createElement('div');
         seatElement.className = 'video-seat empty';
         seatElement.id = `seat-${seat.number}`;
-        seatElement.style.left = `${seat.x}px`; // PIXELS not percentages
-        seatElement.style.top = `${seat.y}px`;  // PIXELS not percentages
+        seatElement.style.position = 'fixed'; // Fixed to viewport
+        seatElement.style.left = `${seat.x}px`;
+        seatElement.style.top = `${seat.y}px`;
         seatElement.style.transform = 'translate(-50%, -50%)';
         
         // Determine label style
@@ -330,10 +346,10 @@ function generateVideoSeats() {
         // Add click handler
         seatElement.addEventListener('click', () => handleSeatClick(seat.number));
         
-        circle.appendChild(seatElement);
+        document.body.appendChild(seatElement); // Append to body, not circle
     });
     
-    console.log('Generated 24 player seats with fixed pixel positioning');
+    console.log('Generated 24 player seats with viewport-fixed positioning');
 }
 
 function handleSeatClick(seatNumber) {
