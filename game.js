@@ -236,53 +236,66 @@ function generateVideoSeats() {
     if (!circle) return;
     
     // ============================================
-    // SPACING CONTROLS - ADJUST THESE VALUES
-    // ============================================
-    
-    // Distance from edges
-    const topMargin = 165;        
-    const bottomMargin = 100;     
-    const sideMargin = 200;       
-    
-    // Horizontal spread for top/bottom rows
-    const horizontalPadding = 500; 
-    const horizontalEndPadding = 300; 
-    
-    // Vertical gaps between corners and side seats
-    const verticalGapFromCorner = 250; 
-    
-    // ============================================
-    // CALCULATE DYNAMIC SEAT SIZE
+    // NEW BOUNDARIES FOR PLAYER AREA
     // ============================================
     
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Calculate available space
+    // Left border: inner edge of expanded side panel
+    const panelWidth = 320;
+    const tabWidth = 40;
+    const panelLeft = 20;
+    const leftBoundary = panelLeft + panelWidth + tabWidth + 50; // +50px gap
+    
+    // Top border: bottom of top panel
+    const topBoundary = 80; // Height of top panel
+    
+    // Right border: right edge of window
+    const rightBoundary = viewportWidth - 50; // -50px margin
+    
+    // Bottom border: bottom of window
+    const bottomBoundary = viewportHeight - 50; // -50px margin
+    
+    // ============================================
+    // SPACING CONTROLS
+    // ============================================
+    
+    const topMargin = topBoundary + 50; // Distance from top
+    const bottomMargin = 50; // Distance from bottom
+    const sideMargin = 100; // Distance from right edge
+    
+    const horizontalPadding = leftBoundary + 50; // Start after panel
+    const horizontalEndPadding = 100;
+    
+    const verticalGapFromCorner = 150;
+    
+    // ============================================
+    // CALCULATE SEAT SIZE
+    // ============================================
+    
     const availableWidth = viewportWidth - horizontalPadding - horizontalEndPadding;
     const availableHeight = viewportHeight - topMargin - bottomMargin - (verticalGapFromCorner * 2);
     
-    // Calculate max seat size based on spacing
     const topSeats = 8;
-    const maxSeatWidthFromTop = availableWidth / topSeats * 0.8; // 80% of available space per seat
+    const maxSeatWidthFromTop = availableWidth / topSeats * 0.8;
     
     const sideSeats = 4;
     const maxSeatHeightFromSide = availableHeight / sideSeats * 0.8;
     
-    // Choose the smaller dimension to ensure all fits
-    const calculatedSeatSize = Math.min(maxSeatWidthFromTop, maxSeatHeightFromSide, 180); // Max 180px
-    const minSeatSize = 100; // Minimum 100px
-    const seatSize = Math.max(minSeatSize, calculatedSeatSize);
+    const calculatedSeatSize = Math.min(maxSeatWidthFromTop, maxSeatHeightFromSide, 180);
+    const seatSize = Math.max(100, calculatedSeatSize);
     
-    console.log(`Calculated seat size: ${seatSize}px (viewport: ${viewportWidth}x${viewportHeight})`);
+    console.log(`Player area: left=${leftBoundary}, top=${topBoundary}, right=${rightBoundary}, bottom=${bottomBoundary}`);
+    console.log(`Seat size: ${seatSize}px`);
     
     // ============================================
-    // END OF SPACING CONTROLS
+    // GENERATE SEATS (same logic as before)
     // ============================================
     
     const seats = [];
     
-    // TOP ROW - Spread across window width
+    // TOP ROW
     const topY = topMargin;
     const topStartX = horizontalPadding;
     const topEndX = viewportWidth - horizontalEndPadding;
@@ -297,7 +310,7 @@ function generateVideoSeats() {
         });
     }
     
-    // RIGHT SIDE - Fixed distance from right edge
+    // RIGHT SIDE
     const rightSeats = 4;
     const rightX = viewportWidth - sideMargin;
     const rightStartY = topY + verticalGapFromCorner;
@@ -313,7 +326,7 @@ function generateVideoSeats() {
         });
     }
     
-    // BOTTOM ROW - Mirror top row (right to left)
+    // BOTTOM ROW
     const bottomSeats = 8;
     const bottomY = viewportHeight - bottomMargin;
     
@@ -326,9 +339,9 @@ function generateVideoSeats() {
         });
     }
     
-    // LEFT SIDE - Fixed distance from left edge
+    // LEFT SIDE
     const leftSeats = 4;
-    const leftX = sideMargin;
+    const leftX = leftBoundary + 50; // Start at panel boundary
     
     for (let i = 0; i < leftSeats; i++) {
         seats.push({
@@ -339,7 +352,7 @@ function generateVideoSeats() {
         });
     }
     
-    // Create all seats with dynamic size
+    // Create seats (same as before)
     seats.forEach(seat => {
         const seatElement = document.createElement('div');
         seatElement.className = 'video-seat empty';
@@ -347,11 +360,10 @@ function generateVideoSeats() {
         seatElement.style.position = 'fixed';
         seatElement.style.left = `${seat.x}px`;
         seatElement.style.top = `${seat.y}px`;
-        seatElement.style.width = `${seatSize}px`; // Dynamic size
-        seatElement.style.height = `${seatSize}px`; // Dynamic size
+        seatElement.style.width = `${seatSize}px`;
+        seatElement.style.height = `${seatSize}px`;
         seatElement.style.transform = 'translate(-50%, -50%)';
         
-        // Label positioning logic
         let labelStyle = 'position: absolute; white-space: nowrap;';
         switch(seat.labelPosition) {
             case 'bottom':
@@ -380,7 +392,7 @@ function generateVideoSeats() {
         document.body.appendChild(seatElement);
     });
     
-    console.log('Generated 24 player seats with responsive positioning and sizing');
+    console.log('Generated 24 player seats in new boundaries');
 }
 
 function handleSeatClick(seatNumber) {
