@@ -240,16 +240,16 @@ function generateVideoSeats() {
     // ============================================
     
     // Distance from edges
-    const topMargin = 100;        
-    const bottomMargin = 100;     
-    const sideMargin = 150;       
+    const topMargin = 150;        
+    const bottomMargin = 150;     
+    const sideMargin = 200;       
     
     // Horizontal spread for top/bottom rows
-    const horizontalPadding = 300; 
-    const horizontalEndPadding = 100; 
+    const horizontalPadding = 400; 
+    const horizontalEndPadding = 200; 
     
     // Vertical gaps between corners and side seats
-    const verticalGapFromCorner = 150; 
+    const verticalGapFromCorner = 100; 
     
     // ============================================
     // CALCULATE DYNAMIC SEAT SIZE
