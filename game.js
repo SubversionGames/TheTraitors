@@ -249,7 +249,7 @@ function generateVideoSeats() {
     const horizontalEndPadding = 300; 
     
     // Vertical gaps between corners and side seats
-    const verticalGapFromCorner = 400; 
+    const verticalGapFromCorner = 250; 
     
     // ============================================
     // CALCULATE DYNAMIC SEAT SIZE
