@@ -51,10 +51,10 @@
                 <!-- Seat 1 (Host) - Top Left -->
                 <div class="video-seat host" id="seat-1" style="position: fixed !important; top: 100px !important; left: 20px !important; transform: none !important; z-index: 50;">
                     <div id="video-1"></div>
-                    <div class="seat-label" style="position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); white-space: nowrap;">
-                        <span class="seat-number">Seat 1</span>
-                        <span class="player-name" id="name-1" onclick="renameHost()" style="cursor: pointer;">Host</span>
-                    </div>
+                </div>
+                <!-- Host name tag as separate element to ensure it's visible -->
+                <div style="position: fixed !important; top: 290px !important; left: 110px !important; transform: translateX(-50%) !important; background: rgba(0, 0, 0, 0.9); padding: 5px 12px; border-radius: 6px; z-index: 100 !important; white-space: nowrap;">
+                    <span class="player-name" id="name-1" onclick="renameHost()" style="cursor: pointer; font-weight: bold; font-size: 0.9rem; color: white;">Host</span>
                 </div>
             
                 <div class="video-circle" id="video-circle">
