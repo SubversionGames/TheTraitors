@@ -52,9 +52,9 @@
                 <div class="video-seat host" id="seat-1" style="position: fixed !important; top: 100px !important; left: 20px !important; transform: none !important; z-index: 50;">
                     <div id="video-1"></div>
                 </div>
-                <!-- Host name tag as separate element to ensure it's visible -->
+                <!-- Host name tag as separate element -->
                 <div style="position: fixed !important; top: 290px !important; left: 110px !important; transform: translateX(-50%) !important; background: rgba(0, 0, 0, 0.9); padding: 5px 12px; border-radius: 6px; z-index: 100 !important; white-space: nowrap;">
-                    <span class="player-name" id="name-1" onclick="renameHost()" style="cursor: pointer; font-weight: bold; font-size: 0.9rem; color: white;">Host</span>
+                    <span class="player-name" id="name-1" style="cursor: pointer; font-weight: bold; font-size: 0.9rem; color: white;">Host</span>
                 </div>
             
                 <div class="video-circle" id="video-circle">
@@ -390,19 +390,19 @@
             }
         });
 
-        // Rename host
+        // Allow host to rename themselves
         function renameHost() {
             const currentName = document.getElementById('name-1').textContent;
             const newName = prompt('Enter your name:', currentName);
             
-            if (newName && newName.trim().length > 0 && newName.trim().length <= 12) {
-                const trimmedName = newName.trim();
+            if (newName && newName.trim().length > 0) {
+                const trimmedName = newName.trim().substring(0, 12);
                 
                 // Check for duplicate names
                 database.ref('players').once('value', (snapshot) => {
                     let nameExists = false;
                     snapshot.forEach((child) => {
-                        if (child.val().name === trimmedName && child.key !== 'host') {
+                        if (child.key !== 'host' && child.val().name === trimmedName) {
                             nameExists = true;
                         }
                     });
@@ -413,17 +413,21 @@
                     }
                     
                     // Update name
+                    document.getElementById('name-1').textContent = trimmedName;
+                    database.ref('players/host/name').set(trimmedName);
                     currentUser.name = trimmedName;
                     sessionStorage.setItem('playerName', trimmedName);
-                    document.getElementById('name-1').textContent = trimmedName;
-                    
-                    // Update in Firebase
-                    database.ref('players/host/name').set(trimmedName);
                 });
-            } else if (newName !== null) {
-                alert('Name must be 1-12 characters.');
             }
         }
+
+        // Add click handler to host name
+        document.addEventListener('DOMContentLoaded', () => {
+            const hostNameElement = document.getElementById('name-1');
+            if (hostNameElement) {
+                hostNameElement.addEventListener('click', renameHost);
+            }
+        });
 
         // Initialize host interface
         let isProduction = sessionStorage.getItem('isProduction') === 'true';
