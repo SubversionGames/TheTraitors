@@ -245,16 +245,14 @@ function generateVideoSeats() {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Left border: aligned with profile text in top panel
-    const leftBorderX = 20;
-    
-    // Right border: 20px to the right of expanded side panel
-    // Panel structure: starts at 20px left, has 320px content + 40px tabs
+    // Left border: where expanded panel ends
     const panelLeft = 20;
     const panelContentWidth = 320;
     const panelTabWidth = 40;
-    const panelRightEdge = panelLeft + panelContentWidth + panelTabWidth; // = 380px
-    const rightBorderX = panelRightEdge + 20; // = 400px
+    const leftBorderX = panelLeft + panelContentWidth + panelTabWidth + 20; // Panel edge + 20px gap = 400px
+    
+    // Right border: near right edge of viewport
+    const rightBorderX = viewportWidth - 50; // 50px from right edge
     
     // Top border: below top panel
     const topBorderY = 90;
@@ -262,15 +260,17 @@ function generateVideoSeats() {
     // Bottom border: near bottom of viewport
     const bottomBorderY = viewportHeight - 50;
     
-    // Calculate center of seating area
-    const seatingAreaWidth = rightBorderX - leftBorderX; // 400 - 20 = 380px wide
+    // Calculate seating area dimensions
+    const seatingAreaWidth = rightBorderX - leftBorderX; // Should be ~viewport width - 450px
     const seatingAreaHeight = bottomBorderY - topBorderY;
     
-    const centerX = leftBorderX + (seatingAreaWidth / 2); // 20 + 190 = 210px
+    // Calculate center of seating area
+    const centerX = leftBorderX + (seatingAreaWidth / 2);
     const centerY = topBorderY + (seatingAreaHeight / 2);
     
+    console.log(`Viewport: ${viewportWidth}x${viewportHeight}`);
     console.log(`Seating area: ${seatingAreaWidth}px wide x ${seatingAreaHeight}px tall`);
-    console.log(`Boundaries: left=${leftBorderX}px, right=${rightBorderX}px, top=${topBorderY}px, bottom=${bottomBorderY}px`);
+    console.log(`Boundaries: left=${leftBorderX}px, right=${rightBorderX}px`);
     console.log(`Center: x=${centerX}px, y=${centerY}px`);
     
     // ============================================
@@ -398,7 +398,10 @@ function generateVideoSeats() {
     window.currentPlayerSize = finalPlayerSize;
     window.currentHostSize = finalHostSize;
     
-    setTimeout(() => attachRenameHandlers(), 100);
+    // Re-attach rename handlers if function exists
+    if (typeof attachRenameHandlers === 'function') {
+        setTimeout(() => attachRenameHandlers(), 100);
+    }
 }
 
 function handleSeatClick(seatNumber) {
