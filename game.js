@@ -239,26 +239,32 @@ function generateVideoSeats() {
     }
     
     // ============================================
-    // DEFINE PLAYER SEATING AREA BOUNDARIES
+    // DEFINE PLAYER SEATING AREA BOUNDARIES (%)
     // ============================================
     
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Left border: left edge of browser
-    const leftBoundary = 50;
+    // Left border: percentage from left edge
+    const leftBoundaryPercent = 10; // 10% from left
     
-    // Top border: below top panel
-    const topBoundary = 90;
+    // Top border: below top panel (fixed px)
+    const topBoundaryPx = 90;
     
-    // Right border: outer edge of expanded side panel
+    // Right border: outer edge of expanded side panel (fixed px for now)
     const panelWidth = 320;
     const tabWidth = 40;
     const panelLeft = 20;
-    const rightBoundary = panelLeft + panelWidth + tabWidth + 50; // Panel + gap
+    const rightBoundaryPx = panelLeft + panelWidth + tabWidth + 50;
     
-    // Bottom border: bottom of browser
-    const bottomBoundary = viewportHeight - 50;
+    // Bottom border: percentage from bottom
+    const bottomMarginPercent = 5; // 5% from bottom
+    
+    // Convert to actual pixels for calculations
+    const leftBoundary = (viewportWidth * leftBoundaryPercent) / 100;
+    const rightBoundary = rightBoundaryPx;
+    const topBoundary = topBoundaryPx;
+    const bottomBoundary = viewportHeight - (viewportHeight * bottomMarginPercent / 100);
     
     // Available seating area
     const availableWidth = viewportWidth - leftBoundary - (viewportWidth - rightBoundary);
@@ -267,11 +273,24 @@ function generateVideoSeats() {
     console.log(`Seating area: ${availableWidth}w x ${availableHeight}h`);
     
     // ============================================
-    // SEAT SIZING
+    // SEAT SIZING (% of viewport)
     // ============================================
     
-    const playerSeatSize = 180; // Same as current host
-    const hostSeatSize = 360; // Double the player size
+    // Player seats: 8% of viewport width (responsive)
+    const playerSeatSizeVw = 8;
+    const playerSeatSize = (viewportWidth * playerSeatSizeVw) / 100;
+    
+    // Host seat: 16% of viewport width (double player size)
+    const hostSeatSizeVw = 16;
+    const hostSeatSize = (viewportWidth * hostSeatSizeVw) / 100;
+    
+    // Enforce min/max sizes
+    const minSeatSize = 120;
+    const maxSeatSize = 200;
+    const finalPlayerSize = Math.min(Math.max(playerSeatSize, minSeatSize), maxSeatSize);
+    const finalHostSize = Math.min(Math.max(hostSeatSize, minSeatSize * 2), maxSeatSize * 2);
+    
+    console.log(`Player seat: ${finalPlayerSize}px, Host seat: ${finalHostSize}px`);
     
     // ============================================
     // CALCULATE POSITIONS (8-9-8 layout)
@@ -285,14 +304,15 @@ function generateVideoSeats() {
     
     // MIDDLE ROW (9 seats total: 4 left + HOST + 4 right)
     const middleY = centerY;
-    const middleRowSpacing = playerSeatSize + 20; // 20px gap between seats
+    const middleRowSpacing = finalPlayerSize + (viewportWidth * 0.01); // 1vw gap
     
     // Left side of middle row (seats 10-13)
     for (let i = 0; i < 4; i++) {
         seats.push({
             number: 10 + i,
-            x: centerX - (hostSeatSize / 2) - middleRowSpacing * (4 - i),
-            y: middleY
+            x: centerX - (finalHostSize / 2) - middleRowSpacing * (4 - i),
+            y: middleY,
+            size: finalPlayerSize
         });
     }
     
@@ -300,22 +320,24 @@ function generateVideoSeats() {
     for (let i = 0; i < 4; i++) {
         seats.push({
             number: 14 + i,
-            x: centerX + (hostSeatSize / 2) + middleRowSpacing * (i + 1),
-            y: middleY
+            x: centerX + (finalHostSize / 2) + middleRowSpacing * (i + 1),
+            y: middleY,
+            size: finalPlayerSize
         });
     }
     
     // TOP ROW (8 seats: 2-9)
     // Centered between each pair of middle row seats
-    const topY = centerY - (playerSeatSize + 80); // 80px gap from middle row
+    const verticalGap = finalPlayerSize + (viewportHeight * 0.05); // 5vh gap
+    const topY = centerY - verticalGap;
     
     // Calculate positions between middle row seats
     const topRowPositions = [];
     
     // Between left seats
     for (let i = 0; i < 3; i++) {
-        const leftSeat = seats[i]; // Seats 10, 11, 12
-        const rightSeat = seats[i + 1]; // Seats 11, 12, 13
+        const leftSeat = seats[i];
+        const rightSeat = seats[i + 1];
         topRowPositions.push((leftSeat.x + rightSeat.x) / 2);
     }
     
@@ -327,8 +349,8 @@ function generateVideoSeats() {
     
     // Between right seats
     for (let i = 4; i < 7; i++) {
-        const leftSeat = seats[i]; // Seats 14, 15, 16
-        const rightSeat = seats[i + 1]; // Seats 15, 16, 17
+        const leftSeat = seats[i];
+        const rightSeat = seats[i + 1];
         topRowPositions.push((leftSeat.x + rightSeat.x) / 2);
     }
     
@@ -336,19 +358,21 @@ function generateVideoSeats() {
         seats.push({
             number: 2 + i,
             x: topRowPositions[i],
-            y: topY
+            y: topY,
+            size: finalPlayerSize
         });
     }
     
     // BOTTOM ROW (8 seats: 18-25)
     // Mirror top row positions
-    const bottomY = centerY + (playerSeatSize + 80);
+    const bottomY = centerY + verticalGap;
     
     for (let i = 0; i < 8; i++) {
         seats.push({
             number: 18 + i,
             x: topRowPositions[i],
-            y: bottomY
+            y: bottomY,
+            size: finalPlayerSize
         });
     }
     
@@ -363,8 +387,8 @@ function generateVideoSeats() {
         seatElement.style.position = 'fixed';
         seatElement.style.left = `${seat.x}px`;
         seatElement.style.top = `${seat.y}px`;
-        seatElement.style.width = `${playerSeatSize}px`;
-        seatElement.style.height = `${playerSeatSize}px`;
+        seatElement.style.width = `${seat.size}px`;
+        seatElement.style.height = `${seat.size}px`;
         seatElement.style.transform = 'translate(-50%, -50%)';
         
         // Name tag below seat
@@ -382,7 +406,11 @@ function generateVideoSeats() {
         document.body.appendChild(seatElement);
     });
     
-    console.log(`Generated 24 player seats in 8-9-8 layout (seat size: ${playerSeatSize}px)`);
+    console.log(`Generated 24 player seats in 8-9-8 layout (${finalPlayerSize}px each)`);
+    
+    // Store sizes for host update
+    window.currentPlayerSize = finalPlayerSize;
+    window.currentHostSize = finalHostSize;
     
     // Re-attach rename handlers
     setTimeout(() => attachRenameHandlers(), 100);
