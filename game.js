@@ -245,11 +245,21 @@ function generateVideoSeats() {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Left border: aligned with profile text (NOT after panel)
-    const leftBorderX = 20; // Same as "Main Host" text position
+    // Calculate panel width as % of viewport
+    const panelLeft = 20;
+    const panelContentWidth = 320;
+    const panelTabWidth = 40;
+    const panelTotalWidth = panelLeft + panelContentWidth + panelTabWidth; // 380px
+    const panelPercentage = (panelTotalWidth / viewportWidth) * 100; // ~15% on typical screen
     
-    // Right border: near right edge of viewport
-    const rightBorderX = viewportWidth - 50; // 50px from right edge
+    console.log(`Panel takes ${panelPercentage.toFixed(1)}% of screen width`);
+    
+    // Left border: where panel ends
+    const leftBorderX = panelTotalWidth;
+    
+    // Right border: mirror the panel percentage from right edge
+    const rightMargin = (viewportWidth * panelPercentage) / 100; // Same % as panel
+    const rightBorderX = viewportWidth - rightMargin;
     
     // Top border: below top panel
     const topBorderY = 90;
@@ -261,28 +271,51 @@ function generateVideoSeats() {
     const seatingAreaWidth = rightBorderX - leftBorderX;
     const seatingAreaHeight = bottomBorderY - topBorderY;
     
-    // Calculate center of seating area
+    // Calculate center of seating area (NOT viewport center)
     const centerX = leftBorderX + (seatingAreaWidth / 2);
     const centerY = topBorderY + (seatingAreaHeight / 2);
+    
+    // Calculate as percentage of total viewport for verification
+    const centerPercentFromLeft = (centerX / viewportWidth) * 100;
     
     console.log(`Viewport: ${viewportWidth}x${viewportHeight}`);
     console.log(`Seating area: ${seatingAreaWidth}px wide x ${seatingAreaHeight}px tall`);
     console.log(`Boundaries: left=${leftBorderX}px, right=${rightBorderX}px`);
-    console.log(`Center: x=${centerX}px, y=${centerY}px (should be ~${viewportWidth/2}px)`);
+    console.log(`Center: x=${centerX}px (${centerPercentFromLeft.toFixed(1)}% from left), y=${centerY}px`);
     
     // ============================================
-    // SEAT SIZING (% of seating area width)
+    // DYNAMIC SEAT SIZING (responsive to screen size)
     // ============================================
     
-    // Player seats: proportion of available width
-    const playerSeatSize = Math.min(seatingAreaWidth * 0.08, 180); // 8% of width, max 180px
-    const hostSeatSize = playerSeatSize * 2; // Double player size
+    // Calculate optimal seat size based on available space
+    // Need to fit: 8 seats horizontally in top/bottom rows with gaps
+    const topRowSeats = 8;
+    const horizontalGapPercentage = 0.015; // 1.5% gap between seats
+    const totalHorizontalGaps = topRowSeats + 1; // Gaps on sides and between
+    const totalGapWidth = seatingAreaWidth * horizontalGapPercentage * totalHorizontalGaps;
+    const availableForSeats = seatingAreaWidth - totalGapWidth;
+    const maxSeatFromWidth = availableForSeats / topRowSeats;
     
-    // Enforce min sizes
-    const finalPlayerSize = Math.max(playerSeatSize, 100);
-    const finalHostSize = Math.max(hostSeatSize, 200);
+    // Need to fit: 3 rows vertically with gaps
+    const verticalRows = 3;
+    const verticalGapPercentage = 0.08; // 8% vertical gap
+    const totalVerticalGaps = verticalRows + 1;
+    const totalVerticalGapHeight = seatingAreaHeight * verticalGapPercentage * totalVerticalGaps;
+    const availableForHeight = seatingAreaHeight - totalVerticalGapHeight;
+    const maxSeatFromHeight = availableForHeight / verticalRows;
     
-    console.log(`Seat sizes: player=${finalPlayerSize}px, host=${finalHostSize}px`);
+    // Player seat size: smaller of width/height constraint
+    const calculatedPlayerSize = Math.min(maxSeatFromWidth, maxSeatFromHeight);
+    
+    // Apply min/max constraints
+    const minPlayerSize = 80; // Minimum 80px for mobile
+    const maxPlayerSize = 200; // Maximum 200px for large screens
+    const finalPlayerSize = Math.min(Math.max(calculatedPlayerSize, minPlayerSize), maxPlayerSize);
+    
+    // Host seat: double the player size
+    const finalHostSize = finalPlayerSize * 2;
+    
+    console.log(`Calculated sizes: player=${finalPlayerSize.toFixed(0)}px, host=${finalHostSize.toFixed(0)}px`);
     
     // ============================================
     // CALCULATE POSITIONS (8-9-8 layout)
@@ -290,9 +323,13 @@ function generateVideoSeats() {
     
     const seats = [];
     
+    // Calculate spacing
+    const horizontalGap = seatingAreaWidth * horizontalGapPercentage;
+    const verticalGap = seatingAreaHeight * verticalGapPercentage;
+    
     // MIDDLE ROW (9 seats total: 4 left + HOST + 4 right)
     const middleY = centerY;
-    const middleRowSpacing = finalPlayerSize + 20; // 20px gap between seats
+    const middleRowSpacing = finalPlayerSize + horizontalGap;
     
     // Left side of middle row (seats 10-13)
     for (let i = 0; i < 4; i++) {
@@ -315,8 +352,7 @@ function generateVideoSeats() {
     }
     
     // TOP ROW (8 seats: 2-9)
-    const verticalGap = finalPlayerSize + 60; // 60px vertical gap
-    const topY = centerY - verticalGap;
+    const topY = centerY - (finalPlayerSize / 2) - verticalGap - (finalPlayerSize / 2);
     
     // Calculate positions between middle row seats
     const topRowPositions = [];
@@ -347,7 +383,7 @@ function generateVideoSeats() {
     }
     
     // BOTTOM ROW (8 seats: 18-25)
-    const bottomY = centerY + verticalGap;
+    const bottomY = centerY + (finalPlayerSize / 2) + verticalGap + (finalPlayerSize / 2);
     
     for (let i = 0; i < 8; i++) {
         seats.push({
@@ -359,7 +395,7 @@ function generateVideoSeats() {
     }
     
     // ============================================
-    // CREATE SEAT ELEMENTS (same as before)
+    // CREATE SEAT ELEMENTS
     // ============================================
     
     seats.forEach(seat => {
@@ -373,6 +409,7 @@ function generateVideoSeats() {
         seatElement.style.height = `${seat.size}px`;
         seatElement.style.transform = 'translate(-50%, -50%)';
         
+        // Name tag below seat
         const labelStyle = 'position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); white-space: nowrap;';
         
         seatElement.innerHTML = `
