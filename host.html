@@ -510,25 +510,11 @@
 
         // Position host seat in center of player area
         function updateHostPosition() {
-            const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
             
-            // Match boundaries from generateVideoSeats
-            const leftBoundary = 20; // Aligned with profile text
-            const topBoundary = 90;
-            const panelWidth = 320;
-            const tabWidth = 40;
-            const panelLeft = 20;
-            const rightBoundary = panelLeft + panelWidth + tabWidth + 50;
-            const bottomMargin = 50;
-            const bottomBoundary = viewportHeight - bottomMargin;
-            
-            const availableWidth = viewportWidth - leftBoundary - (viewportWidth - rightBoundary);
-            const availableHeight = bottomBoundary - topBoundary;
-            
-            const centerX = leftBoundary + (availableWidth / 2);
-            const centerY = topBoundary + (availableHeight / 2);
-            
+            // Use calculated values from generateVideoSeats
+            const centerX = window.seatingCenterX || 210; // Fallback
+            const centerY = window.seatingCenterY || (90 + (viewportHeight - 140) / 2); // Fallback
             const hostSize = window.currentHostSize || 240;
             
             const hostSeat = document.getElementById('seat-1');
@@ -540,7 +526,7 @@
                 hostSeat.style.transform = 'translate(-50%, -50%)';
             }
             
-            console.log(`Host positioned at: x=${centerX}, y=${centerY}, size=${hostSize}`);
+            console.log(`Host positioned at center: x=${centerX}px, y=${centerY}px, size=${hostSize}px`);
         }
 
         // Call on load and resize
