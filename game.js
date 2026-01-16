@@ -328,81 +328,65 @@ function generateVideoSeats() {
     const verticalGap = seatingAreaHeight * verticalGapPercentage;
     
     // ============================================
-    // CALCULATE SHARED X POSITIONS FOR ALL ROWS
+    // CREATE 8x3 GRID OF PLAYER SEATS
     // ============================================
-    // All three rows use the same X positions so seats align vertically
     
-    // Calculate the width needed for 8 evenly-spaced seats
-    const numSeatsPerRow = 8;
-    const totalSeatsWidth = numSeatsPerRow * finalPlayerSize;
-    const totalGapsWidth = (numSeatsPerRow - 1) * horizontalGap;
-    const totalRowWidth = totalSeatsWidth + totalGapsWidth;
+    const rows = 3;
+    const cols = 8;
     
-    // Calculate starting X position (leftmost seat center)
-    const rowStartX = centerX - (totalRowWidth / 2) + (finalPlayerSize / 2);
+    // Calculate spacing for the grid
+    const gridWidth = seatingAreaWidth - (finalPlayerSize * 2); // Leave room on sides
+    const gridHeight = seatingAreaHeight - (finalPlayerSize * 2); // Leave room top/bottom
     
-    // Calculate spacing between seat centers
-    const seatSpacing = finalPlayerSize + horizontalGap;
+    const horizontalSpacing = (gridWidth - (cols * finalPlayerSize)) / (cols + 1);
+    const verticalSpacing = (gridHeight - (rows * finalPlayerSize)) / (rows + 1);
     
-    // Generate X positions for all 8 seats in each row
-    const rowXPositions = [];
-    for (let i = 0; i < numSeatsPerRow; i++) {
-        rowXPositions.push(rowStartX + (seatSpacing * i));
+    // Starting position (top-left of grid area)
+    const gridStartX = leftBorderX + finalPlayerSize + horizontalSpacing;
+    const gridStartY = topBorderY + finalPlayerSize + verticalSpacing;
+    
+    console.log(`Creating 8x3 grid with spacing: H=${horizontalSpacing.toFixed(0)}px, V=${verticalSpacing.toFixed(0)}px`);
+    
+    let seatNumber = 2; // Start at seat 2 (seat 1 is Host)
+    
+    // Generate seats row by row
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const x = gridStartX + (col * (finalPlayerSize + horizontalSpacing));
+            const y = gridStartY + (row * (finalPlayerSize + verticalSpacing));
+            
+            seats.push({
+                number: seatNumber,
+                x: x,
+                y: y,
+                size: finalPlayerSize
+            });
+            
+            seatNumber++;
+        }
     }
     
-    console.log('Row X positions:', rowXPositions);
-    
+    console.log(`Generated ${seats.length} player seats in 8x3 grid`);
+
     // ============================================
-    // TOP ROW (8 seats: 2-9)
+    // POSITION HOST SEAT (SEAT 1) IN TOP-LEFT
     // ============================================
-    const topY = centerY - (finalPlayerSize / 2) - verticalGap - (finalPlayerSize / 2);
     
-    for (let i = 0; i < 8; i++) {
-        seats.push({
-            number: 2 + i,
-            x: rowXPositions[i],
-            y: topY,
-            size: finalPlayerSize
-        });
-    }
-    
-    // ============================================
-    // MIDDLE ROW (8 seats: 10-17, arranged around HOST)
-    // ============================================
-    const middleY = centerY;
-    
-    // Left side of middle row (seats 10-13) - use first 4 X positions
-    for (let i = 0; i < 4; i++) {
-        seats.push({
-            number: 10 + i,
-            x: rowXPositions[i],
-            y: middleY,
-            size: finalPlayerSize
-        });
-    }
-    
-    // Right side of middle row (seats 14-17) - use last 4 X positions
-    for (let i = 0; i < 4; i++) {
-        seats.push({
-            number: 14 + i,
-            x: rowXPositions[4 + i],
-            y: middleY,
-            size: finalPlayerSize
-        });
-    }
-    
-    // ============================================
-    // BOTTOM ROW (8 seats: 18-25)
-    // ============================================
-    const bottomY = centerY + (finalPlayerSize / 2) + verticalGap + (finalPlayerSize / 2);
-    
-    for (let i = 0; i < 8; i++) {
-        seats.push({
-            number: 18 + i,
-            x: rowXPositions[i],
-            y: bottomY,
-            size: finalPlayerSize
-        });
+    const hostSeat = document.getElementById('seat-1');
+    if (hostSeat) {
+        // Position host seat in top-left corner with some margin
+        const hostMargin = 20; // pixels from edge
+        const hostX = leftBorderX + hostMargin + (finalHostSize / 2);
+        const hostY = topBorderY + hostMargin + (finalHostSize / 2);
+        
+        hostSeat.style.position = 'fixed';
+        hostSeat.style.left = `${hostX}px`;
+        hostSeat.style.top = `${hostY}px`;
+        hostSeat.style.width = `${finalHostSize}px`;
+        hostSeat.style.height = `${finalHostSize}px`;
+        hostSeat.style.transform = 'translate(-50%, -50%)';
+        
+        console.log(`Positioned host seat at (${hostX}, ${hostY}) with size ${finalHostSize}px`);
     }
     
     // ============================================
