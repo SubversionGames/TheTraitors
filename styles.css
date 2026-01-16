@@ -402,11 +402,12 @@ body {
 /* Tab System (Right Side) */
 .tab-container {
     position: fixed;
-    right: 0;
-    top: 70px; /* Changed from 80px to match top bar height */
+    left: 20px; /* Changed from right: 0 */
+    top: 300px; /* Below host seat (100px top + 180px seat + 20px gap) */
     bottom: 0;
     z-index: 200;
     display: flex;
+    flex-direction: row-reverse; /* Tabs on right side of panel */
     pointer-events: auto;
 }
 
@@ -415,9 +416,10 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0;
-    background: rgba(0, 0, 0, 0.85); /* Match panel transparency */
-    border-left: 2px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.85);
+    border-right: 2px solid rgba(255, 255, 255, 0.2); /* Changed from border-left */
     backdrop-filter: blur(10px);
+    order: 2; /* Tabs appear on right side */
 }
 
 .tab-button {
@@ -447,19 +449,20 @@ body {
 /* Tab Content Panel */
 .tab-content-panel {
     width: 0;
-    background: rgba(0, 0, 0, 0.85); /* Changed from 0.95 to 0.85 for more transparency */
+    background: rgba(0, 0, 0, 0.85);
     overflow-y: auto;
     overflow-x: hidden;
     transition: width 0.3s ease;
-    box-shadow: -5px 0 20px rgba(0, 0, 0, 0.5);
+    box-shadow: 5px 0 20px rgba(0, 0, 0, 0.5); /* Changed shadow direction */
     pointer-events: auto;
-    backdrop-filter: blur(10px); /* Add blur effect */
+    backdrop-filter: blur(10px);
+    order: 1; /* Panel appears on left side */
 }
 
 .tab-content-panel.open {
     width: 320px;
     padding: 20px;
-    border-left: 2px solid rgba(255, 255, 255, 0.2);
+    border-right: 2px solid rgba(255, 255, 255, 0.2); /* Changed from border-left */
 }
 
 .tab-content {
