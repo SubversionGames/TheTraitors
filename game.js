@@ -235,69 +235,74 @@ function generateVideoSeats() {
     const circle = document.getElementById('video-circle');
     if (!circle) return;
     
-    // Seat 1 (Host) is already in HTML at top left
-    // Generate seats 2-25 around a rectangular table
+    // Fixed dimensions in pixels (not percentages)
+    const containerWidth = 1200;
+    const containerHeight = 650;
     
     const seats = [];
     
-    // TOP ROW - Seats 2-9 (8 seats across top)
+    // TOP ROW - 8 seats with fixed pixel spacing
     const topSeats = 8;
-    const topSpacing = 100 / (topSeats + 1);
+    const topY = 50; // 50px from top of container
+    const topSpacing = containerWidth / (topSeats + 1);
     for (let i = 0; i < topSeats; i++) {
         seats.push({
             number: i + 2,
             x: topSpacing * (i + 1),
-            y: 8,
-            labelPosition: 'bottom' // Label below seat
+            y: topY,
+            labelPosition: 'bottom'
         });
     }
     
-    // RIGHT SIDE - Seats 10-13 (4 seats down right side)
+    // RIGHT SIDE - 4 seats
     const rightSeats = 4;
-    const rightSpacing = 84 / (rightSeats + 1);
+    const rightX = containerWidth - 50; // 50px from right edge
+    const rightSpacing = (containerHeight - 100) / (rightSeats + 1); // 100 = top/bottom margins
     for (let i = 0; i < rightSeats; i++) {
         seats.push({
             number: 10 + i,
-            x: 92,
-            y: 8 + rightSpacing * (i + 1),
-            labelPosition: 'left' // Label to left of seat
+            x: rightX,
+            y: 50 + rightSpacing * (i + 1),
+            labelPosition: 'left'
         });
     }
     
-    // BOTTOM ROW - Seats 14-21 (8 seats across bottom, RIGHT TO LEFT)
+    // BOTTOM ROW - 8 seats
     const bottomSeats = 8;
-    const bottomSpacing = 100 / (bottomSeats + 1);
+    const bottomY = containerHeight - 50; // 50px from bottom
+    const bottomSpacing = containerWidth / (bottomSeats + 1);
     for (let i = 0; i < bottomSeats; i++) {
         seats.push({
             number: 14 + i,
-            x: 100 - (bottomSpacing * (i + 1)),
-            y: 92,
-            labelPosition: 'top' // Label above seat
+            x: containerWidth - (bottomSpacing * (i + 1)),
+            y: bottomY,
+            labelPosition: 'top'
         });
     }
     
-    // LEFT SIDE - Seats 22-25 (4 seats up left side, BOTTOM TO TOP)
+    // LEFT SIDE - 4 seats
     const leftSeats = 4;
-    const leftSpacing = 84 / (leftSeats + 1);
+    const leftX = 50; // 50px from left edge
+    const leftSpacing = (containerHeight - 100) / (leftSeats + 1);
     for (let i = 0; i < leftSeats; i++) {
         seats.push({
             number: 22 + i,
-            x: 8,
-            y: 92 - (leftSpacing * (i + 1)),
-            labelPosition: 'right' // Label to right of seat
+            x: leftX,
+            y: containerHeight - 50 - (leftSpacing * (i + 1)),
+            labelPosition: 'right'
         });
     }
     
-    // Create all seats
+    // Create all seats with PIXEL positioning
     seats.forEach(seat => {
         const seatElement = document.createElement('div');
         seatElement.className = 'video-seat empty';
         seatElement.id = `seat-${seat.number}`;
-        seatElement.style.left = `${seat.x}%`;
-        seatElement.style.top = `${seat.y}%`;
+        seatElement.style.left = `${seat.x}px`; // PIXELS not percentages
+        seatElement.style.top = `${seat.y}px`;  // PIXELS not percentages
         seatElement.style.transform = 'translate(-50%, -50%)';
         
-        // Determine label style based on position
+        // Determine label style
         let labelStyle = 'position: absolute; white-space: nowrap;';
         switch(seat.labelPosition) {
             case 'bottom':
@@ -317,18 +322,18 @@ function generateVideoSeats() {
         seatElement.innerHTML = `
             <div id="video-${seat.number}"></div>
             <div class="seat-label" style="${labelStyle}">
-                <span class="player-name clickable-name" id="name-${seat.number}">Empty</span>
+                <span class="player-name" id="name-${seat.number}" style="cursor: pointer; font-weight: bold; font-size: 0.9rem;">Empty</span>
             </div>
             <div class="vote-indicator" id="vote-${seat.number}"></div>
         `;
         
-        // Add click handler for empty seats
+        // Add click handler
         seatElement.addEventListener('click', () => handleSeatClick(seat.number));
         
         circle.appendChild(seatElement);
     });
     
-    console.log('Generated 24 player seats in rectangular table layout');
+    console.log('Generated 24 player seats with fixed pixel positioning');
 }
 
 function handleSeatClick(seatNumber) {
