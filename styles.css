@@ -267,8 +267,6 @@ body {
 
 /* Host seat - ensure perfect circular alignment */
 .video-seat.host {
-    width: 360px !important; /* Double size */
-    height: 360px !important;
     border-color: #667eea;
     border-width: 6px;
     box-shadow: 0 0 40px rgba(102, 126, 234, 0.6);
