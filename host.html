@@ -513,13 +513,18 @@
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
             
-            const leftBoundary = 50;
-            const topBoundary = 90;
+            const leftBoundaryPercent = 10;
+            const topBoundaryPx = 90;
             const panelWidth = 320;
             const tabWidth = 40;
             const panelLeft = 20;
-            const rightBoundary = panelLeft + panelWidth + tabWidth + 50;
-            const bottomBoundary = viewportHeight - 50;
+            const rightBoundaryPx = panelLeft + panelWidth + tabWidth + 50;
+            const bottomMarginPercent = 5;
+            
+            const leftBoundary = (viewportWidth * leftBoundaryPercent) / 100;
+            const rightBoundary = rightBoundaryPx;
+            const topBoundary = topBoundaryPx;
+            const bottomBoundary = viewportHeight - (viewportHeight * bottomMarginPercent / 100);
             
             const availableWidth = viewportWidth - leftBoundary - (viewportWidth - rightBoundary);
             const availableHeight = bottomBoundary - topBoundary;
@@ -527,17 +532,26 @@
             const centerX = leftBoundary + (availableWidth / 2);
             const centerY = topBoundary + (availableHeight / 2);
             
+            // Use stored sizes from generateVideoSeats
+            const hostSize = window.currentHostSize || 240; // Fallback
+            
             const hostSeat = document.getElementById('seat-1');
             if (hostSeat) {
                 hostSeat.style.left = `${centerX}px`;
                 hostSeat.style.top = `${centerY}px`;
+                hostSeat.style.width = `${hostSize}px`;
+                hostSeat.style.height = `${hostSize}px`;
                 hostSeat.style.transform = 'translate(-50%, -50%)';
             }
         }
 
         // Call on load and resize
-        document.addEventListener('DOMContentLoaded', updateHostPosition);
-        window.addEventListener('resize', updateHostPosition);
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(updateHostPosition, 100);
+        });
+        window.addEventListener('resize', () => {
+            updateHostPosition();
+        });
 
         // Resize host seat to match player seats
         function resizeHostSeat() {
