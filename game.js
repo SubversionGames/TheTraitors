@@ -354,25 +354,37 @@ function generateVideoSeats() {
     // TOP ROW (8 seats: 2-9)
     const topY = centerY - (finalPlayerSize / 2) - verticalGap - (finalPlayerSize / 2);
     
-    // Calculate positions between middle row seats
+    // Calculate anchor positions (seats that stay in their current positions)
+    // These are positioned between middle row seats or between middle and host
     const topRowPositions = [];
     
-    // Between left seats (10-11, 11-12, 12-13)
-    for (let i = 0; i < 3; i++) {
-        topRowPositions.push((seats[i].x + seats[i + 1].x) / 2);
-    }
+    // Seat 2: between 10-11
+    const seat2X = (seats[0].x + seats[1].x) / 2;
     
-    // Between seat 13 and host
-    topRowPositions.push((seats[3].x + centerX) / 2);
+    // Seat 5: between 12-13
+    const seat5X = (seats[2].x + seats[3].x) / 2;
     
-    // Between host and seat 14
-    topRowPositions.push((centerX + seats[4].x) / 2);
+    // Seat 6: between 14-15
+    const seat6X = (seats[4].x + seats[5].x) / 2;
     
-    // Between right seats (14-15, 15-16, 16-17)
-    for (let i = 4; i < 7; i++) {
-        topRowPositions.push((seats[i].x + seats[i + 1].x) / 2);
-    }
+    // Seat 9: between 16-17
+    const seat9X = (seats[6].x + seats[7].x) / 2;
     
+    // Now fill in seats 3 and 4 evenly between 2 and 5
+    const gap_2_5 = (seat5X - seat2X) / 3; // Divide by 3 to get 3 equal spaces
+    topRowPositions[0] = seat2X;                    // Seat 2
+    topRowPositions[1] = seat2X + gap_2_5;          // Seat 3
+    topRowPositions[2] = seat2X + (gap_2_5 * 2);    // Seat 4
+    topRowPositions[3] = seat5X;                    // Seat 5
+    
+    // Fill in seats 7 and 8 evenly between 6 and 9
+    const gap_6_9 = (seat9X - seat6X) / 3; // Divide by 3 to get 3 equal spaces
+    topRowPositions[4] = seat6X;                    // Seat 6
+    topRowPositions[5] = seat6X + gap_6_9;          // Seat 7
+    topRowPositions[6] = seat6X + (gap_6_9 * 2);    // Seat 8
+    topRowPositions[7] = seat9X;                    // Seat 9
+    
+    // Create top row seats
     for (let i = 0; i < 8; i++) {
         seats.push({
             number: 2 + i,
@@ -382,7 +394,7 @@ function generateVideoSeats() {
         });
     }
     
-    // BOTTOM ROW (8 seats: 18-25)
+    // BOTTOM ROW (8 seats: 18-25) - uses same X positions as top row
     const bottomY = centerY + (finalPlayerSize / 2) + verticalGap + (finalPlayerSize / 2);
     
     for (let i = 0; i < 8; i++) {
