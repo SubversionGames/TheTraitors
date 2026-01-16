@@ -239,38 +239,33 @@ function generateVideoSeats() {
     }
     
     // ============================================
-    // DEFINE PLAYER SEATING AREA BOUNDARIES (%)
+    // DEFINE PLAYER SEATING AREA BOUNDARIES
     // ============================================
     
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Left border: percentage from left edge
-    const leftBoundaryPercent = 10; // 10% from left
+    // Left border: aligned with profile text in top panel
+    const leftBoundary = 20; // Same as profile text position in top panel
     
-    // Top border: below top panel (fixed px)
-    const topBoundaryPx = 90;
+    // Top border: below top panel
+    const topBoundary = 90; // Just below top bar
     
-    // Right border: outer edge of expanded side panel (fixed px for now)
+    // Right border: outer edge of expanded side panel
     const panelWidth = 320;
     const tabWidth = 40;
     const panelLeft = 20;
-    const rightBoundaryPx = panelLeft + panelWidth + tabWidth + 50;
+    const rightBoundary = panelLeft + panelWidth + tabWidth + 50; // Panel edge + gap
     
-    // Bottom border: percentage from bottom
-    const bottomMarginPercent = 5; // 5% from bottom
-    
-    // Convert to actual pixels for calculations
-    const leftBoundary = (viewportWidth * leftBoundaryPercent) / 100;
-    const rightBoundary = rightBoundaryPx;
-    const topBoundary = topBoundaryPx;
-    const bottomBoundary = viewportHeight - (viewportHeight * bottomMarginPercent / 100);
+    // Bottom border: near bottom of viewport
+    const bottomMargin = 50; // 50px from bottom
+    const bottomBoundary = viewportHeight - bottomMargin;
     
     // Available seating area
     const availableWidth = viewportWidth - leftBoundary - (viewportWidth - rightBoundary);
     const availableHeight = bottomBoundary - topBoundary;
     
-    console.log(`Seating area: ${availableWidth}w x ${availableHeight}h`);
+    console.log(`Seating area: left=${leftBoundary}, right boundary=${rightBoundary}, width=${availableWidth}, height=${availableHeight}`);
     
     // ============================================
     // SEAT SIZING (% of viewport)
