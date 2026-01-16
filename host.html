@@ -509,6 +509,51 @@
             }
         }
 
+        // Resize host seat to match player seats
+        function resizeHostSeat() {
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            // Same calculation as player seats
+            const horizontalPadding = 300;
+            const horizontalEndPadding = 100;
+            const topMargin = 100;
+            const bottomMargin = 100;
+            const verticalGapFromCorner = 150;
+            
+            const availableWidth = viewportWidth - horizontalPadding - horizontalEndPadding;
+            const availableHeight = viewportHeight - topMargin - bottomMargin - (verticalGapFromCorner * 2);
+            
+            const topSeats = 8;
+            const maxSeatWidthFromTop = availableWidth / topSeats * 0.8;
+            const sideSeats = 4;
+            const maxSeatHeightFromSide = availableHeight / sideSeats * 0.8;
+            
+            const calculatedSeatSize = Math.min(maxSeatWidthFromTop, maxSeatHeightFromSide, 180);
+            const seatSize = Math.max(100, calculatedSeatSize);
+            
+            // Update host seat size
+            const hostSeat = document.getElementById('seat-1');
+            if (hostSeat) {
+                hostSeat.style.width = `${seatSize}px`;
+                hostSeat.style.height = `${seatSize}px`;
+            }
+            
+            // Update host name tag position (below seat)
+            const hostNameTag = hostSeat.nextElementSibling;
+            if (hostNameTag) {
+                const hostTop = 100;
+                hostNameTag.style.top = `${hostTop + seatSize/2 + 10}px`;
+            }
+        }
+
+        // Call on load and resize
+        window.addEventListener('load', resizeHostSeat);
+        window.addEventListener('resize', () => {
+            clearTimeout(window.hostResizeTimeout);
+            window.hostResizeTimeout = setTimeout(resizeHostSeat, 250);
+        });
+
         async function toggleHostAudio() {
             if (window.toggleAudio) {
                 const isMuted = await window.toggleAudio();
