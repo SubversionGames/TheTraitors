@@ -48,8 +48,8 @@
         <div class="main-content">
             <!-- Video Circle -->
             <div class="video-circle-container">
-                <!-- Seat 1 (Host) - Top Left -->
-                <div class="video-seat host" id="seat-1" style="position: fixed !important; top: 100px !important; left: 20px !important; transform: none !important; z-index: 50;">
+                <!-- Seat 1 (Host) - Will be positioned by JavaScript -->
+                <div class="video-seat host" id="seat-1" style="position: fixed !important; z-index: 250;">
                     <div id="video-1"></div>
                 </div>
                 <!-- Host name tag as separate element -->
@@ -508,6 +508,47 @@
                 }
             }
         }
+
+        // Position host seat based on panel state
+        function updateHostPosition() {
+            const hostSeat = document.getElementById('seat-1');
+            const panel = document.querySelector('.tab-content-panel');
+            const isPanelOpen = panel && panel.classList.contains('open');
+            
+            const panelLeft = 20; // Starting position of panel
+            const panelWidth = isPanelOpen ? 320 : 0; // Panel width when open
+            const tabWidth = 40; // Tab button width
+            
+            // Center on the expanded panel
+            const hostLeft = panelLeft + (panelWidth + tabWidth) / 2;
+            const hostTop = 200; // Fixed top position
+            
+            if (hostSeat) {
+                hostSeat.style.left = `${hostLeft}px`;
+                hostSeat.style.top = `${hostTop}px`;
+                hostSeat.style.transform = 'translateX(-50%)';
+            }
+            
+            // Update host name tag
+            const hostNameTag = hostSeat ? hostSeat.nextElementSibling : null;
+            if (hostNameTag) {
+                hostNameTag.style.left = `${hostLeft}px`;
+                const seatSize = parseInt(hostSeat.style.height) || 180;
+                hostNameTag.style.top = `${hostTop + seatSize/2 + 10}px`;
+            }
+        }
+
+        // Call on load and when panel toggles
+        document.addEventListener('DOMContentLoaded', () => {
+            updateHostPosition();
+            
+            // Watch for panel changes
+            const observer = new MutationObserver(updateHostPosition);
+            const panel = document.querySelector('.tab-content-panel');
+            if (panel) {
+                observer.observe(panel, { attributes: true, attributeFilter: ['class'] });
+            }
+        });
 
         // Resize host seat to match player seats
         function resizeHostSeat() {
