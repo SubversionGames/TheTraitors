@@ -242,37 +242,10 @@ body {
 }
 
 .video-circle {
+    /* Not used for positioning, just a container reference */
     position: fixed;
-    top: 120px; /* Fixed distance from top (below top bar) */
-    left: 50%;
-    transform: translateX(-50%);
-    width: 1200px; /* Fixed width */
-    height: 650px; /* Fixed height - prevents vertical scaling */
-    margin: 0;
-    padding: 0;
-    overflow: visible !important;
-}
-
-/* Scale down on smaller screens but maintain aspect ratio */
-@media (max-width: 1400px) {
-    .video-circle {
-        width: 1000px;
-        height: 542px; /* Maintains same aspect ratio: 542 = 1000 * (650/1200) */
-    }
-}
-
-@media (max-width: 1200px) {
-    .video-circle {
-        width: 900px;
-        height: 488px; /* Maintains same aspect ratio */
-    }
-}
-
-@media (max-width: 1100px) {
-    .video-circle {
-        width: 800px;
-        height: 433px; /* Maintains same aspect ratio */
-    }
+    pointer-events: none;
+    z-index: 1;
 }
 
 /* Individual Video Seats */
