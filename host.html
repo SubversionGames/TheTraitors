@@ -48,13 +48,12 @@
         <div class="main-content">
             <!-- Video Circle -->
             <div class="video-circle-container">
-                <!-- Seat 1 (Host) - Will be positioned by JavaScript -->
-                <div class="video-seat host" id="seat-1" style="position: fixed !important; z-index: 250;">
+                <!-- Host Seat - Double size, centered in player area -->
+                <div class="video-seat host" id="seat-1" style="position: fixed !important; width: 360px !important; height: 360px !important; z-index: 250;">
                     <div id="video-1"></div>
-                </div>
-                <!-- Host name tag as separate element -->
-                <div style="position: fixed !important; top: 290px !important; left: 110px !important; transform: translateX(-50%) !important; background: rgba(0, 0, 0, 0.9); padding: 5px 12px; border-radius: 6px; z-index: 100 !important; white-space: nowrap;">
-                    <span class="player-name" id="name-1" style="cursor: pointer; font-weight: bold; font-size: 0.9rem; color: white;">Host</span>
+                    <div class="seat-label" style="position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); white-space: nowrap; z-index: 100;">
+                        <span class="player-name" id="name-1" style="cursor: pointer; font-weight: bold; font-size: 0.9rem; color: white;">Host</span>
+                    </div>
                 </div>
             
                 <div class="video-circle" id="video-circle">
@@ -509,46 +508,36 @@
             }
         }
 
-        // Position host seat based on panel state
+        // Position host seat in center of player area
         function updateHostPosition() {
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            const leftBoundary = 50;
+            const topBoundary = 90;
+            const panelWidth = 320;
+            const tabWidth = 40;
+            const panelLeft = 20;
+            const rightBoundary = panelLeft + panelWidth + tabWidth + 50;
+            const bottomBoundary = viewportHeight - 50;
+            
+            const availableWidth = viewportWidth - leftBoundary - (viewportWidth - rightBoundary);
+            const availableHeight = bottomBoundary - topBoundary;
+            
+            const centerX = leftBoundary + (availableWidth / 2);
+            const centerY = topBoundary + (availableHeight / 2);
+            
             const hostSeat = document.getElementById('seat-1');
-            const panel = document.querySelector('.tab-content-panel');
-            const isPanelOpen = panel && panel.classList.contains('open');
-            
-            const panelLeft = 20; // Starting position of panel
-            const panelWidth = isPanelOpen ? 320 : 0; // Panel width when open
-            const tabWidth = 40; // Tab button width
-            
-            // Center on the expanded panel
-            const hostLeft = panelLeft + (panelWidth + tabWidth) / 2;
-            const hostTop = 200; // Fixed top position
-            
             if (hostSeat) {
-                hostSeat.style.left = `${hostLeft}px`;
-                hostSeat.style.top = `${hostTop}px`;
-                hostSeat.style.transform = 'translateX(-50%)';
-            }
-            
-            // Update host name tag
-            const hostNameTag = hostSeat ? hostSeat.nextElementSibling : null;
-            if (hostNameTag) {
-                hostNameTag.style.left = `${hostLeft}px`;
-                const seatSize = parseInt(hostSeat.style.height) || 180;
-                hostNameTag.style.top = `${hostTop + seatSize/2 + 10}px`;
+                hostSeat.style.left = `${centerX}px`;
+                hostSeat.style.top = `${centerY}px`;
+                hostSeat.style.transform = 'translate(-50%, -50%)';
             }
         }
 
-        // Call on load and when panel toggles
-        document.addEventListener('DOMContentLoaded', () => {
-            updateHostPosition();
-            
-            // Watch for panel changes
-            const observer = new MutationObserver(updateHostPosition);
-            const panel = document.querySelector('.tab-content-panel');
-            if (panel) {
-                observer.observe(panel, { attributes: true, attributeFilter: ['class'] });
-            }
-        });
+        // Call on load and resize
+        document.addEventListener('DOMContentLoaded', updateHostPosition);
+        window.addEventListener('resize', updateHostPosition);
 
         // Resize host seat to match player seats
         function resizeHostSeat() {
