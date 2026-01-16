@@ -245,11 +245,8 @@ function generateVideoSeats() {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Left border: where expanded panel ends
-    const panelLeft = 20;
-    const panelContentWidth = 320;
-    const panelTabWidth = 40;
-    const leftBorderX = panelLeft + panelContentWidth + panelTabWidth + 20; // Panel edge + 20px gap = 400px
+    // Left border: aligned with profile text (NOT after panel)
+    const leftBorderX = 20; // Same as "Main Host" text position
     
     // Right border: near right edge of viewport
     const rightBorderX = viewportWidth - 50; // 50px from right edge
@@ -261,7 +258,7 @@ function generateVideoSeats() {
     const bottomBorderY = viewportHeight - 50;
     
     // Calculate seating area dimensions
-    const seatingAreaWidth = rightBorderX - leftBorderX; // Should be ~viewport width - 450px
+    const seatingAreaWidth = rightBorderX - leftBorderX;
     const seatingAreaHeight = bottomBorderY - topBorderY;
     
     // Calculate center of seating area
@@ -271,7 +268,7 @@ function generateVideoSeats() {
     console.log(`Viewport: ${viewportWidth}x${viewportHeight}`);
     console.log(`Seating area: ${seatingAreaWidth}px wide x ${seatingAreaHeight}px tall`);
     console.log(`Boundaries: left=${leftBorderX}px, right=${rightBorderX}px`);
-    console.log(`Center: x=${centerX}px, y=${centerY}px`);
+    console.log(`Center: x=${centerX}px, y=${centerY}px (should be ~${viewportWidth/2}px)`);
     
     // ============================================
     // SEAT SIZING (% of seating area width)
