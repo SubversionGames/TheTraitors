@@ -235,31 +235,36 @@ function generateVideoSeats() {
     const circle = document.getElementById('video-circle');
     if (!circle) return;
     
-    // FIXED POSITIONS - all in pixels relative to viewport
-    const hostTop = 100; // Host seat is at 100px from top
-    const hostLeft = 110; // Host seat center (20px left + 90px radius)
-    const seatSize = 180; // Seat diameter
+    // ============================================
+    // SPACING CONTROLS - ADJUST THESE VALUES
+    // ============================================
     
-    // TOP ROW - Same height as host seat
-    const topY = hostTop; // Same as host
+    // Distance from edges
+    const topMargin = 100;        // Distance from top of window
+    const bottomMargin = 100;     // Distance from bottom of window
+    const sideMargin = 150;       // Distance of left/right seats from window edges
     
-    // BOTTOM ROW - Same distance from bottom as top from top
-    const viewportHeight = window.innerHeight;
-    const bottomY = viewportHeight - hostTop; // Mirror top position
+    // Horizontal spread for top/bottom rows
+    const horizontalPadding = 300; // Space on left before top row starts
+    const horizontalEndPadding = 100; // Space on right before top row ends
     
-    // LEFT SIDE - Vertically centered on host
-    const leftX = hostLeft; // Aligned with host center
+    // Vertical gaps between corners and side seats
+    const verticalGapFromCorner = 150; // Space between top row and first right/left seat
     
-    // RIGHT SIDE - Same distance from right edge as left from left edge
+    // ============================================
+    // END OF SPACING CONTROLS
+    // ============================================
+    
     const viewportWidth = window.innerWidth;
-    const rightX = viewportWidth - hostLeft; // Mirror left position
+    const viewportHeight = window.innerHeight;
     
     const seats = [];
     
-    // TOP ROW - 8 seats across
+    // TOP ROW - Spread across window width
     const topSeats = 8;
-    const topStartX = 300; // Start after host area
-    const topEndX = viewportWidth - 100; // End before right edge
+    const topY = topMargin;
+    const topStartX = horizontalPadding;
+    const topEndX = viewportWidth - horizontalEndPadding;
     const topSpacing = (topEndX - topStartX) / (topSeats - 1);
     
     for (let i = 0; i < topSeats; i++) {
@@ -271,10 +276,11 @@ function generateVideoSeats() {
         });
     }
     
-    // RIGHT SIDE - 4 seats
+    // RIGHT SIDE - Fixed distance from right edge
     const rightSeats = 4;
-    const rightStartY = topY + 150; // Start below top row
-    const rightEndY = bottomY - 150; // End above bottom row
+    const rightX = viewportWidth - sideMargin;
+    const rightStartY = topY + verticalGapFromCorner;
+    const rightEndY = (viewportHeight - bottomMargin) - verticalGapFromCorner;
     const rightSpacing = (rightEndY - rightStartY) / (rightSeats - 1);
     
     for (let i = 0; i < rightSeats; i++) {
@@ -286,39 +292,43 @@ function generateVideoSeats() {
         });
     }
     
-    // BOTTOM ROW - 8 seats across (right to left)
+    // BOTTOM ROW - Mirror top row (right to left)
     const bottomSeats = 8;
+    const bottomY = viewportHeight - bottomMargin;
+    
     for (let i = 0; i < bottomSeats; i++) {
         seats.push({
             number: 14 + i,
-            x: topEndX - (topSpacing * i), // Mirror top row
+            x: topEndX - (topSpacing * i),
             y: bottomY,
             labelPosition: 'top'
         });
     }
     
-    // LEFT SIDE - 4 seats
+    // LEFT SIDE - Fixed distance from left edge
     const leftSeats = 4;
+    const leftX = sideMargin;
+    
     for (let i = 0; i < leftSeats; i++) {
         seats.push({
             number: 22 + i,
             x: leftX,
-            y: rightEndY - (rightSpacing * i), // Mirror right side
+            y: rightEndY - (rightSpacing * i),
             labelPosition: 'right'
         });
     }
     
-    // Create all seats with absolute pixel positioning
+    // Create all seats
     seats.forEach(seat => {
         const seatElement = document.createElement('div');
         seatElement.className = 'video-seat empty';
         seatElement.id = `seat-${seat.number}`;
-        seatElement.style.position = 'fixed'; // Fixed to viewport
+        seatElement.style.position = 'fixed';
         seatElement.style.left = `${seat.x}px`;
         seatElement.style.top = `${seat.y}px`;
         seatElement.style.transform = 'translate(-50%, -50%)';
         
-        // Determine label style
+        // Label positioning logic
         let labelStyle = 'position: absolute; white-space: nowrap;';
         switch(seat.labelPosition) {
             case 'bottom':
@@ -343,13 +353,11 @@ function generateVideoSeats() {
             <div class="vote-indicator" id="vote-${seat.number}"></div>
         `;
         
-        // Add click handler
         seatElement.addEventListener('click', () => handleSeatClick(seat.number));
-        
-        document.body.appendChild(seatElement); // Append to body, not circle
+        document.body.appendChild(seatElement);
     });
     
-    console.log('Generated 24 player seats with viewport-fixed positioning');
+    console.log('Generated 24 player seats with responsive positioning');
 }
 
 function handleSeatClick(seatNumber) {
@@ -764,6 +772,21 @@ function renameSelf() {
         alert('Name must be 1-12 characters.');
     }
 }
+
+// Regenerate seats on window resize
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        // Remove old seats
+        for (let i = 2; i <= 25; i++) {
+            const seat = document.getElementById(`seat-${i}`);
+            if (seat) seat.remove();
+        }
+        // Regenerate with new dimensions
+        generateVideoSeats();
+    }, 250); // Wait 250ms after resize stops
+});
 
 // Make rename available globally
 window.renameSelf = renameSelf;
