@@ -49,11 +49,14 @@
                     <div class="tab-content active" id="game-controls">
                         <h3>Game Controls</h3>
 
-                        <div class="control-buttons-section">
-                            <button onclick="startGame()" class="control-button primary" style="width: 100%; margin-bottom: 10px;">Start Game</button>
-                            <button onclick="showTimerModal()" class="control-button" style="width: 100%; margin-bottom: 10px;">Set Timer</button>
-                            <button onclick="startTimer()" class="control-button" id="start-timer-btn" style="width: 100%; margin-bottom: 10px;">Start Timer</button>
-                            <button onclick="pauseTimer()" class="control-button" id="pause-timer-btn" style="width: 100%; margin-bottom: 10px;">Pause Timer</button>
+                        <div class="timer-controls-section">
+                            <h4>Timer</h4>
+                            <div class="button-grid-2x2">
+                                <button onclick="startGame()" class="control-button primary">Start Game</button>
+                                <button onclick="showTimerModal()" class="control-button">Set Timer</button>
+                                <button onclick="startTimer()" class="control-button" id="start-timer-btn">Start Timer</button>
+                                <button onclick="pauseTimer()" class="control-button" id="pause-timer-btn">Pause Timer</button>
+                            </div>
                         </div>
                         
                         <!-- Phase Controls -->
