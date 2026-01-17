@@ -468,6 +468,7 @@ function claimSeat(seatNumber, playerName) {
     const playerData = {
         id: currentUser.id,
         name: playerName,
+        pronouns: '',
         seat: seatNumber,
         room: 'main',
         status: 'active',
