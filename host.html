@@ -8,40 +8,10 @@
 </head>
 <body>
     <div class="game-interface">
-        <!-- Top Bar with Timer and Controls -->
-        <div class="top-bar">
-            <div class="host-info">
-                <span id="host-mode-display">Main Host</span>
-                <button onclick="toggleProductionMode()" class="control-button" id="production-toggle">
-                    Switch to Production Viewer
-                </button>
-                <button onclick="toggleHostVideo()" class="control-button" id="host-video-btn">
-                    Video On
-                </button>
-                <button onclick="toggleHostAudio()" class="control-button" id="host-audio-btn">
-                    Mic On
-                </button>
-            </div>
-
-            <div class="timer-display">
-                <div class="phase-name" id="phase-name">Waiting to Start</div>
-                <div class="timer" id="timer">00:00</div>
-            </div>
-
-            <div class="host-controls">
-                <button onclick="startGame()" class="control-button success" id="start-game-btn">
-                    Start Game
-                </button>
-                <button onclick="setTimer()" class="control-button">
-                    Set Timer
-                </button>
-                <button onclick="startTimer()" class="control-button" id="start-timer-btn" disabled>
-                    Start Timer
-                </button>
-                <button onclick="pauseTimer()" class="control-button" id="pause-timer-btn" disabled>
-                    Pause Timer
-                </button>
-            </div>
+        <!-- Timer/Phase Display (floating, centered with Host seat) -->
+        <div class="timer-phase-display" id="timer-phase-display">
+            <div class="phase-name" id="phase-name">Waiting to Start</div>
+            <div class="timer" id="timer">00:00</div>
         </div>
 
         <!-- Main Content Area -->
@@ -78,6 +48,13 @@
                     <!-- Game Controls Tab -->
                     <div class="tab-content active" id="game-controls">
                         <h3>Game Controls</h3>
+
+                        <div class="control-buttons-section">
+                            <button onclick="startGame()" class="control-button primary" style="width: 100%; margin-bottom: 10px;">Start Game</button>
+                            <button onclick="showTimerModal()" class="control-button" style="width: 100%; margin-bottom: 10px;">Set Timer</button>
+                            <button onclick="startTimer()" class="control-button" id="start-timer-btn" style="width: 100%; margin-bottom: 10px;">Start Timer</button>
+                            <button onclick="pauseTimer()" class="control-button" id="pause-timer-btn" style="width: 100%; margin-bottom: 10px;">Pause Timer</button>
+                        </div>
                         
                         <!-- Phase Controls -->
                         <div class="control-section">
