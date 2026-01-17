@@ -170,19 +170,34 @@ body {
     height: 70px; /* Increased from 60px */
 }
 
-.timer-display {
+/* New Timer/Phase Display (replaces top bar) */
+.timer-phase-display {
+    position: fixed;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    padding: 20px 40px;
+    border-radius: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
     text-align: center;
+    z-index: 100;
+    box-shadow: 0 5px 30px rgba(0, 0, 0, 0.5);
 }
 
-.timer-display .phase-name {
-    font-size: 0.9rem;
-    color: #bbb;
-    margin-bottom: 5px;
-}
-
-.timer-display .timer {
-    font-size: 2.5rem;
+.timer-phase-display .phase-name {
+    font-size: 1.8rem;
     font-weight: bold;
+    color: #667eea;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.timer-phase-display .timer {
+    font-size: 3rem;
+    font-weight: bold;
+    color: white;
     font-family: 'Courier New', monospace;
 }
 
@@ -624,10 +639,9 @@ body {
     }
     
     .side-panel {
-        width: 100%;
-        border-left: none;
-        border-top: 2px solid rgba(255, 255, 255, 0.2);
-        max-height: 200px;
+       position: fixed;
+       left: 20px;
+       top: 20px; /* Move to near top of window */
     }
 }
 
