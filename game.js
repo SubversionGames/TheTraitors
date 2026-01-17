@@ -261,8 +261,8 @@ function generateVideoSeats() {
     const rightMargin = (viewportWidth * panelPercentage) / 100; // Same % as panel
     const rightBorderX = viewportWidth - rightMargin;
     
-    // Top border: below top panel
-    const topBorderY = 90;
+    // Top border: near top of viewport (no top panel anymore)
+    const topBorderY = 20;
     
     // Bottom border: near bottom of viewport
     const bottomBorderY = viewportHeight - 50;
