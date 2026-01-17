@@ -367,27 +367,6 @@ function generateVideoSeats() {
     }
     
     console.log(`Generated ${seats.length} player seats in 8x3 grid`);
-
-    // ============================================
-    // POSITION HOST SEAT (SEAT 1) IN TOP-LEFT
-    // ============================================
-    
-    const hostSeat = document.getElementById('seat-1');
-    if (hostSeat) {
-        // Position host seat in top-left corner with some margin
-        const hostMargin = 20; // pixels from edge
-        const hostX = leftBorderX + hostMargin + (finalHostSize / 2);
-        const hostY = topBorderY + hostMargin + (finalHostSize / 2);
-        
-        hostSeat.style.position = 'fixed';
-        hostSeat.style.left = `${hostX}px`;
-        hostSeat.style.top = `${hostY}px`;
-        hostSeat.style.width = `${finalHostSize}px`;
-        hostSeat.style.height = `${finalHostSize}px`;
-        hostSeat.style.transform = 'translate(-50%, -50%)';
-        
-        console.log(`Positioned host seat at (${hostX}, ${hostY}) with size ${finalHostSize}px`);
-    }
     
     // ============================================
     // CREATE SEAT ELEMENTS
