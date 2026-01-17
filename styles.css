@@ -159,17 +159,6 @@ body {
     overflow: hidden;
 }
 
-/* Top Bar with Timer and Controls */
-.top-bar {
-    background: rgba(0, 0, 0, 0.8);
-    padding: 15px 30px; /* Increased back to 15px for more vertical space */
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
-    height: 70px; /* Increased from 60px */
-}
-
 /* New Timer/Phase Display (replaces top bar) */
 .timer-phase-display {
     position: fixed;
