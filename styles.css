@@ -625,7 +625,7 @@ body {
     .side-panel {
        position: fixed;
        left: 20px;
-       top: 0px; /* Move to near top of window */
+       top: 0px !important; /* Move to near top of window */
     }
 }
 
