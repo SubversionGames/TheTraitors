@@ -388,8 +388,9 @@ function generateVideoSeats() {
         
         seatElement.innerHTML = `
             <div id="video-${seat.number}"></div>
-            <div class="seat-label" style="${labelStyle}">
-                <span class="player-name" id="name-${seat.number}" style="cursor: pointer; font-weight: bold; font-size: 0.9rem;">Empty</span>
+            <div class="seat-label">
+                <span class="player-name" id="name-${seat.number}">Empty</span>
+                <span class="player-pronouns" id="pronouns-${seat.number}"></span>
             </div>
             <div class="vote-indicator" id="vote-${seat.number}"></div>
         `;
@@ -493,7 +494,19 @@ function claimSeat(seatNumber, playerName) {
 function updatePlayerDisplay() {
     for (let i = 1; i <= 25; i++) {
         const seatElement = document.getElementById(`seat-${i}`);
-        const nameElement = document.getElementById(`name-${i}`);
+        
+        // Update seat display
+            const nameElement = document.getElementById(`name-${playerData.seat}`);
+            if (nameElement) {
+                nameElement.textContent = playerData.name;
+                nameElement.style.color = 'white';
+            }
+            
+            // Update pronouns display
+            const pronounsElement = document.getElementById(`pronouns-${playerData.seat}`);
+            if (pronounsElement && playerData.pronouns) {
+                pronounsElement.textContent = playerData.pronouns;
+            }
         
         if (!seatElement || !nameElement) continue;
         
