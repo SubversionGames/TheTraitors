@@ -363,12 +363,26 @@
         }
 
         // CRITICAL: Auto-assign host to Seat 1 IMMEDIATELY before anything else
-        currentUser.seat = 1;
-        currentUser.name = 'Host';
-        currentUser.id = 'host';
-        sessionStorage.setItem('playerSeat', '1');
-        sessionStorage.setItem('playerName', 'Host');
-        console.log('Host assigned to Seat 1:', currentUser);
+        if (typeof currentUser !== 'undefined') {
+            currentUser.seat = 1;
+            currentUser.name = 'Host';
+            currentUser.id = 'host';
+            sessionStorage.setItem('playerSeat', '1');
+            sessionStorage.setItem('playerName', 'Host');
+            console.log('Host assigned to Seat 1:', currentUser);
+        } else {
+            console.log('Waiting for currentUser to be defined...');
+            setTimeout(() => {
+                if (typeof currentUser !== 'undefined') {
+                    currentUser.seat = 1;
+                    currentUser.name = 'Host';
+                    currentUser.id = 'host';
+                    sessionStorage.setItem('playerSeat', '1');
+                    sessionStorage.setItem('playerName', 'Host');
+                    console.log('Host assigned to Seat 1:', currentUser);
+                }
+            }, 100);
+        }
 
         // Register host in Firebase
         database.ref('players/host').set({
