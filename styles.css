@@ -176,13 +176,8 @@ body {
     top: 50px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.9);
-    padding: 20px 40px;
-    border-radius: 15px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
     text-align: center;
     z-index: 100;
-    box-shadow: 0 5px 30px rgba(0, 0, 0, 0.5);
 }
 
 .timer-phase-display .phase-name {
@@ -641,7 +636,7 @@ body {
     .side-panel {
        position: fixed;
        left: 20px;
-       top: 20px; /* Move to near top of window */
+       top: 0px; /* Move to near top of window */
     }
 }
 
@@ -847,4 +842,29 @@ input[type="number"] {
 .player-name.clickable-name:hover {
     color: #4CAF50;
     text-decoration: underline;
+}
+
+/* Timer Controls Section */
+.timer-controls-section {
+    margin-bottom: 20px;
+}
+
+.timer-controls-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 1rem;
+    color: #667eea;
+    font-weight: bold;
+}
+
+/* 2x2 Button Grid */
+.button-grid-2x2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.button-grid-2x2 .control-button {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 0.85rem;
 }
