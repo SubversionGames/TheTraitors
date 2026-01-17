@@ -369,9 +369,9 @@ body {
 
 .player-name {
     font-weight: bold;
-    font-size: 1.1rem;
+    font-size: 1.5rem;
     cursor: pointer;
-    line-height: 1.2;
+    line-height: 1.5;
 }
 
 .player-pronouns {
