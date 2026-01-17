@@ -360,11 +360,11 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(0, 0, 0, 0.8);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 8px;
-    padding: 8px 12px;
-    min-width: 100px;
+    background: rgba(0, 0, 0, 0.8) !important;
+    border: 2px solid rgba(255, 255, 255, 0.3) !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    min-width: 100px !important;
 }
 
 /* Remove seat-number styles since we're not using it anymore */
@@ -869,4 +869,22 @@ input[type="number"] {
     width: 100%;
     padding: 8px 12px;
     font-size: 0.85rem;
+}
+
+/* FORCE NAME TAG BOXES - ADD AT BOTTOM */
+body .seat-label {
+    background: rgba(0, 0, 0, 0.9) !important;
+    border: 2px solid rgba(255, 255, 255, 0.5) !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    min-width: 100px !important;
+}
+
+body .player-pronouns {
+    display: block !important;
+    min-height: 16px !important;
+    font-size: 0.8rem !important;
+    font-style: italic !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    margin-top: 2px !important;
 }
