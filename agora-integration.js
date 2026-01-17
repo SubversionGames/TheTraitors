@@ -11,6 +11,13 @@ let remoteUsers = {};
 // Initialize Agora
 async function initializeAgora() {
     console.log('=== AGORA INIT START ===');
+    
+    if (typeof currentUser === 'undefined') {
+        console.log('currentUser not ready yet, retrying in 500ms...');
+        setTimeout(initializeAgora, 500);
+        return;
+    }
+    
     console.log('Current user role:', currentUser.role);
     console.log('Current user seat:', currentUser.seat);
     console.log('Current user name:', currentUser.name);
