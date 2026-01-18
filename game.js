@@ -421,8 +421,8 @@ function generateVideoSeats() {
     
     const hostSeat = document.getElementById('seat-1');
     if (hostSeat) {
-        const hostX = leftBorderX + 20;
-        const hostY = topBorderY + 20;
+        const hostX = 40;
+        const hostY = 40;
         
         hostSeat.style.position = 'fixed';
         hostSeat.style.left = `${hostX}px`;
