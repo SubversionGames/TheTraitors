@@ -411,9 +411,6 @@ function generateVideoSeats() {
     if (typeof attachRenameHandlers === 'function') {
         setTimeout(() => attachRenameHandlers(), 100);
     }
-        
-    // Attach pronoun edit handlers
-    attachPronounHandlers();
 }
     
     // Function to edit pronouns
