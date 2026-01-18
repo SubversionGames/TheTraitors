@@ -245,43 +245,34 @@ function generateVideoSeats() {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Calculate panel width as % of viewport
+    // Calculate panel width (only needed for host positioning)
     const panelLeft = 20;
     const panelContentWidth = 320;
     const panelTabWidth = 40;
     const panelTotalWidth = panelLeft + panelContentWidth + panelTabWidth; // 380px
-    const panelPercentage = (panelTotalWidth / viewportWidth) * 100; // ~15% on typical screen
     
-    console.log(`Panel takes ${panelPercentage.toFixed(1)}% of screen width`);
+    // For player seats: use FULL viewport width (ignore panel)
+    const leftBorderX = 50; // Small margin from left edge
+    const rightBorderX = viewportWidth - 50; // Small margin from right edge
     
-    // Left border: where panel ends
-    const leftBorderX = panelTotalWidth;
-    
-    // Right border: mirror the panel percentage from right edge
-    const rightMargin = (viewportWidth * panelPercentage) / 100; // Same % as panel
-    const rightBorderX = viewportWidth - rightMargin;
-    
-    // Top border: near top of viewport (no top panel anymore)
+    // Top border: near top of viewport
     const topBorderY = 20;
     
     // Bottom border: near bottom of viewport
     const bottomBorderY = viewportHeight - 50;
     
-    // Calculate seating area dimensions
+    // Calculate seating area dimensions (full width)
     const seatingAreaWidth = rightBorderX - leftBorderX;
     const seatingAreaHeight = bottomBorderY - topBorderY;
     
-    // Calculate center - horizontal center of viewport, vertical based on seating area
+    // Calculate center - horizontal center of viewport
     const centerX = viewportWidth / 2;
     const centerY = topBorderY + (seatingAreaHeight / 2);
-    
-    // Calculate as percentage of total viewport for verification
-    const centerPercentFromLeft = (centerX / viewportWidth) * 100;
     
     console.log(`Viewport: ${viewportWidth}x${viewportHeight}`);
     console.log(`Seating area: ${seatingAreaWidth}px wide x ${seatingAreaHeight}px tall`);
     console.log(`Boundaries: left=${leftBorderX}px, right=${rightBorderX}px`);
-    console.log(`Center: x=${centerX}px (${centerPercentFromLeft.toFixed(1)}% from left), y=${centerY}px`);
+    console.log(`Center: x=${centerX}px, y=${centerY}px`);
     
     // ============================================
     // DYNAMIC SEAT SIZING (responsive to screen size)
