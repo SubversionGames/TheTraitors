@@ -392,6 +392,14 @@ function generateVideoSeats() {
                 <span class="player-name" id="name-${seat.number}">Empty</span>
                 <span class="player-pronouns" id="pronouns-${seat.number}"></span>
             </div>
+            <div class="seat-controls" id="controls-${seat.number}" style="display: none;">
+                <button class="seat-control-btn" id="mic-${seat.number}" onclick="toggleMic(${seat.number})" title="Toggle Microphone">
+                    🎤
+                </button>
+                <button class="seat-control-btn" id="video-${seat.number}-btn" onclick="toggleVideo(${seat.number})" title="Toggle Video">
+                    📹
+                </button>
+            </div>
             <div class="vote-indicator" id="vote-${seat.number}"></div>
         `;
         
@@ -406,6 +414,22 @@ function generateVideoSeats() {
     window.seatingCenterY = centerY;
     window.currentPlayerSize = finalPlayerSize;
     window.currentHostSize = finalHostSize;
+
+    // Position host seat in top-left
+    const hostSeat = document.getElementById('seat-1');
+    if (hostSeat) {
+        const hostX = leftBorderX + 20 + (finalHostSize / 2);
+        const hostY = topBorderY + 20 + (finalHostSize / 2);
+        
+        hostSeat.style.position = 'fixed';
+        hostSeat.style.left = `${hostX}px`;
+        hostSeat.style.top = `${hostY}px`;
+        hostSeat.style.width = `${finalHostSize}px`;
+        hostSeat.style.height = `${finalHostSize}px`;
+        hostSeat.style.transform = 'translate(-50%, -50%)';
+        
+        console.log(`Host positioned at (${hostX}, ${hostY}) with size ${finalHostSize}px`);
+    }
     
     // Re-attach rename handlers if function exists
     if (typeof attachRenameHandlers === 'function') {
@@ -629,6 +653,16 @@ function updatePlayerDisplay() {
             
             // Update seat display for video/room status
             updateSeatDisplay(i, playerInSeat);
+            // Show controls only for current user's seat
+            const controls = document.getElementById(`controls-${i}`);
+            if (controls) {
+                if ((currentUser.role === 'player' && playerInSeat.id === currentUser.id) || 
+                    (currentUser.role === 'host' && i === 1)) {
+                    controls.style.display = 'flex';
+                } else {
+                    controls.style.display = 'none';
+                }
+            }
         } else {
             seatElement.classList.add('empty');
             seatElement.classList.remove('active');
@@ -639,6 +673,11 @@ function updatePlayerDisplay() {
             const pronounsElement = document.getElementById(`pronouns-${i}`);
             if (pronounsElement) {
                 pronounsElement.textContent = '';
+            }
+            // Hide controls for empty seats
+            const controls = document.getElementById(`controls-${i}`);
+            if (controls) {
+                controls.style.display = 'none';
             }
         }
     }
@@ -913,3 +952,45 @@ window.addEventListener('resize', () => {
 
 // Make rename available globally
 window.renameSelf = renameSelf;
+
+// Toggle microphone for a seat
+function toggleMic(seatNumber) {
+    // Only allow controlling own seat
+    if (currentUser.seat !== seatNumber) {
+        return;
+    }
+    
+    const micBtn = document.getElementById(`mic-${seatNumber}`);
+    
+    // Toggle muted state
+    if (micBtn.classList.contains('muted')) {
+        micBtn.classList.remove('muted');
+        console.log('Microphone ON for seat', seatNumber);
+        // TODO: Unmute Agora audio when re-enabled
+    } else {
+        micBtn.classList.add('muted');
+        console.log('Microphone OFF for seat', seatNumber);
+        // TODO: Mute Agora audio when re-enabled
+    }
+}
+
+// Toggle video for a seat
+function toggleVideo(seatNumber) {
+    // Only allow controlling own seat
+    if (currentUser.seat !== seatNumber) {
+        return;
+    }
+    
+    const videoBtn = document.getElementById(`video-${seatNumber}-btn`);
+    
+    // Toggle video-off state
+    if (videoBtn.classList.contains('video-off')) {
+        videoBtn.classList.remove('video-off');
+        console.log('Video ON for seat', seatNumber);
+        // TODO: Enable Agora video when re-enabled
+    } else {
+        videoBtn.classList.add('video-off');
+        console.log('Video OFF for seat', seatNumber);
+        // TODO: Disable Agora video when re-enabled
+    }
+}
