@@ -309,6 +309,16 @@ function generateVideoSeats() {
     console.log(`Calculated sizes: player=${finalPlayerSize.toFixed(0)}px, host=${finalHostSize.toFixed(0)}px`);
     
     // ============================================
+    // CALCULATE POSITIONS (8-9-8 layout)
+    // ============================================
+    
+    const seats = [];
+    
+    // Calculate spacing
+    const horizontalGap = seatingAreaWidth * horizontalGapPercentage;
+    const verticalGap = seatingAreaHeight * verticalGapPercentage;
+    
+    // ============================================
     // CREATE 8x3 GRID OF PLAYER SEATS
     // ============================================
     
