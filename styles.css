@@ -250,8 +250,6 @@ body {
 /* Individual Video Seats */
 .video-seat {
     position: absolute;
-    width: 180px; /* Player size */
-    height: 180px;
     border: 4px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     overflow: visible;
@@ -898,7 +896,7 @@ body .player-pronouns:hover {
 /* Audio/Video Controls */
 .seat-controls {
     position: absolute;
-    top: calc(100% + 45px);
+    top: calc(100% + 55px); /* Changed from 45px to 55px to move further down */
     left: 50%;
     transform: translateX(-50%);
     display: flex;
