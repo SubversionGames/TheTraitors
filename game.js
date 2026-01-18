@@ -354,10 +354,6 @@ function generateVideoSeats() {
     // No boundary constraints needed - we're already in center section
     const gridStartX = idealGridStartX;
     
-    // But constrain to not overlap host or panel
-    const minGridStartX = leftBorderX;
-    const maxGridStartX = rightBorderX - totalGridWidth;
-    
     console.log(`Grid: ideal=${idealGridStartX.toFixed(0)}px, actual=${gridStartX.toFixed(0)}px (constrained by boundaries)`);
     
     // Center middle row vertically on page (Y = viewport height / 2)
