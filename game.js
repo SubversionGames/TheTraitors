@@ -409,8 +409,42 @@ function generateVideoSeats() {
     
     // Re-attach rename handlers if function exists
     if (typeof attachRenameHandlers === 'function') {
-        setTimeout(() => attachRenameHandlers(), 100);
+        // Attach pronoun edit handlers
+        attachPronounHandlers();
     }
+    
+    // Function to attach click handlers for editing pronouns
+    function attachPronounHandlers() {
+        // Get all pronoun elements
+        for (let i = 1; i <= 25; i++) {
+            const pronounElement = document.getElementById(`pronouns-${i}`);
+            if (pronounElement) {
+                pronounElement.style.cursor = 'pointer';
+                pronounElement.onclick = () => editPronouns(i);
+            }
+        }
+    }
+    
+    // Function to edit pronouns
+    function editPronouns(seatNumber) {
+        // Only allow editing own pronouns
+        if (currentUser.seat !== seatNumber) {
+            return;
+        }
+        
+        const currentPronouns = prompt('Enter your pronouns (e.g., he/him, she/her, they/them):');
+        
+        if (currentPronouns === null) {
+            return; // User cancelled
+        }
+        
+        const trimmedPronouns = currentPronouns.trim().substring(0, 20); // Max 20 characters
+        
+        // Update in Firebase
+        const userPath = currentUser.role === 'host' ? 'players/host' : 'players/' + currentUser.id;
+        database.ref(userPath + '/pronouns').set(trimmedPronouns);
+        
+        console.log('Updated pronouns to:', trimmedPronouns);
 }
 
 function handleSeatClick(seatNumber) {
@@ -505,8 +539,14 @@ function updatePlayerDisplay() {
             
             // Update pronouns display
             const pronounsElement = document.getElementById(`pronouns-${playerData.seat}`);
-            if (pronounsElement && playerData.pronouns) {
-                pronounsElement.textContent = playerData.pronouns;
+            if (pronounsElement) {
+                if (playerData.pronouns) {
+                    pronounsElement.textContent = playerData.pronouns;
+                    pronounsElement.style.opacity = '0.7';
+                } else {
+                    pronounsElement.textContent = 'pronouns';
+                    pronounsElement.style.opacity = '0.4';
+                }
             }
         
         if (!seatElement || !nameElement) continue;
