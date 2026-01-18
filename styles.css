@@ -894,3 +894,44 @@ body .player-pronouns {
 body .player-pronouns:hover {
     opacity: 1 !important;
 }
+
+/* Audio/Video Controls */
+.seat-controls {
+    position: absolute;
+    top: calc(100% + 45px);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 5px;
+    z-index: 101;
+}
+
+.seat-control-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.seat-control-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.seat-control-btn.muted {
+    background: rgba(255, 0, 0, 0.6);
+    border-color: rgba(255, 0, 0, 0.8);
+}
+
+.seat-control-btn.video-off {
+    background: rgba(255, 0, 0, 0.6);
+    border-color: rgba(255, 0, 0, 0.8);
+}
