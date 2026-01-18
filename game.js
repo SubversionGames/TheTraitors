@@ -459,22 +459,7 @@ function generateVideoSeats() {
             const trimmedName = name.substring(0, 12);
             const trimmedPronouns = pronouns.substring(0, 20);
             
-            // Check for duplicate names (excluding current user)
-            database.ref('players').once('value', (snapshot) => {
-                let nameExists = false;
-                snapshot.forEach((child) => {
-                    if (child.val().name === trimmedName && child.key !== currentUser.id && child.key !== 'host') {
-                        nameExists = true;
-                    }
-                });
-                
-                if (nameExists) {
-                    errorElement.textContent = 'This name is already taken. Please choose another.';
-                    errorElement.style.display = 'block';
-                    return;
-                }
-                
-                // Update in Firebase
+            // Update in Firebase directly (allow duplicate names)
                 const userPath = currentUser.role === 'host' ? 'players/host' : 'players/' + currentUser.id;
                 database.ref(userPath).update({
                     name: trimmedName,
@@ -503,20 +488,7 @@ function generateVideoSeats() {
         const trimmedName = name.substring(0, 12);
         const trimmedPronouns = pronouns.substring(0, 20);
         
-        // Check for duplicate names
-        database.ref('players').once('value', (snapshot) => {
-            let nameExists = false;
-            snapshot.forEach((child) => {
-                if (child.val().name === trimmedName && child.key !== currentUser.id) {
-                    nameExists = true;
-                }
-            });
-            
-            if (nameExists) {
-                errorElement.textContent = 'This name is already taken. Please choose another.';
-                errorElement.style.display = 'block';
-                return;
-            }
+        // Update in Firebase directly (allow duplicate names)
             
             // Close modal and claim seat
             closeNamePronounsModal();
@@ -960,38 +932,8 @@ function updateSeatDisplay(seatNumber, playerData) {
 
 // Rename functionality - called when clicking own name
 function renameSelf() {
-    if (currentUser.role !== 'player') return;
-    
-    const currentName = currentUser.name;
-    const newName = prompt('Enter your new name:', currentName);
-    
-    if (newName && newName.trim().length > 0 && newName.trim().length <= 12) {
-        const trimmedName = newName.trim();
-        
-        // Check for duplicate names
-        database.ref('players').once('value', (snapshot) => {
-            let nameExists = false;
-            snapshot.forEach((child) => {
-                if (child.val().name === trimmedName && child.key !== currentUser.id) {
-                    nameExists = true;
-                }
-            });
-            
-            if (nameExists) {
-                alert('This name is already taken. Please choose another.');
-                return;
-            }
-            
-            // Update name
-            currentUser.name = trimmedName;
-            sessionStorage.setItem('playerName', trimmedName);
-            
-            // Update in Firebase
-            database.ref('players/' + currentUser.id + '/name').set(trimmedName);
-        });
-    } else if (newName !== null) {
-        alert('Name must be 1-12 characters.');
-    }
+    // Redirect to new modal-based editing
+    editNameAndPronouns(currentUser.seat);
 }
 
 // Real-time resize handler
