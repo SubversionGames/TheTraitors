@@ -978,3 +978,14 @@ function toggleVideo(seatNumber) {
         // TODO: Disable Agora video when re-enabled
     }
 }
+
+// FORCE host to top-left - diagnostic
+setTimeout(() => {
+    const hostSeat = document.getElementById('seat-1');
+    if (hostSeat) {
+        hostSeat.style.left = '400px';
+        hostSeat.style.top = '40px';
+        hostSeat.style.transform = 'none';
+        console.log('FORCED host position');
+    }
+}, 1000);
