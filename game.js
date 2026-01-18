@@ -240,43 +240,50 @@ function generateVideoSeats() {
     }
     
     // ============================================
-    // DEFINE PLAYER SEATING AREA BOUNDARIES
+    // DEFINE THREE SECTIONS OF THE PAGE
     // ============================================
     
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Calculate panel width (only needed for host positioning)
-    const panelLeft = 20;
-    const panelContentWidth = 320;
-    const panelTabWidth = 40;
-    const panelTotalWidth = panelLeft + panelContentWidth + panelTabWidth; // 380px
+    // Define section widths as percentages
+    const sectionWidthPx = 170; // Fixed pixel width for side sections
+    const sectionWidthPercent = (sectionWidthPx / viewportWidth) * 100;
     
-    // For player seats: constrain between host seat and side panel
-    const hostSeatRightEdge = 40 + (window.currentHostSize || 240); // Host position + width
-    const sidePanelLeftEdge = viewportWidth - panelTotalWidth; // Where panel starts from right
+    console.log(`Section width: ${sectionWidthPx}px = ${sectionWidthPercent.toFixed(2)}%`);
     
-    const leftBorderX = hostSeatRightEdge + 30; // 30px gap after host
-    const rightBorderX = sidePanelLeftEdge - 30; // 30px gap before panel
+    // LEFT SECTION: Host seat area (mirrored from side panel)
+    const leftSectionWidth = (viewportWidth * sectionWidthPercent) / 100;
+    const leftSectionRight = leftSectionWidth; // Right border of left section
     
-    // Top border: near top of viewport
+    // RIGHT SECTION: Side panel area
+    const rightSectionWidth = (viewportWidth * sectionWidthPercent) / 100;
+    const rightSectionLeft = viewportWidth - rightSectionWidth; // Left border of right section
+    
+    // CENTER SECTION: Player seats and timer
+    const centerSectionLeft = leftSectionRight;
+    const centerSectionRight = rightSectionLeft;
+    const centerSectionWidth = centerSectionRight - centerSectionLeft;
+    const centerSectionCenterX = centerSectionLeft + (centerSectionWidth / 2);
+    
+    console.log(`Left section: 0px to ${leftSectionRight.toFixed(0)}px`);
+    console.log(`Center section: ${centerSectionLeft.toFixed(0)}px to ${centerSectionRight.toFixed(0)}px (${centerSectionWidth.toFixed(0)}px wide)`);
+    console.log(`Right section: ${rightSectionLeft.toFixed(0)}px to ${viewportWidth}px`);
+    console.log(`Center of center section: ${centerSectionCenterX.toFixed(0)}px`);
+    
+    // Boundaries for player seats (center section only)
+    const leftBorderX = centerSectionLeft;
+    const rightBorderX = centerSectionRight;
     const topBorderY = 20;
-    
-    // Bottom border: near bottom of viewport
     const bottomBorderY = viewportHeight - 50;
     
-    // Calculate seating area dimensions (full width)
-    const seatingAreaWidth = rightBorderX - leftBorderX;
+    // Calculate seating area dimensions (center section)
+    const seatingAreaWidth = centerSectionWidth;
     const seatingAreaHeight = bottomBorderY - topBorderY;
     
-    // Calculate center - center of FULL viewport (same as timer)
-    const centerX = viewportWidth / 2;
-    const centerY = topBorderY + (seatingAreaHeight / 2);
-    
-    console.log(`Viewport: ${viewportWidth}x${viewportHeight}`);
-    console.log(`Seating area: ${seatingAreaWidth}px wide x ${seatingAreaHeight}px tall`);
-    console.log(`Boundaries: left=${leftBorderX}px, right=${rightBorderX}px`);
-    console.log(`Center: x=${centerX}px, y=${centerY}px`);
+    // Center point is center of CENTER SECTION
+    const centerX = centerSectionCenterX;
+    const centerY = viewportHeight / 2; // Vertical center of viewport
     
     // ============================================
     // DYNAMIC SEAT SIZING (responsive to screen size)
@@ -340,10 +347,12 @@ function generateVideoSeats() {
     const totalGridWidth = (cols * finalPlayerSize) + ((cols - 1) * horizontalSpacing);
     const totalGridHeight = (rows * finalPlayerSize) + ((rows - 1) * verticalSpacing);
     
-    // Center the MIDDLE GAP (between seats 4 and 5 in each row)
-    // With 8 seats, we want the gap after the 4th seat to be at center
+    // Center grid in CENTER SECTION (gap between seats 4 and 5)
     const gapAfter4thSeat = (4 * finalPlayerSize) + (4 * horizontalSpacing) - (horizontalSpacing / 2);
-    const idealGridStartX = (viewportWidth / 2) - gapAfter4thSeat;
+    const idealGridStartX = centerSectionCenterX - gapAfter4thSeat;
+    
+    // No boundary constraints needed - we're already in center section
+    const gridStartX = idealGridStartX;
     
     // But constrain to not overlap host or panel
     const minGridStartX = leftBorderX;
@@ -429,20 +438,27 @@ function generateVideoSeats() {
     window.currentHostSize = finalHostSize;
 
     // ============================================
-    // POSITION HOST SEAT IN TOP-LEFT
+    // POSITION HOST SEAT IN LEFT SECTION
     // ============================================
     
     const hostSeat = document.getElementById('seat-1');
     if (hostSeat) {
-        const hostX = 40;
-        const hostY = 40;
+        // Center host in left section, with margin from top
+        const hostX = leftSectionWidth / 2;
+        const hostY = 40 + (finalHostSize / 2); // Margin + half seat size
+        
+        // Constrain host size to fit in left section
+        const maxHostSize = leftSectionWidth - 40; // 20px margin on each side
+        const actualHostSize = Math.min(finalHostSize, maxHostSize);
         
         hostSeat.style.position = 'fixed';
         hostSeat.style.left = `${hostX}px`;
         hostSeat.style.top = `${hostY}px`;
-        hostSeat.style.width = `${finalHostSize}px`;
-        hostSeat.style.height = `${finalHostSize}px`;
-        hostSeat.style.transform = 'none';
+        hostSeat.style.width = `${actualHostSize}px`;
+        hostSeat.style.height = `${actualHostSize}px`;
+        hostSeat.style.transform = 'translate(-50%, -50%)';
+        
+        console.log(`Host positioned in left section: (${hostX.toFixed(0)}, ${hostY}) with size ${actualHostSize.toFixed(0)}px`);
         
         console.log(`Host positioned at top-left: (${hostX}, ${hostY}) with size ${finalHostSize}px`);
     }
