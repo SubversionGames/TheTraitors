@@ -585,23 +585,34 @@ function updatePlayerDisplay() {
                 }
             }
             
-            // Make name and pronouns clickable if it's the current user's seat
+            // Make entire seat label clickable if it's the current user's seat
+            const seatLabel = nameElement.parentElement; // Get the seat-label div
+            
             if ((currentUser.role === 'player' && playerInSeat.id === currentUser.id) || 
                 (currentUser.role === 'host' && i === 1)) {
-                nameElement.classList.add('clickable-name');
-                nameElement.style.cursor = 'pointer';
-                nameElement.onclick = () => editNameAndPronouns(i);
+                // Remove onclick from individual elements
+                nameElement.onclick = null;
                 
-                // Also make pronouns clickable
                 const pronounsElement = document.getElementById(`pronouns-${i}`);
                 if (pronounsElement) {
-                    pronounsElement.style.cursor = 'pointer';
-                    pronounsElement.onclick = () => editNameAndPronouns(i);
+                    pronounsElement.onclick = null;
+                }
+                
+                // Add onclick to the entire label box
+                if (seatLabel) {
+                    seatLabel.style.cursor = 'pointer';
+                    seatLabel.onclick = (e) => {
+                        e.stopPropagation(); // Prevent seat click
+                        editNameAndPronouns(i);
+                    };
                 }
             } else {
-                nameElement.classList.remove('clickable-name');
-                nameElement.style.cursor = 'default';
+                // Clear onclick handlers
                 nameElement.onclick = null;
+                if (seatLabel) {
+                    seatLabel.style.cursor = 'default';
+                    seatLabel.onclick = null;
+                }
             }
             
             // Update seat display for video/room status
