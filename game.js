@@ -271,9 +271,9 @@ function generateVideoSeats() {
     const seatingAreaWidth = rightBorderX - leftBorderX;
     const seatingAreaHeight = bottomBorderY - topBorderY;
     
-    // Calculate center of FULL VIEWPORT (not just seating area)
+    // Calculate center - horizontal center of viewport, vertical based on seating area
     const centerX = viewportWidth / 2;
-    const centerY = viewportHeight / 2;
+    const centerY = topBorderY + (seatingAreaHeight / 2);
     
     // Calculate as percentage of total viewport for verification
     const centerPercentFromLeft = (centerX / viewportWidth) * 100;
@@ -341,9 +341,13 @@ function generateVideoSeats() {
     const horizontalSpacing = (gridWidth - (cols * finalPlayerSize)) / (cols + 1);
     const verticalSpacing = (gridHeight - (rows * finalPlayerSize)) / (rows + 1);
     
-    // Starting position (adjusted to spread up and right)
-    const gridStartX = leftBorderX + (finalPlayerSize * 0.5) + horizontalSpacing - (horizontalSpacing * 0.3); // Move left column slightly left
-    const gridStartY = topBorderY + (finalPlayerSize * 2) + verticalSpacing - (verticalSpacing * 0.5); // Move top row up
+    // Calculate total grid dimensions
+    const totalGridWidth = (cols * finalPlayerSize) + ((cols - 1) * horizontalSpacing);
+    const totalGridHeight = (rows * finalPlayerSize) + ((rows - 1) * verticalSpacing);
+    
+    // Center horizontally on viewport, keep vertical position
+    const gridStartX = centerX - (totalGridWidth / 2);
+    const gridStartY = topBorderY + (finalPlayerSize * 2) + verticalSpacing;
     
     console.log(`Creating 8x3 grid with spacing: H=${horizontalSpacing.toFixed(0)}px, V=${verticalSpacing.toFixed(0)}px`);
     
