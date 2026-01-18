@@ -435,20 +435,75 @@ function generateVideoSeats() {
             return;
         }
         
-        const currentPronouns = prompt('Enter your pronouns (e.g., he/him, she/her, they/them):');
+        // For host or players, show modal to edit pronouns
+        document.getElementById('name-pronouns-modal').classList.add('visible');
         
-        if (currentPronouns === null) {
-            return; // User cancelled
+        // Pre-fill with current values
+        document.getElementById('modal-name-input').value = currentUser.name || '';
+        document.getElementById('modal-name-input').disabled = true; // Can't change name after claiming seat
+        
+        // Get current pronouns from Firebase
+        const userPath = currentUser.role === 'host' ? 'players/host' : 'players/' + currentUser.id;
+        database.ref(userPath + '/pronouns').once('value', (snapshot) => {
+            document.getElementById('modal-pronouns-input').value = snapshot.val() || '';
+            document.getElementById('modal-pronouns-input').focus();
+        });
+        
+        document.getElementById('name-pronouns-error').style.display = 'none';
+        
+        // Change submit button behavior for editing
+        window.editingPronouns = true;
+    }
+    
+    // Update submitNameAndPronouns to handle editing mode
+    function submitNameAndPronouns() {
+        const name = document.getElementById('modal-name-input').value.trim();
+        const pronouns = document.getElementById('modal-pronouns-input').value.trim();
+        const errorElement = document.getElementById('name-pronouns-error');
+        
+        // If editing pronouns only
+        if (window.editingPronouns) {
+            const trimmedPronouns = pronouns.substring(0, 20);
+            const userPath = currentUser.role === 'host' ? 'players/host' : 'players/' + currentUser.id;
+            database.ref(userPath + '/pronouns').set(trimmedPronouns);
+            
+            // Reset modal
+            document.getElementById('modal-name-input').disabled = false;
+            window.editingPronouns = false;
+            closeNamePronounsModal();
+            return;
         }
         
-        const trimmedPronouns = currentPronouns.trim().substring(0, 20); // Max 20 characters
+        // Validate name (for new players)
+        if (!name || name.length === 0) {
+            errorElement.textContent = 'Please enter a name';
+            errorElement.style.display = 'block';
+            return;
+        }
         
-        // Update in Firebase
-        const userPath = currentUser.role === 'host' ? 'players/host' : 'players/' + currentUser.id;
-        database.ref(userPath + '/pronouns').set(trimmedPronouns);
+        const trimmedName = name.substring(0, 12);
+        const trimmedPronouns = pronouns.substring(0, 20);
         
-        console.log('Updated pronouns to:', trimmedPronouns);
-}
+        // Check for duplicate names
+        database.ref('players').once('value', (snapshot) => {
+            let nameExists = false;
+            snapshot.forEach((child) => {
+                if (child.val().name === trimmedName && child.key !== currentUser.id) {
+                    nameExists = true;
+                }
+            });
+            
+            if (nameExists) {
+                errorElement.textContent = 'This name is already taken. Please choose another.';
+                errorElement.style.display = 'block';
+                return;
+            }
+            
+            // Close modal and claim seat
+            closeNamePronounsModal();
+            claimSeat(window.pendingSeatNumber, trimmedName, trimmedPronouns);
+        });
+    }
 
 function handleSeatClick(seatNumber) {
     // Only players in lobby phase can select seats
@@ -474,38 +529,69 @@ function handleSeatClick(seatNumber) {
 }
 
 function showPlayerNameModal(seatNumber) {
-    const name = prompt('Enter your display name (max 12 characters):');
-    if (!name || name.trim().length === 0) {
+    // Store the seat number globally so we can access it from the modal
+    window.pendingSeatNumber = seatNumber;
+    
+    // Show the modal
+    document.getElementById('name-pronouns-modal').classList.add('visible');
+    
+    // Clear previous values
+    document.getElementById('modal-name-input').value = '';
+    document.getElementById('modal-pronouns-input').value = '';
+    document.getElementById('name-pronouns-error').style.display = 'none';
+    
+    // Focus on name input
+    setTimeout(() => {
+        document.getElementById('modal-name-input').focus();
+    }, 100);
+}
+
+function closeNamePronounsModal() {
+    document.getElementById('name-pronouns-modal').classList.remove('visible');
+    window.pendingSeatNumber = null;
+}
+
+function submitNameAndPronouns() {
+    const name = document.getElementById('modal-name-input').value.trim();
+    const pronouns = document.getElementById('modal-pronouns-input').value.trim();
+    const errorElement = document.getElementById('name-pronouns-error');
+    
+    // Validate name
+    if (!name || name.length === 0) {
+        errorElement.textContent = 'Please enter a name';
+        errorElement.style.display = 'block';
         return;
     }
     
-    const trimmedName = name.trim().substring(0, 12);
+    const trimmedName = name.substring(0, 12);
+    const trimmedPronouns = pronouns.substring(0, 20);
     
     // Check for duplicate names
     database.ref('players').once('value', (snapshot) => {
         let nameExists = false;
         snapshot.forEach((child) => {
-            if (child.val().name === trimmedName) {
+            if (child.val().name === trimmedName && child.key !== currentUser.id) {
                 nameExists = true;
             }
         });
         
         if (nameExists) {
-            alert('This name is already taken. Please choose another.');
-            showPlayerNameModal(seatNumber);
+            errorElement.textContent = 'This name is already taken. Please choose another.';
+            errorElement.style.display = 'block';
             return;
         }
         
-        // Claim the seat
-        claimSeat(seatNumber, trimmedName);
+        // Close modal and claim seat
+        closeNamePronounsModal();
+        claimSeat(window.pendingSeatNumber, trimmedName, trimmedPronouns);
     });
 }
 
-function claimSeat(seatNumber, playerName) {
+function claimSeat(seatNumber, playerName, pronouns) {
     const playerData = {
         id: currentUser.id,
         name: playerName,
-        pronouns: '',
+        pronouns: pronouns || '', // Use provided pronouns or empty string
         seat: seatNumber,
         room: 'main',
         status: 'active',
@@ -522,7 +608,7 @@ function claimSeat(seatNumber, playerName) {
     sessionStorage.setItem('playerName', playerName);
     sessionStorage.setItem('playerSeat', seatNumber);
     
-    console.log('Claimed seat:', seatNumber, 'as', playerName);
+    console.log('Claimed seat:', seatNumber, 'as', playerName, 'with pronouns:', pronouns);
 }
 
 // ============================================
