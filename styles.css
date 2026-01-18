@@ -887,4 +887,10 @@ body .player-pronouns {
     font-style: italic !important;
     color: rgba(255, 255, 255, 0.7) !important;
     margin-top: 2px !important;
+    cursor: pointer !important;
+    transition: opacity 0.2s !important;
+}
+
+body .player-pronouns:hover {
+    opacity: 1 !important;
 }
