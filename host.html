@@ -545,33 +545,6 @@
             }
         }
 
-        // Position host seat in center of player area
-        function updateHostPosition() {
-            // Use calculated values from generateVideoSeats
-            const centerX = window.seatingCenterX || window.innerWidth / 2;
-            const centerY = window.seatingCenterY || window.innerHeight / 2;
-            const hostSize = window.currentHostSize || 240;
-            
-            const hostSeat = document.getElementById('seat-1');
-            if (hostSeat) {
-                hostSeat.style.left = `${centerX}px`;
-                hostSeat.style.top = `${centerY}px`;
-                hostSeat.style.width = `${hostSize}px`;
-                hostSeat.style.height = `${hostSize}px`;
-                hostSeat.style.transform = 'translate(-50%, -50%)';
-            }
-            
-            console.log(`Host positioned at seating center: x=${centerX}px, y=${centerY}px, size=${hostSize}px`);
-        }
-
-        // Call on load and resize
-        document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(updateHostPosition, 100);
-        });
-        window.addEventListener('resize', () => {
-            updateHostPosition();
-        });
-
         // Resize host seat to match player seats
         function resizeHostSeat() {
             const viewportWidth = window.innerWidth;
