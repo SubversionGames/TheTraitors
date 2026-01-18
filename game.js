@@ -440,61 +440,6 @@ function generateVideoSeats() {
         // Mark as editing mode (not claiming new seat)
         window.editingNamePronouns = true;
     }
-    
-    // Update submitNameAndPronouns to handle editing mode
-    function submitNameAndPronouns() {
-        const name = document.getElementById('modal-name-input').value.trim();
-        const pronouns = document.getElementById('modal-pronouns-input').value.trim();
-        const errorElement = document.getElementById('name-pronouns-error');
-        
-        // If editing existing name/pronouns
-        if (window.editingNamePronouns) {
-            // Validate name
-            if (!name || name.length === 0) {
-                errorElement.textContent = 'Please enter a name';
-                errorElement.style.display = 'block';
-                return;
-            }
-            
-            const trimmedName = name.substring(0, 12);
-            const trimmedPronouns = pronouns.substring(0, 20);
-            
-            // Update in Firebase directly (allow duplicate names)
-                const userPath = currentUser.role === 'host' ? 'players/host' : 'players/' + currentUser.id;
-                database.ref(userPath).update({
-                    name: trimmedName,
-                    pronouns: trimmedPronouns
-                });
-                
-                // Update local state
-                currentUser.name = trimmedName;
-                sessionStorage.setItem('playerName', trimmedName);
-                
-                // Reset and close modal
-                window.editingNamePronouns = false;
-                closeNamePronounsModal();
-                console.log('Updated name to:', trimmedName, 'and pronouns to:', trimmedPronouns);
-            });
-            return;
-        }
-        
-        // If claiming new seat (original functionality)
-        if (!name || name.length === 0) {
-            errorElement.textContent = 'Please enter a name';
-            errorElement.style.display = 'block';
-            return;
-        }
-        
-        const trimmedName = name.substring(0, 12);
-        const trimmedPronouns = pronouns.substring(0, 20);
-        
-        // Update in Firebase directly (allow duplicate names)
-            
-            // Close modal and claim seat
-            closeNamePronounsModal();
-            claimSeat(window.pendingSeatNumber, trimmedName, trimmedPronouns);
-        });
-    }
 
 function handleSeatClick(seatNumber) {
     // Only players in lobby phase can select seats
@@ -539,6 +484,7 @@ function showPlayerNameModal(seatNumber) {
 function closeNamePronounsModal() {
     document.getElementById('name-pronouns-modal').classList.remove('visible');
     window.pendingSeatNumber = null;
+    window.editingNamePronouns = false;
 }
 
 function submitNameAndPronouns() {
@@ -556,25 +502,29 @@ function submitNameAndPronouns() {
     const trimmedName = name.substring(0, 12);
     const trimmedPronouns = pronouns.substring(0, 20);
     
-    // Check for duplicate names
-    database.ref('players').once('value', (snapshot) => {
-        let nameExists = false;
-        snapshot.forEach((child) => {
-            if (child.val().name === trimmedName && child.key !== currentUser.id) {
-                nameExists = true;
-            }
+    // If editing existing name/pronouns
+    if (window.editingNamePronouns) {
+        // Update in Firebase
+        const userPath = currentUser.role === 'host' ? 'players/host' : 'players/' + currentUser.id;
+        database.ref(userPath).update({
+            name: trimmedName,
+            pronouns: trimmedPronouns
         });
         
-        if (nameExists) {
-            errorElement.textContent = 'This name is already taken. Please choose another.';
-            errorElement.style.display = 'block';
-            return;
-        }
+        // Update local state
+        currentUser.name = trimmedName;
+        sessionStorage.setItem('playerName', trimmedName);
         
-        // Close modal and claim seat
+        // Reset and close modal
+        window.editingNamePronouns = false;
         closeNamePronounsModal();
-        claimSeat(window.pendingSeatNumber, trimmedName, trimmedPronouns);
-    });
+        console.log('Updated name to:', trimmedName, 'and pronouns to:', trimmedPronouns);
+        return;
+    }
+    
+    // If claiming new seat
+    closeNamePronounsModal();
+    claimSeat(window.pendingSeatNumber, trimmedName, trimmedPronouns);
 }
 
 function claimSeat(seatNumber, playerName, pronouns) {
