@@ -416,43 +416,29 @@ function generateVideoSeats() {
     attachPronounHandlers();
 }
     
-    // Function to attach click handlers for editing pronouns
-    function attachPronounHandlers() {
-        // Get all pronoun elements
-        for (let i = 1; i <= 25; i++) {
-            const pronounElement = document.getElementById(`pronouns-${i}`);
-            if (pronounElement) {
-                pronounElement.style.cursor = 'pointer';
-                pronounElement.onclick = () => editPronouns(i);
-            }
-        }
-    }
-    
     // Function to edit pronouns
-    function editPronouns(seatNumber) {
-        // Only allow editing own pronouns
+    function editNameAndPronouns(seatNumber) {
+        // Only allow editing own info
         if (currentUser.seat !== seatNumber) {
             return;
         }
         
-        // For host or players, show modal to edit pronouns
+        // Show modal to edit both name and pronouns
         document.getElementById('name-pronouns-modal').classList.add('visible');
         
         // Pre-fill with current values
         document.getElementById('modal-name-input').value = currentUser.name || '';
-        document.getElementById('modal-name-input').disabled = true; // Can't change name after claiming seat
         
         // Get current pronouns from Firebase
         const userPath = currentUser.role === 'host' ? 'players/host' : 'players/' + currentUser.id;
         database.ref(userPath + '/pronouns').once('value', (snapshot) => {
             document.getElementById('modal-pronouns-input').value = snapshot.val() || '';
-            document.getElementById('modal-pronouns-input').focus();
         });
         
         document.getElementById('name-pronouns-error').style.display = 'none';
         
-        // Change submit button behavior for editing
-        window.editingPronouns = true;
+        // Mark as editing mode (not claiming new seat)
+        window.editingNamePronouns = true;
     }
     
     // Update submitNameAndPronouns to handle editing mode
@@ -461,20 +447,53 @@ function generateVideoSeats() {
         const pronouns = document.getElementById('modal-pronouns-input').value.trim();
         const errorElement = document.getElementById('name-pronouns-error');
         
-        // If editing pronouns only
-        if (window.editingPronouns) {
-            const trimmedPronouns = pronouns.substring(0, 20);
-            const userPath = currentUser.role === 'host' ? 'players/host' : 'players/' + currentUser.id;
-            database.ref(userPath + '/pronouns').set(trimmedPronouns);
+        // If editing existing name/pronouns
+        if (window.editingNamePronouns) {
+            // Validate name
+            if (!name || name.length === 0) {
+                errorElement.textContent = 'Please enter a name';
+                errorElement.style.display = 'block';
+                return;
+            }
             
-            // Reset modal
-            document.getElementById('modal-name-input').disabled = false;
-            window.editingPronouns = false;
-            closeNamePronounsModal();
+            const trimmedName = name.substring(0, 12);
+            const trimmedPronouns = pronouns.substring(0, 20);
+            
+            // Check for duplicate names (excluding current user)
+            database.ref('players').once('value', (snapshot) => {
+                let nameExists = false;
+                snapshot.forEach((child) => {
+                    if (child.val().name === trimmedName && child.key !== currentUser.id && child.key !== 'host') {
+                        nameExists = true;
+                    }
+                });
+                
+                if (nameExists) {
+                    errorElement.textContent = 'This name is already taken. Please choose another.';
+                    errorElement.style.display = 'block';
+                    return;
+                }
+                
+                // Update in Firebase
+                const userPath = currentUser.role === 'host' ? 'players/host' : 'players/' + currentUser.id;
+                database.ref(userPath).update({
+                    name: trimmedName,
+                    pronouns: trimmedPronouns
+                });
+                
+                // Update local state
+                currentUser.name = trimmedName;
+                sessionStorage.setItem('playerName', trimmedName);
+                
+                // Reset and close modal
+                window.editingNamePronouns = false;
+                closeNamePronounsModal();
+                console.log('Updated name to:', trimmedName, 'and pronouns to:', trimmedPronouns);
+            });
             return;
         }
         
-        // Validate name (for new players)
+        // If claiming new seat (original functionality)
         if (!name || name.length === 0) {
             errorElement.textContent = 'Please enter a name';
             errorElement.style.display = 'block';
@@ -508,7 +527,6 @@ function generateVideoSeats() {
 function handleSeatClick(seatNumber) {
     // Only players in lobby phase can select seats
     if (currentUser.role !== 'player') return;
-    if (gameState.phase !== 'lobby') return;
     
     // Check if seat is empty
     database.ref('game/seats/' + seatNumber).once('value', (snapshot) => {
@@ -618,25 +636,7 @@ function claimSeat(seatNumber, playerName, pronouns) {
 function updatePlayerDisplay() {
     for (let i = 1; i <= 25; i++) {
         const seatElement = document.getElementById(`seat-${i}`);
-        
-        // Update seat display
-            const nameElement = document.getElementById(`name-${playerData.seat}`);
-            if (nameElement) {
-                nameElement.textContent = playerData.name;
-                nameElement.style.color = 'white';
-            }
-            
-            // Update pronouns display
-            const pronounsElement = document.getElementById(`pronouns-${playerData.seat}`);
-            if (pronounsElement) {
-                if (playerData.pronouns) {
-                    pronounsElement.textContent = playerData.pronouns;
-                    pronounsElement.style.opacity = '0.7';
-                } else {
-                    pronounsElement.textContent = 'pronouns';
-                    pronounsElement.style.opacity = '0.4';
-                }
-            }
+        const nameElement = document.getElementById(`name-${i}`);
         
         if (!seatElement || !nameElement) continue;
         
@@ -654,11 +654,31 @@ function updatePlayerDisplay() {
             seatElement.classList.add('active');
             nameElement.textContent = playerInSeat.name;
             
-            // Make clickable if it's the current user's seat
-            if (currentUser.role === 'player' && playerInSeat.id === currentUser.id) {
+            // Update pronouns display
+            const pronounsElement = document.getElementById(`pronouns-${i}`);
+            if (pronounsElement) {
+                if (playerInSeat.pronouns) {
+                    pronounsElement.textContent = playerInSeat.pronouns;
+                    pronounsElement.style.opacity = '0.7';
+                } else {
+                    pronounsElement.textContent = 'pronouns';
+                    pronounsElement.style.opacity = '0.4';
+                }
+            }
+            
+            // Make name and pronouns clickable if it's the current user's seat
+            if ((currentUser.role === 'player' && playerInSeat.id === currentUser.id) || 
+                (currentUser.role === 'host' && i === 1)) {
                 nameElement.classList.add('clickable-name');
                 nameElement.style.cursor = 'pointer';
-                nameElement.onclick = renameSelf;
+                nameElement.onclick = () => editNameAndPronouns(i);
+                
+                // Also make pronouns clickable
+                const pronounsElement = document.getElementById(`pronouns-${i}`);
+                if (pronounsElement) {
+                    pronounsElement.style.cursor = 'pointer';
+                    pronounsElement.onclick = () => editNameAndPronouns(i);
+                }
             } else {
                 nameElement.classList.remove('clickable-name');
                 nameElement.style.cursor = 'default';
@@ -672,6 +692,12 @@ function updatePlayerDisplay() {
             seatElement.classList.remove('active');
             nameElement.textContent = i === 1 ? 'Host' : 'Empty';
             nameElement.onclick = null;
+            
+            // Clear pronouns for empty seats
+            const pronounsElement = document.getElementById(`pronouns-${i}`);
+            if (pronounsElement) {
+                pronounsElement.textContent = '';
+            }
         }
     }
 }
