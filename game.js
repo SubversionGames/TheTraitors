@@ -271,9 +271,9 @@ function generateVideoSeats() {
     const seatingAreaWidth = rightBorderX - leftBorderX;
     const seatingAreaHeight = bottomBorderY - topBorderY;
     
-    // Calculate center of seating area (NOT viewport center)
-    const centerX = leftBorderX + (seatingAreaWidth / 2);
-    const centerY = topBorderY + (seatingAreaHeight / 2);
+    // Calculate center of FULL VIEWPORT (not just seating area)
+    const centerX = viewportWidth / 2;
+    const centerY = viewportHeight / 2;
     
     // Calculate as percentage of total viewport for verification
     const centerPercentFromLeft = (centerX / viewportWidth) * 100;
