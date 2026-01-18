@@ -11,6 +11,7 @@ let remoteUsers = {};
 // Initialize Agora
 async function initializeAgora() {
     console.log('=== AGORA INIT START ===');
+    return; // DISABLE AGORA
     
     if (typeof currentUser === 'undefined') {
         console.log('currentUser not ready yet, retrying in 500ms...');
