@@ -545,13 +545,6 @@
             }
         }
 
-        // Call on load and resize
-        window.addEventListener('load', resizeHostSeat);
-        window.addEventListener('resize', () => {
-            clearTimeout(window.hostResizeTimeout);
-            window.hostResizeTimeout = setTimeout(resizeHostSeat, 250);
-        });
-
         async function toggleHostAudio() {
             if (window.toggleAudio) {
                 const isMuted = await window.toggleAudio();
