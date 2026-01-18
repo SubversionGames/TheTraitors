@@ -326,12 +326,12 @@ function generateVideoSeats() {
     const rows = 3;
     const cols = 8;
     
-    // Calculate spacing for the grid (with more spacing)
-    const gridWidth = seatingAreaWidth - (finalPlayerSize * 1); // Reduced margin on sides for more spread
-    const gridHeight = seatingAreaHeight - (finalPlayerSize * 1.5); // Less top margin, more bottom
+    // Calculate spacing based on FULL viewport width (not constrained seating area)
+    const availableWidth = viewportWidth - 100; // 50px margin on each side
+    const availableHeight = seatingAreaHeight - (finalPlayerSize * 1.5);
     
-    const horizontalSpacing = (gridWidth - (cols * finalPlayerSize)) / (cols + 1);
-    const verticalSpacing = (gridHeight - (rows * finalPlayerSize)) / (rows + 1);
+    const horizontalSpacing = (availableWidth - (cols * finalPlayerSize)) / (cols - 1); // Space BETWEEN seats only
+    const verticalSpacing = (availableHeight - (rows * finalPlayerSize)) / (rows - 1); // Space BETWEEN seats only
     
     // Calculate total grid dimensions
     const totalGridWidth = (cols * finalPlayerSize) + ((cols - 1) * horizontalSpacing);
