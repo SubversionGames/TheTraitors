@@ -896,7 +896,7 @@ body .player-pronouns:hover {
 /* Audio/Video Controls */
 .seat-controls {
     position: absolute;
-    top: calc(100% + 75px); /* Changed from 45px to 55px to move further down */
+    top: calc(100% + 70px); /* Changed from 45px to 55px to move further down */
     left: 50%;
     transform: translateX(-50%);
     display: flex;
