@@ -252,9 +252,12 @@ function generateVideoSeats() {
     const panelTabWidth = 40;
     const panelTotalWidth = panelLeft + panelContentWidth + panelTabWidth; // 380px
     
-    // For player seats: use margins from edges (not constrained by host/panel)
-    const leftBorderX = 50;
-    const rightBorderX = viewportWidth - 50;
+    // For player seats: constrain between host seat and side panel
+    const hostSeatRightEdge = 40 + (window.currentHostSize || 240); // Host position + width
+    const sidePanelLeftEdge = viewportWidth - panelTotalWidth; // Where panel starts from right
+    
+    const leftBorderX = hostSeatRightEdge + 30; // 30px gap after host
+    const rightBorderX = sidePanelLeftEdge - 30; // 30px gap before panel
     
     // Top border: near top of viewport
     const topBorderY = 20;
@@ -337,9 +340,12 @@ function generateVideoSeats() {
     const totalGridWidth = (cols * finalPlayerSize) + ((cols - 1) * horizontalSpacing);
     const totalGridHeight = (rows * finalPlayerSize) + ((rows - 1) * verticalSpacing);
     
-    // Center horizontally on viewport, keep vertical position
-    const gridStartX = centerX - (totalGridWidth / 2);
-    const gridStartY = topBorderY + (finalPlayerSize * 2) + verticalSpacing;
+    // Center horizontally between host and panel
+    const gridStartX = leftBorderX + ((rightBorderX - leftBorderX) / 2) - (totalGridWidth / 2);
+    
+    // Center middle row vertically on page (Y = viewport height / 2)
+    const middleRowY = viewportHeight / 2;
+    const gridStartY = middleRowY - finalPlayerSize - verticalSpacing; // Start one row above middle
     
     console.log(`Creating 8x3 grid with spacing: H=${horizontalSpacing.toFixed(0)}px, V=${verticalSpacing.toFixed(0)}px`);
     
