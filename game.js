@@ -590,12 +590,24 @@ function updatePlayerDisplay() {
             
             if ((currentUser.role === 'player' && playerInSeat.id === currentUser.id) || 
                 (currentUser.role === 'host' && i === 1)) {
-                // Remove onclick from individual elements
-                nameElement.onclick = null;
+                // Explicitly remove and prevent onclick from individual elements
+                nameElement.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                };
+                nameElement.removeAttribute('onclick');
+                nameElement.style.pointerEvents = 'none'; // Make name element non-clickable
                 
                 const pronounsElement = document.getElementById(`pronouns-${i}`);
                 if (pronounsElement) {
-                    pronounsElement.onclick = null;
+                    pronounsElement.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    };
+                    pronounsElement.removeAttribute('onclick');
+                    pronounsElement.style.pointerEvents = 'none'; // Make pronouns element non-clickable
                 }
                 
                 // Add onclick to the entire label box
