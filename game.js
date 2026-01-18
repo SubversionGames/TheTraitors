@@ -358,9 +358,6 @@ function generateVideoSeats() {
     const minGridStartX = leftBorderX;
     const maxGridStartX = rightBorderX - totalGridWidth;
     
-    // Use ideal center, but clamp within boundaries
-    const gridStartX = Math.max(minGridStartX, Math.min(idealGridStartX, maxGridStartX));
-    
     console.log(`Grid: ideal=${idealGridStartX.toFixed(0)}px, actual=${gridStartX.toFixed(0)}px (constrained by boundaries)`);
     
     // Center middle row vertically on page (Y = viewport height / 2)
