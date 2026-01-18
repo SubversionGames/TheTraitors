@@ -352,8 +352,8 @@ function generateVideoSeats() {
     // Generate seats row by row
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
-            const x = gridStartX + (col * (finalPlayerSize + horizontalSpacing));
-            const y = gridStartY + (row * (finalPlayerSize + verticalSpacing));
+            const x = gridStartX + (col * (finalPlayerSize + horizontalSpacing * 1.2));
+            const y = gridStartY + (row * (finalPlayerSize + verticalSpacing * 1.2));
             
             seats.push({
                 number: seatNumber,
