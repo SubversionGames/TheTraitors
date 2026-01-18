@@ -341,9 +341,9 @@ function generateVideoSeats() {
     const horizontalSpacing = (gridWidth - (cols * finalPlayerSize)) / (cols + 1);
     const verticalSpacing = (gridHeight - (rows * finalPlayerSize)) / (rows + 1);
     
-    // Starting position (lower and more centered)
-    const gridStartX = leftBorderX + (finalPlayerSize * 0.5) + horizontalSpacing;
-    const gridStartY = topBorderY + (finalPlayerSize * 2) + verticalSpacing; // Moved down significantly
+    // Starting position (adjusted to spread up and right)
+    const gridStartX = leftBorderX + (finalPlayerSize * 0.5) + horizontalSpacing - (horizontalSpacing * 0.3); // Move left column slightly left
+    const gridStartY = topBorderY + (finalPlayerSize * 2) + verticalSpacing - (verticalSpacing * 0.5); // Move top row up
     
     console.log(`Creating 8x3 grid with spacing: H=${horizontalSpacing.toFixed(0)}px, V=${verticalSpacing.toFixed(0)}px`);
     
@@ -352,8 +352,8 @@ function generateVideoSeats() {
     // Generate seats row by row
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
-            const x = gridStartX + (col * (finalPlayerSize + horizontalSpacing * 1.2));
-            const y = gridStartY + (row * (finalPlayerSize + verticalSpacing * 1.2));
+            const x = gridStartX + (col * (finalPlayerSize + horizontalSpacing));
+            const y = gridStartY + (row * (finalPlayerSize + verticalSpacing));
             
             seats.push({
                 number: seatNumber,
