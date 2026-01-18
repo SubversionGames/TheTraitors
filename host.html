@@ -317,6 +317,28 @@
         </div>
     </div>
 
+    <!-- Name and Pronouns Entry Modal -->
+    <div class="modal" id="name-pronouns-modal">
+        <div class="modal-content">
+            <h2>Enter Your Information</h2>
+            <div style="margin: 20px 0;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Display Name (max 12 characters):</label>
+                <input type="text" id="modal-name-input" maxlength="12" placeholder="Enter your name" 
+                       style="width: 100%; padding: 10px; font-size: 1rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white;">
+            </div>
+            <div style="margin: 20px 0;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Pronouns (optional, max 20 characters):</label>
+                <input type="text" id="modal-pronouns-input" maxlength="20" placeholder="e.g., he/him, she/her, they/them" 
+                       style="width: 100%; padding: 10px; font-size: 1rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white;">
+            </div>
+            <div class="modal-buttons">
+                <button onclick="submitNameAndPronouns()" class="control-button primary">Submit</button>
+                <button onclick="closeNamePronounsModal()" class="control-button">Cancel</button>
+            </div>
+            <p id="name-pronouns-error" style="color: #ff6b6b; margin-top: 10px; display: none;"></p>
+        </div>
+    </div>
+
     <!-- Agora SDK -->
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
     
