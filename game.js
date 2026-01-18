@@ -253,6 +253,7 @@ function generateVideoSeats() {
     
     // For player seats: use FULL viewport width (ignore panel)
     const leftBorderX = 50; // Small margin from left edge
+    console.log('NEW CODE RUNNING - leftBorderX:', leftBorderX);
     const rightBorderX = viewportWidth - 50; // Small margin from right edge
     
     // Top border: near top of viewport
