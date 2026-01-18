@@ -461,60 +461,59 @@ function generateVideoSeats() {
         setTimeout(() => attachRenameHandlers(), 100);
     }
 
-        // ============================================
-        // DEBUG: VISUAL SECTION BOUNDARIES
-        // ============================================
+    // ============================================
+    // DEBUG: VISUAL SECTION BOUNDARIES
+    // ============================================
         
-        // Remove old debug lines if they exist
-        document.querySelectorAll('.debug-line').forEach(el => el.remove());
+    // Remove old debug lines if they exist
+    document.querySelectorAll('.debug-line').forEach(el => el.remove());
         
-        // Left section boundary (right edge)
-        const leftLine = document.createElement('div');
-        leftLine.className = 'debug-line';
-        leftLine.style.cssText = `
-            position: fixed;
-            left: ${leftSectionRight}px;
-            top: 0;
-            width: 3px;
-            height: 100vh;
-            background: red;
-            z-index: 10000;
-            pointer-events: none;
-        `;
-        document.body.appendChild(leftLine);
+    // Left section boundary (right edge)
+    const leftLine = document.createElement('div');
+    leftLine.className = 'debug-line';
+    leftLine.style.cssText = `
+        position: fixed;
+        left: ${leftSectionRight}px;
+        top: 0;
+        width: 3px;
+        height: 100vh;
+        background: red;
+        z-index: 10000;
+        pointer-events: none;
+    `;
+    document.body.appendChild(leftLine);
         
-        // Right section boundary (left edge)
-        const rightLine = document.createElement('div');
-        rightLine.className = 'debug-line';
-        rightLine.style.cssText = `
-            position: fixed;
-            left: ${rightSectionLeft}px;
-            top: 0;
-            width: 3px;
-            height: 100vh;
-            background: red;
-            z-index: 10000;
-            pointer-events: none;
-        `;
-        document.body.appendChild(rightLine);
+    // Right section boundary (left edge)
+    const rightLine = document.createElement('div');
+    rightLine.className = 'debug-line';
+    rightLine.style.cssText = `
+        position: fixed;
+        left: ${rightSectionLeft}px;
+        top: 0;
+        width: 3px;
+        height: 100vh;
+        background: red;
+        z-index: 10000;
+        pointer-events: none;
+    `;
+    document.body.appendChild(rightLine);
         
-        // Center of center section (for reference)
-        const centerLine = document.createElement('div');
-        centerLine.className = 'debug-line';
-        centerLine.style.cssText = `
-            position: fixed;
-            left: ${centerSectionCenterX}px;
-            top: 0;
-            width: 1px;
-            height: 100vh;
-            background: yellow;
-            z-index: 10000;
-            pointer-events: none;
-        `;
-        document.body.appendChild(centerLine);
+    // Center of center section (for reference)
+    const centerLine = document.createElement('div');
+    centerLine.className = 'debug-line';
+    centerLine.style.cssText = `
+        position: fixed;
+        left: ${centerSectionCenterX}px;
+        top: 0;
+        width: 1px;
+        height: 100vh;
+        background: yellow;
+        z-index: 10000;
+        pointer-events: none;
+    `;
+    document.body.appendChild(centerLine);
         
-        console.log('DEBUG LINES ADDED - Red = section boundaries, Yellow = center of center section');
-    }
+    console.log('DEBUG LINES ADDED - Red = section boundaries, Yellow = center of center section');
 }
     
     // Function to edit pronouns
