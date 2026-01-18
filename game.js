@@ -251,10 +251,14 @@ function generateVideoSeats() {
     const panelTabWidth = 40;
     const panelTotalWidth = panelLeft + panelContentWidth + panelTabWidth; // 380px
     
-    // For player seats: use FULL viewport width (ignore panel)
-    const leftBorderX = 50; // Small margin from left edge
-    console.log('NEW CODE RUNNING - leftBorderX:', leftBorderX);
-    const rightBorderX = viewportWidth - 50; // Small margin from right edge
+    // For player seats: boundary is between host seat and side panel
+    const hostSeatRightEdge = 40 + (window.currentHostSize || 240); // Host left position + host width
+    const sidePanelLeftEdge = viewportWidth - panelTotalWidth; // Where expanded panel starts
+    
+    const leftBorderX = hostSeatRightEdge + 20; // 20px gap after host
+    const rightBorderX = sidePanelLeftEdge - 20; // 20px gap before panel
+    
+    console.log(`Player area: from ${leftBorderX}px (after host) to ${rightBorderX}px (before panel)`);
     
     // Top border: near top of viewport
     const topBorderY = 20;
@@ -266,8 +270,8 @@ function generateVideoSeats() {
     const seatingAreaWidth = rightBorderX - leftBorderX;
     const seatingAreaHeight = bottomBorderY - topBorderY;
     
-    // Calculate center - horizontal center of viewport
-    const centerX = viewportWidth / 2;
+    // Calculate center - center between host and panel
+    const centerX = leftBorderX + (seatingAreaWidth / 2);
     const centerY = topBorderY + (seatingAreaHeight / 2);
     
     console.log(`Viewport: ${viewportWidth}x${viewportHeight}`);
@@ -326,12 +330,12 @@ function generateVideoSeats() {
     const rows = 3;
     const cols = 8;
     
-    // Calculate spacing based on FULL viewport width (not constrained seating area)
-    const availableWidth = viewportWidth - 100; // 50px margin on each side
-    const availableHeight = seatingAreaHeight - (finalPlayerSize * 1.5);
+    // Calculate spacing to fit between host and panel
+    const availableWidth = rightBorderX - leftBorderX;
+    const availableHeight = seatingAreaHeight;
     
-    const horizontalSpacing = (availableWidth - (cols * finalPlayerSize)) / (cols - 1); // Space BETWEEN seats only
-    const verticalSpacing = (availableHeight - (rows * finalPlayerSize)) / (rows - 1); // Space BETWEEN seats only
+    const horizontalSpacing = (availableWidth - (cols * finalPlayerSize)) / (cols + 1);
+    const verticalSpacing = (availableHeight - (rows * finalPlayerSize)) / (rows + 1);
     
     // Calculate total grid dimensions
     const totalGridWidth = (cols * finalPlayerSize) + ((cols - 1) * horizontalSpacing);
