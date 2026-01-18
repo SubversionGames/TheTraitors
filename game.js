@@ -334,16 +334,16 @@ function generateVideoSeats() {
     const rows = 3;
     const cols = 8;
     
-    // Calculate spacing for the grid
-    const gridWidth = seatingAreaWidth - (finalPlayerSize * 2); // Leave room on sides
-    const gridHeight = seatingAreaHeight - (finalPlayerSize * 2); // Leave room top/bottom
+    // Calculate spacing for the grid (with more spacing)
+    const gridWidth = seatingAreaWidth - (finalPlayerSize * 1); // Reduced margin on sides for more spread
+    const gridHeight = seatingAreaHeight - (finalPlayerSize * 1.5); // Less top margin, more bottom
     
     const horizontalSpacing = (gridWidth - (cols * finalPlayerSize)) / (cols + 1);
     const verticalSpacing = (gridHeight - (rows * finalPlayerSize)) / (rows + 1);
     
-    // Starting position (top-left of grid area)
-    const gridStartX = leftBorderX + finalPlayerSize + horizontalSpacing;
-    const gridStartY = topBorderY + finalPlayerSize + verticalSpacing;
+    // Starting position (lower and more centered)
+    const gridStartX = leftBorderX + (finalPlayerSize * 0.5) + horizontalSpacing;
+    const gridStartY = topBorderY + (finalPlayerSize * 2) + verticalSpacing; // Moved down significantly
     
     console.log(`Creating 8x3 grid with spacing: H=${horizontalSpacing.toFixed(0)}px, V=${verticalSpacing.toFixed(0)}px`);
     
