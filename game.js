@@ -340,8 +340,10 @@ function generateVideoSeats() {
     const totalGridWidth = (cols * finalPlayerSize) + ((cols - 1) * horizontalSpacing);
     const totalGridHeight = (rows * finalPlayerSize) + ((rows - 1) * verticalSpacing);
     
-    // Center on full viewport X=0 (same as timer)
-    const idealGridStartX = (viewportWidth / 2) - (totalGridWidth / 2);
+    // Center the MIDDLE GAP (between seats 4 and 5 in each row)
+    // With 8 seats, we want the gap after the 4th seat to be at center
+    const gapAfter4thSeat = (4 * finalPlayerSize) + (4 * horizontalSpacing) - (horizontalSpacing / 2);
+    const idealGridStartX = (viewportWidth / 2) - gapAfter4thSeat;
     
     // But constrain to not overlap host or panel
     const minGridStartX = leftBorderX;
