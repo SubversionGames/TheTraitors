@@ -414,6 +414,25 @@ function generateVideoSeats() {
     window.seatingCenterY = centerY;
     window.currentPlayerSize = finalPlayerSize;
     window.currentHostSize = finalHostSize;
+
+    // ============================================
+    // POSITION HOST SEAT IN TOP-LEFT
+    // ============================================
+    
+    const hostSeat = document.getElementById('seat-1');
+    if (hostSeat) {
+        const hostX = leftBorderX + 20;
+        const hostY = topBorderY + 20;
+        
+        hostSeat.style.position = 'fixed';
+        hostSeat.style.left = `${hostX}px`;
+        hostSeat.style.top = `${hostY}px`;
+        hostSeat.style.width = `${finalHostSize}px`;
+        hostSeat.style.height = `${finalHostSize}px`;
+        hostSeat.style.transform = 'none';
+        
+        console.log(`Host positioned at top-left: (${hostX}, ${hostY}) with size ${finalHostSize}px`);
+    }
     
     // Re-attach rename handlers if function exists
     if (typeof attachRenameHandlers === 'function') {
