@@ -1002,7 +1002,7 @@ function toggleVideo(seatNumber) {
 setTimeout(() => {
     const hostSeat = document.getElementById('seat-1');
     if (hostSeat) {
-        hostSeat.style.left = '400px';
+        hostSeat.style.left = '40px';
         hostSeat.style.top = '40px';
         hostSeat.style.transform = 'none';
         console.log('FORCED host position');
