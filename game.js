@@ -367,13 +367,19 @@ function generateVideoSeats() {
     const middleRowY = viewportHeight / 2;
     const gridStartY = middleRowY - finalPlayerSize - verticalSpacing; // Start one row above middle
     
-    console.log(`Creating 8x3 grid with spacing: H=${horizontalSpacing.toFixed(0)}px, V=${verticalSpacing.toFixed(0)}px`);
+    console.log(`Creating ${rows}x${cols} grid with spacing: H=${horizontalSpacing.toFixed(0)}px, V=${verticalSpacing.toFixed(0)}px`);
     
     let seatNumber = 2; // Start at seat 2 (seat 1 is Host)
+    let seatsCreated = 0; // Track how many seats we've created
     
-    // Generate seats row by row
+    // Generate seats row by row, but stop when we reach totalSeats
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
+            // Stop if we've created enough seats
+            if (seatsCreated >= totalSeats) {
+                break;
+            }
+            
             const x = gridStartX + (col * (finalPlayerSize + horizontalSpacing));
             const y = gridStartY + (row * (finalPlayerSize + verticalSpacing));
             
@@ -385,6 +391,12 @@ function generateVideoSeats() {
             });
             
             seatNumber++;
+            seatsCreated++;
+        }
+        
+        // Also break outer loop if we've created enough seats
+        if (seatsCreated >= totalSeats) {
+            break;
         }
     }
     
