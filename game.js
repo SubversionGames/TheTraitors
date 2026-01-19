@@ -246,9 +246,9 @@ function generateVideoSeats() {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Define section widths as percentages
-    const sectionWidthPx = 170; // Fixed pixel width for side sections
-    const sectionWidthPercent = (sectionWidthPx / viewportWidth) * 100;
+    // Define section widths as percentages (21% of viewport)
+    const sectionWidthPercent = 12; // Each side section is 12% of viewport
+    const sectionWidthPx = (viewportWidth * sectionWidthPercent) / 100;
     
     console.log(`Section width: ${sectionWidthPx}px = ${sectionWidthPercent.toFixed(2)}%`);
     
@@ -336,26 +336,33 @@ function generateVideoSeats() {
     const rows = 3;
     const cols = 8;
     
-    // Calculate spacing to fit between host and panel
-    const availableWidth = rightBorderX - leftBorderX;
+    
+    // Calculate spacing to fit in CENTER SECTION with tight margins
+    const sideMargin = 20; // Small margin from red lines
+    const availableWidth = centerSectionWidth - (2 * sideMargin); // Margin on both sides
     const availableHeight = seatingAreaHeight;
     
-    const horizontalSpacing = (availableWidth - (cols * finalPlayerSize)) / (cols + 1);
-    const verticalSpacing = (availableHeight - (rows * finalPlayerSize)) / (rows + 1);
+    // Calculate spacing: seats fill the width from left red line to right red line
+    const horizontalSpacing = (availableWidth - cols * finalPlayerSize) / (cols - 1); // Gaps BETWEEN seats only
+    const verticalSpacing = (availableHeight - rows * finalPlayerSize) / (rows + 1);
     
     // Calculate total grid dimensions
-    const totalGridWidth = (cols * finalPlayerSize) + ((cols - 1) * horizontalSpacing);
-    const totalGridHeight = (rows * finalPlayerSize) + ((rows - 1) * verticalSpacing);
+    const totalGridWidth = cols * finalPlayerSize + (cols - 1) * horizontalSpacing;
+    const totalGridHeight = rows * finalPlayerSize + (rows - 1) * verticalSpacing;
     
-    // Center grid in CENTER SECTION (gap between seats 4 and 5)
-    const gapAfter4thSeat = (4 * finalPlayerSize) + (4 * horizontalSpacing) - (horizontalSpacing / 2);
-    const idealGridStartX = centerSectionCenterX - gapAfter4thSeat;
+    // Grid starts at left red line (with small margin)
+    // Add half seat size because transform: translate(-50%, -50%) centers the seat on this point
+    const gridStartX = centerSectionLeft + sideMargin + (finalPlayerSize / 2);
     
-    // No boundary constraints needed - we're already in center section
-    const gridStartX = idealGridStartX;
+    // DEBUG: Calculate where middle of grid actually is
+    const gridMiddleX = gridStartX + (totalGridWidth / 2);
+    const offsetFromCenter = gridMiddleX - centerSectionCenterX;
     
-    console.log(`Grid: ideal=${idealGridStartX.toFixed(0)}px, actual=${gridStartX.toFixed(0)}px (constrained by boundaries)`);
-    
+    console.log(`Grid start: ${gridStartX.toFixed(0)}px`);
+    console.log(`Grid middle: ${gridMiddleX.toFixed(0)}px`);
+    console.log(`Center section center: ${centerSectionCenterX.toFixed(0)}px`);
+    console.log(`Offset from center: ${offsetFromCenter.toFixed(0)}px (should be ~0)`);
+
     // Center middle row vertically on page (Y = viewport height / 2)
     const middleRowY = viewportHeight / 2;
     const gridStartY = middleRowY - finalPlayerSize - verticalSpacing; // Start one row above middle
@@ -436,9 +443,9 @@ function generateVideoSeats() {
     
     const hostSeat = document.getElementById('seat-1');
     if (hostSeat) {
-        // Center host in left section, with margin from top
+        // Center host in left section, matching left margin distance from top
         const hostX = leftSectionWidth / 2;
-        const hostY = 40 + (finalHostSize / 2); // Margin + half seat size
+        const hostY = leftSectionWidth / 2; // Halfway down the left section
         
         // Constrain host size to fit in left section
         const maxHostSize = leftSectionWidth - 40; // 20px margin on each side
@@ -1074,13 +1081,3 @@ function toggleVideo(seatNumber) {
     }
 }
 
-// FORCE host to top-left - diagnostic
-setTimeout(() => {
-    const hostSeat = document.getElementById('seat-1');
-    if (hostSeat) {
-        hostSeat.style.left = '40px';
-        hostSeat.style.top = '40px';
-        hostSeat.style.transform = 'none';
-        console.log('FORCED host position');
-    }
-}, 1000);
