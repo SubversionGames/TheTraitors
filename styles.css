@@ -459,7 +459,7 @@ body {
 }
 
 .tab-content-panel.open {
-    width: 320px;
+    width: 10vw;
     padding: 20px;
     border-left: 2px solid rgba(255, 255, 255, 0.2);
 }
