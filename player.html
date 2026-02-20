@@ -377,52 +377,30 @@
                     
                     // If player has a seat, ensure their label shows immediately after seats generate
                     if (existingPlayer.seat) {
-                        // Wait for seats to be generated, then update label
-                        setTimeout(() => {
+                        // Wait for seats to be created before adding buttons
+                        const waitForSeat = setInterval(() => {
                             const seatLabel = document.getElementById('name-' + existingPlayer.seat);
-                            if (seatLabel) {
-                                seatLabel.textContent = existingPlayer.name;
-                                console.log('✅ Updated seat label immediately for', existingPlayer.name);
-                            }
-                            const pronounsLabel = document.getElementById('pronouns-' + existingPlayer.seat);
-                            if (pronounsLabel && existingPlayer.pronouns) {
-                                pronounsLabel.textContent = existingPlayer.pronouns;
-                            }
-
-                            // Add media control buttons during fast restore
-                            console.log('🔍 Attempting to add media controls for seat', existingPlayer.seat);
-                            
                             const nameTag = document.querySelector(`#seat-${existingPlayer.seat} .name-tag`);
-                            console.log('🔍 Found name tag:', nameTag);
                             
-                            const existingBtn = document.getElementById(`player-mic-btn-${existingPlayer.seat}`);
-                            console.log('🔍 Existing button check:', existingBtn);
-                            
-                            if (nameTag && !existingBtn) {
-                                const controlsDiv = document.createElement('div');
-                                controlsDiv.style.cssText = 'display: flex; gap: 8px; margin-top: 8px; justify-content: center;';
+                            if (seatLabel && nameTag) {
+                                clearInterval(waitForSeat);
                                 
-                                const micBtn = document.createElement('button');
-                                micBtn.id = `player-mic-btn-${existingPlayer.seat}`;
-                                micBtn.className = 'media-control-btn';
-                                micBtn.innerHTML = '🎤';
-                                micBtn.onclick = () => togglePlayerMic();
+                                // Update name and pronouns
+                                seatLabel.textContent = existingPlayer.name;
+                                console.log('✅ Updated seat label for fast restore:', existingPlayer.name);
                                 
-                                const videoBtn = document.createElement('button');
-                                videoBtn.id = `player-video-btn-${existingPlayer.seat}`;
-                                videoBtn.className = 'media-control-btn';
-                                videoBtn.innerHTML = '📹';
-                                videoBtn.onclick = () => togglePlayerVideo();
+                                if (existingPlayer.pronouns) {
+                                    const pronounsLabel = document.getElementById('pronouns-' + existingPlayer.seat);
+                                    if (pronounsLabel) {
+                                        pronounsLabel.textContent = existingPlayer.pronouns;
+                                    }
+                                }
                                 
-                                controlsDiv.appendChild(micBtn);
-                                controlsDiv.appendChild(videoBtn);
-                                nameTag.appendChild(controlsDiv);
-                                
-                                console.log('✅ Added media controls during fast restore to seat', existingPlayer.seat);
-                            } else {
-                                console.log('❌ Failed to add controls - nameTag:', !!nameTag, 'existingBtn:', !!existingBtn);
+                                // Add media control buttons
+                                console.log('🔍 Attempting to add media controls for seat', existingPlayer.seat);
+                                addPlayerMediaButtons(existingPlayer.seat);
                             }
-                        }, 500);
+                        }, 50); // Check every 50ms
                     }
                     
                     // Hide name modal if they already have a name
