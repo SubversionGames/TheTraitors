@@ -1605,7 +1605,7 @@ function generateVideoSeats() {
                 pronounsLabel.textContent = pronouns || '';
                 console.log('✅ Updated seat label to show:', playerName);
             }
-            
+
             // Add mic/video control buttons for PLAYER only
             if (currentUser.role === 'player') {
                 const nameTag = document.querySelector(`#seat-${seatNumber} .name-tag`);
