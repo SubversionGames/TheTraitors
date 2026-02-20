@@ -1607,33 +1607,8 @@ function generateVideoSeats() {
             }
 
             // Add mic/video control buttons for PLAYER only
-            if (currentUser.role === 'player') {
-                const nameTag = document.querySelector(`#seat-${seatNumber} .name-tag`);
-                if (nameTag) {
-                    // Check if buttons already exist
-                    if (!document.getElementById(`player-mic-btn-${seatNumber}`)) {
-                        const controlsDiv = document.createElement('div');
-                        controlsDiv.style.cssText = 'display: flex; gap: 8px; margin-top: 8px; justify-content: center;';
-                        
-                        const micBtn = document.createElement('button');
-                        micBtn.id = `player-mic-btn-${seatNumber}`;
-                        micBtn.className = 'media-control-btn';
-                        micBtn.innerHTML = '🎤';
-                        micBtn.onclick = () => togglePlayerMic();
-                        
-                        const videoBtn = document.createElement('button');
-                        videoBtn.id = `player-video-btn-${seatNumber}`;
-                        videoBtn.className = 'media-control-btn';
-                        videoBtn.innerHTML = '📹';
-                        videoBtn.onclick = () => togglePlayerVideo();
-                        
-                        controlsDiv.appendChild(micBtn);
-                        controlsDiv.appendChild(videoBtn);
-                        nameTag.appendChild(controlsDiv);
-                        
-                        console.log('✅ Added media controls to name tag');
-                    }
-                }
+            if (currentUser.role === 'player' && typeof addPlayerMediaButtons === 'function') {
+                addPlayerMediaButtons(seatNumber);
             }
 
             // Enable video/audio when seat is claimed (ready for Agora)
