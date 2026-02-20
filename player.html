@@ -413,9 +413,6 @@
                                 
                                 console.log('✅ Added media controls during fast restore');
                             }
-                            
-                            // Add media control buttons during fast restore
-                            addPlayerMediaButtons(existingPlayer.seat);
                         }, 100);
                     }
                     
@@ -727,6 +724,9 @@
                         if (pronounsLabel && currentUser.pronouns) {
                             pronounsLabel.textContent = currentUser.pronouns;
                         }
+                        
+                        // Add media control buttons during fast restore
+                        addPlayerMediaButtons(existingPlayer.seat);
                     }, 100);
                     
                     return; // Don't reassign
