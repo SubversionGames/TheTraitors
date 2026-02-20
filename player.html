@@ -373,7 +373,7 @@
                         status: 'active'
                     });
                     
-                    console.log('✅ Player restored:', existingPlayer.name, '| Seat:', existingPlayer.seat);
+                    console.log('✅ Player restored: ' + existingPlayer.name + ' | Seat: ' + existingPlayer.seat);
                     
                     // If player has a seat, ensure their label shows immediately after seats generate
                     if (existingPlayer.seat) {
@@ -390,8 +390,15 @@
                             }
 
                             // Add media control buttons during fast restore
+                            console.log('🔍 Attempting to add media controls for seat', existingPlayer.seat);
+                            
                             const nameTag = document.querySelector(`#seat-${existingPlayer.seat} .name-tag`);
-                            if (nameTag && !document.getElementById(`player-mic-btn-${existingPlayer.seat}`)) {
+                            console.log('🔍 Found name tag:', nameTag);
+                            
+                            const existingBtn = document.getElementById(`player-mic-btn-${existingPlayer.seat}`);
+                            console.log('🔍 Existing button check:', existingBtn);
+                            
+                            if (nameTag && !existingBtn) {
                                 const controlsDiv = document.createElement('div');
                                 controlsDiv.style.cssText = 'display: flex; gap: 8px; margin-top: 8px; justify-content: center;';
                                 
@@ -411,7 +418,9 @@
                                 controlsDiv.appendChild(videoBtn);
                                 nameTag.appendChild(controlsDiv);
                                 
-                                console.log('✅ Added media controls during fast restore');
+                                console.log('✅ Added media controls during fast restore to seat', existingPlayer.seat);
+                            } else {
+                                console.log('❌ Failed to add controls - nameTag:', !!nameTag, 'existingBtn:', !!existingBtn);
                             }
                         }, 500);
                     }
@@ -724,9 +733,6 @@
                         if (pronounsLabel && currentUser.pronouns) {
                             pronounsLabel.textContent = currentUser.pronouns;
                         }
-                        
-                        // Add media control buttons during fast restore
-                        addPlayerMediaButtons(existingPlayer.seat);
                     }, 100);
                     
                     return; // Don't reassign
