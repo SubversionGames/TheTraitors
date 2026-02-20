@@ -388,6 +388,31 @@
                             if (pronounsLabel && existingPlayer.pronouns) {
                                 pronounsLabel.textContent = existingPlayer.pronouns;
                             }
+
+                            // Add media control buttons during fast restore
+                            const nameTag = document.querySelector(`#seat-${existingPlayer.seat} .name-tag`);
+                            if (nameTag && !document.getElementById(`player-mic-btn-${existingPlayer.seat}`)) {
+                                const controlsDiv = document.createElement('div');
+                                controlsDiv.style.cssText = 'display: flex; gap: 8px; margin-top: 8px; justify-content: center;';
+                                
+                                const micBtn = document.createElement('button');
+                                micBtn.id = `player-mic-btn-${existingPlayer.seat}`;
+                                micBtn.className = 'media-control-btn';
+                                micBtn.innerHTML = '🎤';
+                                micBtn.onclick = () => togglePlayerMic();
+                                
+                                const videoBtn = document.createElement('button');
+                                videoBtn.id = `player-video-btn-${existingPlayer.seat}`;
+                                videoBtn.className = 'media-control-btn';
+                                videoBtn.innerHTML = '📹';
+                                videoBtn.onclick = () => togglePlayerVideo();
+                                
+                                controlsDiv.appendChild(micBtn);
+                                controlsDiv.appendChild(videoBtn);
+                                nameTag.appendChild(controlsDiv);
+                                
+                                console.log('✅ Added media controls during fast restore');
+                            }
                         }, 100);
                     }
                     
