@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subversion: The Traitors</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="landing-page">
+    <div class="landing-container">
+        <h1 class="game-title">SUBVERSION: THE TRAITORS</h1>
+        <p class="game-subtitle">Choose Your Role</p>
+        
+        <div class="role-selection">
+            <!-- Host Login -->
+            <div class="role-card">
+                <h2>Production</h2>
+                <input type="password" id="host-password" placeholder="Enter Host Password" class="password-input">
+                <button onclick="loginAsHost()" class="role-button host-button">Enter as Host</button>
+                <p class="error-message" id="host-error"></p>
+            </div>
+
+            <!-- Player Login -->
+            <div class="role-card">
+                <h2>Player</h2>
+                <input type="password" id="player-password" placeholder="Enter Player Password" class="password-input">
+                <button onclick="loginAsPlayer()" class="role-button player-button">Enter as Player</button>
+                <p class="error-message" id="player-error"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <!-- Firebase Config -->
+    <script src="firebase-config.js"></script>
+
+    <!-- Landing Page Logic -->
+    <script>
+        function loginAsHost() {
+            const password = document.getElementById('host-password').value;
+            const errorElement = document.getElementById('host-error');
+            
+            if (password === window.gamePasswords.host) {
+                // Store role in sessionStorage
+                sessionStorage.setItem('userRole', 'host');
+                sessionStorage.setItem('isProduction', 'false'); // Default to Main Host
+                window.location.href = 'host.html';
+            } else {
+                errorElement.textContent = 'Incorrect password';
+                errorElement.style.display = 'block';
+            }
+        }
+
+        function loginAsPlayer() {
+            const password = document.getElementById('player-password').value;
+            const errorElement = document.getElementById('player-error');
+            
+            if (password === window.gamePasswords.player) {
+                // Store role in sessionStorage
+                sessionStorage.setItem('userRole', 'player');
+                window.location.href = 'player.html';
+            } else {
+                errorElement.textContent = 'Incorrect password';
+                errorElement.style.display = 'block';
+            }
+        }
+
+        // Allow Enter key to submit
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('host-password').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') loginAsHost();
+            });
+            
+            document.getElementById('player-password').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') loginAsPlayer();
+            });
+        });
+    </script>
+</body>
+</html>

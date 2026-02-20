@@ -1,0 +1,1346 @@
+/* ============================================
+   GLOBAL STYLES
+   ============================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+@font-face {
+    font-family: 'ShootingStar';
+    src: url('ShootingStar.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #fff;
+    min-height: 100vh;
+    position: relative;
+}
+
+/* Background image layer */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('Subversion Background.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: -2; /* Behind everything */
+}
+
+/* Phase overlay layer */
+body::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.3); /* Default: white overlay */
+    transition: background-color 0.5s ease;
+    z-index: -1; /* Above background, but behind content */
+    pointer-events: none; /* Allow clicks to pass through */
+}
+
+/* Phase-specific overlay colors */
+body.phase-breakfast::after {
+    background-color: rgba(255, 255, 255, 0.3); /* White */
+}
+
+body.phase-talk::after {
+    background-color: rgba(144, 238, 144, 0.3); /* Light Green */
+}
+
+body.phase-deliberation::after {
+    background-color: rgba(173, 216, 230, 0.3); /* Light Blue */
+}
+
+body.phase-voting::after {
+    background-color: rgba(216, 191, 216, 0.3); /* Light Purple */
+}
+
+body.phase-reveal::after {
+    background-color: rgba(255, 200, 124, 0.3); /* Light Orange */
+}
+
+body.phase-circle-of-truth::after {
+    background-color: rgba(255, 0, 0, 0.4); /* Red (slightly more opaque) */
+}
+
+body.phase-night::after {
+    background-color: rgba(0, 0, 128, 0.5); /* Navy Blue (more opaque for darkness) */
+}
+
+/* Disable phase overlay transition (for instant phase changes) */
+body.no-transition::after {
+    transition: none !important;
+}
+
+/* ============================================
+   LANDING PAGE STYLES
+   ============================================ */
+
+.landing-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.landing-container {
+    text-align: center;
+    max-width: 1200px;
+    width: 100%;
+}
+
+.game-title {
+    font-size: 3.5rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color:rgba(94, 23, 23, 0.8);
+    text-shadow: 
+        0 0 20px rgba(221, 205, 56, 0.7),
+        -0.5px -0.5px 0 #000,
+        0.5px -0.5px 0 #000,
+        -0.5px 0.5px 0 #000,
+        0.5px 0.5px 0 #000;
+    letter-spacing: 3px;
+}
+
+.game-subtitle {
+    font-size: 1.5rem;
+    margin-bottom: 50px;
+    color: #bbb;
+}
+
+.role-selection {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.role-card {
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid rgba(221, 205, 56, 0.719);
+    border-radius: 15px;
+    padding: 40px 30px;
+    width: 300px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.role-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.8);
+}
+
+.role-card h2 {
+    font-size: 2rem;
+    margin-bottom: 15px;
+}
+
+.role-card p {
+    color: #ccc;
+    margin-bottom: 20px;
+    font-size: 1rem;
+}
+
+.password-input {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 1rem;
+    text-align: center;
+    transition: border-color 0.3s ease;
+}
+
+.password-input:focus {
+    outline: none;
+    border-color: #4CAF50;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.password-input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+    text-align: center;
+}
+
+.role-button {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.host-button {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.host-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+}
+
+.player-button {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+}
+
+.player-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 5px 20px rgba(245, 87, 108, 0.4);
+}
+
+.error-message {
+    color: #ff6b6b;
+    font-size: 0.9rem;
+    margin-top: 10px;
+    display: none;
+}
+
+/* ============================================
+   HOST/PLAYER PAGE LAYOUTS
+   ============================================ */
+
+.game-interface {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* New Timer/Phase Display (replaces top bar) */
+.timer-phase-display {
+    position: fixed !important;
+    top: 50px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    text-align: center !important;
+    z-index: 100 !important;
+    pointer-events: none !important;
+    display: block !important; /* Force block display */
+    width: auto !important;
+    z-index: 100;
+}
+
+.timer-phase-display .phase-name {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #667eea;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    display: block !important; /* Stack vertically */
+    width: 100%;
+    z-index: 100;
+}
+
+.timer-phase-display .timer {
+    font-size: 3rem;
+    font-weight: bold;
+    color: white;
+    font-family: 'Courier New', monospace;
+    /* display: block !important; REMOVED - let JavaScript control visibility */
+    width: 100%;
+    z-index: 100;
+}
+
+.host-controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.control-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.control-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+.control-button.primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.control-button.danger {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.control-button.success {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+/* Main Content Area */
+.main-content {
+    display: flex;
+    flex: 1;
+    overflow: visible; /* Changed from hidden if it was */
+    position: relative;
+}
+
+/* Video Circle Container */
+.video-circle-container {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: flex-start; /* Align to left instead of center */
+    align-items: center;
+    position: relative;
+    padding: 0; /* Remove padding since we're handling spacing in .video-circle */
+    overflow: visible;
+}
+
+.video-circle {
+    /* Not used for positioning, just a container reference */
+    position: fixed;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Individual Video Seats */
+.video-seat {
+    position: fixed;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    overflow: visible;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    transition: border-color 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease;
+    cursor: pointer;
+    z-index: 50 !important; /* Ensure seats are above other elements */
+    min-width: 80px !important;
+    min-height: 80px !important;
+}
+
+/* Host seat - ensure perfect circular alignment */
+.video-seat.host {
+    border-color: #667eea;
+    border-width: 6px;
+    box-shadow: 0 0 40px rgba(102, 126, 234, 0.6);
+    z-index: 10;
+    transition: none !important; /* No animation for host seat */
+}
+
+/* Host video container - perfectly centered */
+.video-seat.host #video-1 {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 50% !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+/* Host video element - perfectly fitted */
+.video-seat.host #video-1 video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 50% !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) scaleX(-1) !important;
+}
+
+.video-seat.host:hover {
+    box-shadow: 0 0 40px rgba(102, 126, 234, 0.7);
+}
+
+.video-seat.empty {
+    border-style: dashed;
+    cursor: pointer;
+}
+
+.video-seat.empty:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.video-seat.active {
+    border-color: #4CAF50;
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.video-seat.speaking {
+    border-color: #FFD700;
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+    }
+    50% { 
+        transform: scale(1.05);
+        box-shadow: 0 0 50px rgba(255, 215, 0, 1);
+    }
+}
+
+.video-seat video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.video-seat.empty::before {
+    content: 'EMPTY';
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 1rem;
+    font-weight: bold;
+    text-align: center;
+    z-index: 10 !important;
+}
+
+.seat-label {
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    white-space: nowrap;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.8) !important;
+    border: 2px solid rgba(255, 255, 255, 0.3) !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    min-width: 100px !important;
+}
+
+/* Remove seat-number styles since we're not using it anymore */
+.seat-number {
+    display: none; /* Hide if it still exists */
+}
+
+.player-name {
+    font-weight: bold;
+    font-size: 1.5rem;
+    cursor: pointer;
+    line-height: 1.5;
+}
+
+.player-pronouns {
+    font-size: 0.8rem;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.7);
+    margin-top: 2px;
+}
+
+.vote-indicator {
+    position: absolute;
+    bottom: -65px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    display: none;
+    z-index: 100;
+}
+
+.vote-indicator.visible {
+    display: block;
+}
+
+/* Tab System (Right Side) */
+.tab-container {
+    position: fixed;
+    right: 0;
+    top: 0px; /* Changed from 80px to match top bar height */
+    bottom: 0;
+    z-index: 200;
+    display: flex;
+    pointer-events: auto;
+}
+
+/* Tab Buttons */
+.tab-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: rgba(0, 0, 0, 0.85); /* Match panel transparency */
+    border-left: 2px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+}
+
+.tab-button {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    padding: 20px 12px;
+    background: rgba(0, 0, 0, 0.8);
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    min-height: 150px;
+}
+
+.tab-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.tab-button.active {
+    background: rgba(102, 126, 234, 0.3);
+    border-left: 3px solid #667eea;
+}
+
+/* Tab Content Panel */
+.tab-content-panel {
+    width: 0;
+    background: rgba(0, 0, 0, 0.85); /* Changed from 0.95 to 0.85 for more transparency */
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: width 0.3s ease;
+    box-shadow: -5px 0 20px rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+    backdrop-filter: blur(10px); /* Add blur effect */
+}
+
+.tab-content-panel.open {
+    width: 350px; /* Fixed width instead of percentage */
+    min-width: 350px;
+    max-width: 350px;
+    padding: 20px;
+    border-left: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.tab-content h3 {
+    margin: 0 0 15px 0;
+    font-size: 1.2rem;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 10px;
+}
+
+.control-section {
+    margin-bottom: 20px;
+}
+
+.control-section h4 {
+    font-size: 0.95rem;
+    color: #bbb;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.limit-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.limit-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.limit-btn:active {
+    transform: scale(0.95);
+}
+
+/* Floating Windows (Waiting Lobby & Vote Count in tabs) */
+.floating-window {
+    margin-bottom: 15px;
+}
+
+.floating-window h4 {
+    font-size: 1rem;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.floating-window-content {
+    font-size: 0.85rem;
+    color: #bbb;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.floating-window-content div {
+    padding: 5px 0;
+}
+
+/* Overlay Screens */
+.overlay-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999; /* Higher than everything */
+}
+
+/* Breakfast overlay - dark blue/navy */
+.breakfast-overlay {
+    background: rgba(0, 0, 30, 0.85);
+}
+
+/* Night overlay - darker, more opaque */
+.night-overlay {
+    background: rgba(0, 0, 20, 0.92);
+}
+
+.overlay-screen.visible {
+    display: flex;
+}
+
+.overlay-message {
+    font-size: 3rem;
+    text-align: center;
+    text-shadow: 0 0 30px rgba(255, 255, 255, 0.8);
+    animation: fadeInOut 2s infinite;
+    z-index: 10000;
+    color: white;
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+}
+
+/* Modal Styles */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 10001; /* Changed from 2000 to be ABOVE overlay (9999) */
+}
+
+.modal.visible {
+    display: flex;
+}
+
+.modal-content {
+    background: #1a1a2e;
+    padding: 30px;
+    border-radius: 15px;
+    max-width: 500px;
+    width: 90%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.modal-content h2 {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.modal-content p {
+    text-align: center;
+}
+
+.modal-content input {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 1rem;
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .game-title {
+        font-size: 2rem;
+    }
+    
+    .role-selection {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .role-card {
+        width: 100%;
+        max-width: 400px;
+    }
+    
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .side-panel {
+       position: fixed;
+       left: 20px;
+       top: 0px !important; /* Move to near top of window */
+    }
+}
+
+/* Room Selection Panel (for players during Talk phase) */
+.room-panel {
+    position: fixed;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.95);
+    padding: 20px;
+    border-radius: 10px;
+    width: 280px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    z-index: 100;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.7);
+    display: none;
+}
+
+.room-panel h3 {
+    margin: 0 0 15px 0;
+    font-size: 1.1rem;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 10px;
+}
+
+.room-panel .room-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.room-panel .room-item {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.room-panel .room-item:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: #4CAF50;
+}
+
+.room-panel .room-name {
+    font-weight: bold;
+    font-size: 0.95rem;
+}
+
+.room-panel .room-count {
+    font-size: 0.85rem;
+    color: #bbb;
+}
+
+.room-list .room-item {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    margin-bottom: 15px; /* More space between rooms */
+}
+
+.room-list .room-item:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: #4CAF50;
+}
+
+.room-list .room-item.active {
+    border-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.2);
+}
+
+.room-list .room-name {
+    font-weight: bold;
+    font-size: 1rem;
+    color: #ccc; /* Default color */
+    transition: color 0.3s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px; /* Space between name and player list */
+}
+
+.room-list .room-item:hover .room-name {
+    color: #4CAF50; /* Hover color */
+}
+
+.room-list .room-count {
+    font-size: 0.85rem;
+    color: #bbb;
+}
+
+.room-players {
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 5px;
+    padding-top: 5px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.room-players div {
+    padding: 2px 0;
+    font-size: 0.8rem;
+    color: #ccc;
+}
+
+.room-item {
+    margin-bottom: 10px;
+}
+
+.room-name {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.room-count {
+    font-size: 0.85rem;
+    color: #4CAF50;
+}
+
+/* Announcement Overlay */
+.announcement-overlay {
+    position: fixed;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 107, 107, 0.95);
+    padding: 20px 40px;
+    border-radius: 10px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    z-index: 9999;
+    box-shadow: 0 5px 30px rgba(0, 0, 0, 0.5);
+    display: none;
+}
+
+.announcement-overlay.visible {
+    display: block;
+    animation: slideDown 0.5s ease;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateX(-50%) translateY(-100px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Video element inside seats */
+[id^="video-"] {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    position: relative;
+}
+
+[id^="video-"] video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+/* Fix video aspect ratio */
+[id^="video-"] video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 50%;
+}
+
+/* Ensure video container is square */
+[id^="video-"] {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    position: relative;
+    aspect-ratio: 1 / 1; /* Force square */
+}
+
+/* Remove spinner arrows from number inputs */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+/* Mirror ALL videos including host */
+[id^="video-"] video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 50%;
+    transform: scaleX(-1) !important; /* THIS LINE MIRRORS THE VIDEO */
+}
+
+.player-name.clickable-name {
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.player-name.clickable-name:hover {
+    color: #4CAF50;
+    text-decoration: underline;
+}
+
+/* Timer Controls Section */
+.timer-controls-section {
+    margin-bottom: 20px;
+}
+
+.timer-controls-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 1rem;
+    color: #667eea;
+    font-weight: bold;
+}
+
+/* 2x2 Button Grid */
+.button-grid-2x2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.button-grid-2x2 .control-button {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+}
+
+/* FORCE NAME TAG BOXES - ADD AT BOTTOM */
+body .seat-label {
+    background: rgba(0, 0, 0, 0.9) !important;
+    border: 2px solid rgba(255, 255, 255, 0.5) !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    min-width: 100px !important;
+}
+
+body .player-pronouns[data-showing-vote="true"] {
+    display: none !important;
+    visibility: hidden !important;
+    min-height: 16px !important;
+    font-size: 0.8rem !important;
+    font-style: italic !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    margin-top: 2px !important;
+    cursor: pointer !important;
+    transition: opacity 0.2s !important;
+}
+
+body .player-pronouns:hover {
+    opacity: 1 !important;
+}
+
+/* Audio/Video Controls */
+.seat-controls {
+    position: absolute;
+    top: calc(100% + 70px); /* Changed from 45px to 55px to move further down */
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 5px;
+    z-index: 101;
+}
+
+.seat-control-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.seat-control-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.seat-control-btn.muted {
+    background: rgba(255, 0, 0, 0.6);
+    border-color: rgba(255, 0, 0, 0.8);
+}
+
+.seat-control-btn.video-off {
+    background: rgba(255, 0, 0, 0.6);
+    border-color: rgba(255, 0, 0, 0.8);
+}
+
+/* Mute indicator - centered on name tag, same level as controls */
+.muted-indicator {
+    position: absolute;
+    bottom: -20px; /* Same vertical position as seat controls */
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.5rem;
+    z-index: 15;
+    pointer-events: none;
+    background: rgba(255, 0, 0, 0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Local Video Off Indicator (only visible to the user whose video is off) */
+.local-video-off-indicator {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    font-size: 1.2rem;
+    z-index: 15;
+    pointer-events: none;
+    background: rgba(255, 0, 0, 0.9);
+    color: white;
+    padding: 5px 8px;
+    border-radius: 5px;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    display: none; /* Hidden by default */
+    align-items: center;
+    justify-content: center;
+}
+
+.local-video-off-indicator.visible {
+    display: flex;
+}
+
+/* Center text in modals */
+.modal-content p {
+    text-align: center;
+}
+
+/* Seat Remove Button (Host Only) */
+.seat-remove-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 0, 0, 0.5);
+    background: rgba(255, 0, 0, 0.8);
+    color: white;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 105;
+    transition: all 0.2s ease;
+    line-height: 1;
+    padding: 0;
+}
+
+.seat-remove-btn:hover {
+    background: rgba(255, 0, 0, 1);
+    border-color: rgba(255, 0, 0, 0.8);
+    transform: scale(1.1);
+}
+
+.seat-remove-btn:active {
+    transform: scale(0.95);
+}
+
+/* Center confirmation modal text */
+.modal-content p {
+    text-align: center;
+}
+
+@keyframes rotateText {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.voting-ended-circle {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 900px;
+    height: 900px;
+    margin-top: -450px;  /* Half of height */
+    margin-left: -450px;  /* Half of width */
+    z-index: 300;
+    animation: rotateText 8s linear infinite;
+    pointer-events: none;
+}
+
+.voting-ended-circle svg {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.8));
+}
+
+.voting-ended-circle text {
+    font-size: 72px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 12px;
+    
+    /* Add these lines for Safari compatibility: */
+    -webkit-text-fill-color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    background-image: linear-gradient(to bottom, #FF0000, #000000);
+}
+
+/* Gradient definition */
+.voting-ended-circle stop:first-child {
+    stop-color: #FF0000;  /* Red at top */
+}
+
+.voting-ended-circle stop:last-child {
+    stop-color: #000000;  /* Black at bottom */
+}
+
+@media (max-width: 768px) {
+    .voting-ended-circle {
+        width: 80vw !important;
+        height: 80vw !important;
+        max-width: 500px !important;
+        max-height: 500px !important;
+        margin-top: -40vw !important;
+        margin-left: -40vw !important;
+    }
+    
+    .voting-ended-circle text {
+        font-size: 48px !important;
+        letter-spacing: 8px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .voting-ended-circle {
+        width: 90vw !important;
+        height: 90vw !important;
+        max-width: 350px !important;
+        max-height: 350px !important;
+        margin-top: -45vw !important;
+        margin-left: -45vw !important;
+    }
+    
+    .voting-ended-circle text {
+        font-size: 36px !important;
+        letter-spacing: 4px !important;
+    }
+}
+
+.night-overlay {
+    /* existing properties */
+    z-index: 10000 !important; /* Higher than phase-name and timer */
+}
+
+.vote-section {
+    margin-bottom: 20px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+}
+
+.vote-section-title {
+    font-size: 0.9rem;
+    color: #FFD700;
+    font-weight: bold;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.vote-section-content {
+    font-size: 0.85rem;
+}
+
+/* Toggle Switch for Viewer Mode */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #555;
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: #4CAF50;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(26px);
+}
+
+/* Viewer Mode utility class (backup - mainly using JavaScript) */
+.viewer-mode-hidden {
+    display: none !important;
+}
+
+/* Hide UI until player state is confirmed from Firebase */
+body.player-loading .video-seat,
+body.player-loading .tab-container,
+body.player-loading #phase-display,
+body.player-loading #timer-display {
+    opacity: 0 !important;
+    pointer-events: none;
+}
+
+/* Fast fade-in when ready */
+body.player-ready .video-seat,
+body.player-ready .tab-container,
+body.player-ready #phase-display,
+body.player-ready #timer-display {
+    opacity: 1;
+    transition: opacity 0.2s ease;
+}
+
+/* Mic/Video control buttons on name tag */
+.media-control-btn {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.media-control-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.media-control-btn.muted {
+    background: rgba(220, 53, 69, 0.8);
+    border-color: #dc3545;
+}
