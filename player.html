@@ -1865,6 +1865,8 @@
             }
         });
 
+        
+
         // ============================================
         // NAME AND PRONOUNS
         // ============================================
@@ -2168,6 +2170,12 @@
         // Show roundtable animation function
         function showRoundtableAnimation() {
             console.log('🎉 Showing roundtable animation');
+
+            // Play gong sound
+            const gong = new Audio('gong.mp3');
+            gong.volume = 0.5;
+            gong.play().catch(err => console.log('Gong play failed:', err));
+
             const existing = document.getElementById('roundtable-animation');
             if (existing) existing.remove();
             
@@ -2260,6 +2268,8 @@
                 showRoundtableAnimation();
             }
         });
+
+        
     </script>
 
     <div id="confirmation-modal" class="modal" style="display: none;">
