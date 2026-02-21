@@ -377,10 +377,19 @@
                     
                     // If player has a seat, ensure their label shows immediately after seats generate
                     if (existingPlayer.seat) {
+                        console.log('⏰ Starting polling for seat elements for seat', existingPlayer.seat);
+                        let pollAttempts = 0;
+                        const maxAttempts = 200; // 10 seconds max (200 * 50ms)
+                        
                         // Wait for seats to be created before adding buttons
                         const waitForSeat = setInterval(() => {
+                            pollAttempts++;
                             const seatLabel = document.getElementById('name-' + existingPlayer.seat);
                             const nameTag = document.querySelector(`#seat-${existingPlayer.seat} .name-tag`);
+                            
+                            if (pollAttempts % 20 === 0) {
+                                console.log(`⏰ Poll attempt ${pollAttempts}: seatLabel=${!!seatLabel}, nameTag=${!!nameTag}`);
+                            }
                             
                             if (seatLabel && nameTag) {
                                 clearInterval(waitForSeat);
@@ -399,6 +408,9 @@
                                 // Add media control buttons
                                 console.log('🔍 Attempting to add media controls for seat', existingPlayer.seat);
                                 addPlayerMediaButtons(existingPlayer.seat);
+                            } else if (pollAttempts >= maxAttempts) {
+                                clearInterval(waitForSeat);
+                                console.error('❌ Timeout waiting for seat elements after', pollAttempts, 'attempts');
                             }
                         }, 50); // Check every 50ms
                     }
