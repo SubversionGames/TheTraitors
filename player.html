@@ -312,17 +312,18 @@
         console.log('Timestamp:', Date.now());
         
         // Initialize player in Firebase and send to waiting room
-        let currentPlayerId = sessionStorage.getItem('currentPlayerId');
-        
+        // USE LOCALSTORAGE so ID survives hard refresh (CMD+SHIFT+R)
+        let currentPlayerId = localStorage.getItem('currentPlayerId');
+
         // CRITICAL: Only create new ID if one doesn't exist
         if (!currentPlayerId) {
             currentPlayerId = 'player-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-            sessionStorage.setItem('currentPlayerId', currentPlayerId);
-            sessionStorage.setItem('userId', currentPlayerId); // ADD THIS LINE
+            localStorage.setItem('currentPlayerId', currentPlayerId);
+            localStorage.setItem('userId', currentPlayerId);
             console.log('✅ Created new player ID:', currentPlayerId);
         } else {
             console.log('✅ Using existing player ID:', currentPlayerId);
-            sessionStorage.setItem('userId', currentPlayerId); // ADD THIS LINE TOO
+            localStorage.setItem('userId', currentPlayerId);
         }
         
         // CRITICAL: Set currentUser IMMEDIATELY with the correct ID
