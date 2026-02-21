@@ -2078,7 +2078,7 @@
         function enableNameEdit() {
             if (!currentUser || !currentUser.seat) return;
             
-            const nameTag = document.querySelector(`#seat-${currentUser.seat} .name-tag`);
+            const nameTag = document.querySelector(`#seat-${currentUser.seat} .seat-label`);
             if (nameTag) {
                 nameTag.style.cursor = 'pointer';
                 nameTag.addEventListener('click', () => {
@@ -2091,6 +2091,88 @@
                     }
                 });
             }
+        }
+
+        // Add media control buttons to player's name tag
+        function addPlayerMediaButtons(seatNumber) {
+            console.log('🎮 Adding media buttons to seat:', seatNumber);
+            
+            // VISUAL TEST: Add two red lines to prove function is running
+            const testDiv = document.createElement('div');
+            testDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                z-index: 99999;
+                pointer-events: none;
+            `;
+            testDiv.innerHTML = `
+                <div style="width: 400px; height: 10px; background: red; margin-bottom: 10px;"></div>
+                <div style="width: 400px; height: 10px; background: red;"></div>
+            `;
+            document.body.appendChild(testDiv);
+            console.log('🔴 RED TEST LINES ADDED - FUNCTION IS RUNNING!');
+
+            // Find the seat label (name tag)
+            const seatLabel = document.querySelector(`#seat-${seatNumber} .seat-label`);
+            if (!seatLabel) {
+                console.error('❌ Could not find seat label for seat:', seatNumber);
+                return;
+            }
+            
+            // Check if buttons already exist
+            if (seatLabel.querySelector('.player-media-controls')) {
+                console.log('✅ Media buttons already exist for seat:', seatNumber);
+                return;
+            }
+            
+            // Find the bottom control buttons
+            const bottomMicBtn = document.getElementById('local-mic-btn');
+            const bottomCamBtn = document.getElementById('local-cam-btn');
+            
+            if (!bottomMicBtn || !bottomCamBtn) {
+                console.error('❌ Could not find bottom control buttons');
+                return;
+            }
+            
+            // Create container for the buttons on the name tag
+            const controlsContainer = document.createElement('div');
+            controlsContainer.className = 'player-media-controls';
+            controlsContainer.style.cssText = `
+                position: absolute;
+                bottom: 5px;
+                left: 5px;
+                display: flex;
+                gap: 5px;
+                z-index: 10;
+            `;
+            
+            // Clone the buttons
+            const micBtn = bottomMicBtn.cloneNode(true);
+            const camBtn = bottomCamBtn.cloneNode(true);
+            
+            // Remove IDs from clones to avoid duplicates
+            micBtn.removeAttribute('id');
+            camBtn.removeAttribute('id');
+            
+            // Make buttons smaller for name tag
+            micBtn.style.cssText = 'width: 30px; height: 30px; padding: 5px;';
+            camBtn.style.cssText = 'width: 30px; height: 30px; padding: 5px;';
+            
+            // Wire up the cloned buttons to control the same media as the bottom buttons
+            micBtn.addEventListener('click', () => bottomMicBtn.click());
+            camBtn.addEventListener('click', () => bottomCamBtn.click());
+            
+            // Add buttons to container
+            controlsContainer.appendChild(micBtn);
+            controlsContainer.appendChild(camBtn);
+            
+            // Add container to seat label
+            seatLabel.style.position = 'relative'; // Ensure positioning context
+            seatLabel.appendChild(controlsContainer);
+            
+            console.log('✅ Media buttons added to seat:', seatNumber);
         }
 
         // Call after claiming seat
