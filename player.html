@@ -2028,10 +2028,9 @@
         function addPlayerMediaButtons(seatNumber) {
             console.log('🎮 Adding media buttons to seat:', seatNumber);
             
-            // Find the seat controls container (should already exist from game.js)
+            // Find the seat controls container
             let controlsDiv = document.getElementById(`controls-${seatNumber}`);
             
-            // If it doesn't exist, create it
             if (!controlsDiv) {
                 console.log('Creating new controls div for seat:', seatNumber);
                 const seat = document.getElementById(`seat-${seatNumber}`);
@@ -2046,10 +2045,9 @@
                 seat.appendChild(controlsDiv);
             }
             
-            // Only clear if there are actually old buttons, otherwise leave it alone
-            if (controlsDiv.children.length > 2) {
-                controlsDiv.innerHTML = '';
-            }
+            // ALWAYS clear all existing buttons and recreate
+            controlsDiv.innerHTML = '';
+            console.log('🧹 Cleared existing buttons from controls div');
 
             // Create mic button
             const micBtn = document.createElement('button');
@@ -2071,10 +2069,10 @@
             controlsDiv.appendChild(micBtn);
             controlsDiv.appendChild(videoBtn);
             
-            // Show the controls - make them always visible
-            controlsDiv.style.cssText = 'display: flex; visibility: visible; opacity: 1; position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); gap: 5px; z-index: 10;';
+            // Force display with setAttribute to override CSS
+            controlsDiv.setAttribute('style', 'display: flex; visibility: visible; opacity: 1; position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); gap: 5px; z-index: 10;');
             
-            console.log('✅ Media buttons added to seat:', seatNumber);
+            console.log('✅ Media buttons added and forced visible for seat:', seatNumber);
         }
 
         // Call after claiming seat
