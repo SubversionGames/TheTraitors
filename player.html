@@ -187,16 +187,6 @@
         </div>
     </div>
 
-    <!-- Player Audio/Video Controls -->
-    <div id="player-media-controls" style="display: none; position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; gap: 15px;">
-        <button id="player-mic-btn" onclick="togglePlayerMic()" class="control-button" style="width: 60px; height: 60px; border-radius: 50%; font-size: 1.5rem;">
-            🎤
-        </button>
-        <button id="player-video-btn" onclick="togglePlayerVideo()" class="control-button" style="width: 60px; height: 60px; border-radius: 50%; font-size: 1.5rem;">
-            📹
-        </button>
-    </div>
-
     <!-- Voting Modal -->
     <div class="modal" id="voting-modal">
         <div class="modal-content">
@@ -799,36 +789,6 @@
                     }
                 }
             });
-        }
-
-        // Function to add media control buttons
-        function addPlayerMediaButtons(seatNumber) {
-            const nameTag = document.querySelector(`#seat-${seatNumber} .seat-label`);
-            if (nameTag && !document.getElementById(`player-mic-btn-${seatNumber}`)) {
-                const controlsDiv = document.createElement('div');
-                controlsDiv.style.cssText = 'display: flex; gap: 8px; margin-top: 8px; justify-content: center;';
-                
-                const micBtn = document.createElement('button');
-                micBtn.id = `player-mic-btn-${seatNumber}`;
-                micBtn.className = 'media-control-btn';
-                micBtn.innerHTML = '🎤';
-                micBtn.onclick = () => togglePlayerMic();
-                
-                const videoBtn = document.createElement('button');
-                videoBtn.id = `player-video-btn-${seatNumber}`;
-                videoBtn.className = 'media-control-btn';
-                videoBtn.innerHTML = '📹';
-                videoBtn.onclick = () => togglePlayerVideo();
-                
-                controlsDiv.appendChild(micBtn);
-                controlsDiv.appendChild(videoBtn);
-                nameTag.appendChild(controlsDiv);
-                
-                console.log('✅ Added media controls to seat', seatNumber);
-            }
-            // Hide the original bottom buttons since we've moved them to the name tag
-            document.getElementById('player-mic-btn').style.display = 'none';
-            document.getElementById('player-video-btn').style.display = 'none';
         }
 
         // Player mic/video controls
@@ -1525,36 +1485,6 @@
                                                     console.log('✅ Updated seat label to show:', playerName);
                                                 }
                                                 
-                                                // Add mic/video control buttons for PLAYER only
-                                                if (currentUser.role === 'player') {
-                                                    const nameTag = document.querySelector(`#seat-${seatNumber} .seat-label`);
-                                                    if (nameTag) {
-                                                        // Check if buttons already exist
-                                                        if (!document.getElementById(`player-mic-btn-${seatNumber}`)) {
-                                                            const controlsDiv = document.createElement('div');
-                                                            controlsDiv.style.cssText = 'display: flex; gap: 8px; margin-top: 8px; justify-content: center;';
-                                                            
-                                                            const micBtn = document.createElement('button');
-                                                            micBtn.id = `player-mic-btn-${seatNumber}`;
-                                                            micBtn.className = 'media-control-btn';
-                                                            micBtn.innerHTML = '🎤';
-                                                            micBtn.onclick = () => togglePlayerMic();
-                                                            
-                                                            const videoBtn = document.createElement('button');
-                                                            videoBtn.id = `player-video-btn-${seatNumber}`;
-                                                            videoBtn.className = 'media-control-btn';
-                                                            videoBtn.innerHTML = '📹';
-                                                            videoBtn.onclick = () => togglePlayerVideo();
-                                                            
-                                                            controlsDiv.appendChild(micBtn);
-                                                            controlsDiv.appendChild(videoBtn);
-                                                            nameTag.appendChild(controlsDiv);
-                                                            
-                                                            console.log('✅ Added media controls to name tag');
-                                                        }
-                                                    }
-                                                }
-                                                
                                                 assigned = true;
                                                 break;
                                             }
@@ -2137,8 +2067,10 @@
                 seat.appendChild(controlsDiv);
             }
             
-            // Clear any existing buttons first to prevent duplicates
-            controlsDiv.innerHTML = '';
+            // Only clear if there are actually old buttons, otherwise leave it alone
+            if (controlsDiv.children.length > 2) {
+                controlsDiv.innerHTML = '';
+            }
 
             // Create mic button
             const micBtn = document.createElement('button');
@@ -2167,9 +2099,9 @@
             controlsDiv.appendChild(videoBtn);
             
             // Show the controls - make them always visible
-            controlsDiv.style.display = 'flex';
-            controlsDiv.style.visibility = 'visible';
-            controlsDiv.style.opacity = '1';
+            controlsDiv.style.display = 'flex !important';
+            controlsDiv.style.visibility = 'visible !important';
+            controlsDiv.style.opacity = '1 !important';
             
             console.log('✅ Media buttons added to seat:', seatNumber);
         }
