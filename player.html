@@ -826,6 +826,9 @@
                 
                 console.log('✅ Added media controls to seat', seatNumber);
             }
+            // Hide the original bottom buttons since we've moved them to the name tag
+            document.getElementById('player-mic-btn').style.display = 'none';
+            document.getElementById('player-video-btn').style.display = 'none';
         }
 
         // Player mic/video controls
@@ -2134,6 +2137,9 @@
                 seat.appendChild(controlsDiv);
             }
             
+            // Clear any existing buttons first to prevent duplicates
+            controlsDiv.innerHTML = '';
+
             // Create mic button
             const micBtn = document.createElement('button');
             micBtn.className = 'seat-control-btn';
@@ -2160,8 +2166,10 @@
             controlsDiv.appendChild(micBtn);
             controlsDiv.appendChild(videoBtn);
             
-            // Show the controls
+            // Show the controls - make them always visible
             controlsDiv.style.display = 'flex';
+            controlsDiv.style.visibility = 'visible';
+            controlsDiv.style.opacity = '1';
             
             console.log('✅ Media buttons added to seat:', seatNumber);
         }
