@@ -2417,6 +2417,18 @@ window.addEventListener('resize', () => {
             lastWidth = currentWidth;
             lastHeight = currentHeight;
             generateVideoSeats(); // Regenerate with new dimensions
+            
+            // Re-setup player controls after resize regenerates seats
+            if (typeof currentUser !== 'undefined' && currentUser.role === 'player' && currentUser.seat) {
+                setTimeout(() => {
+                    if (typeof setupPlayerControls === 'function') {
+                        setupPlayerControls(currentUser.seat);
+                    }
+                    if (typeof showPlayerControls === 'function') {
+                        showPlayerControls();
+                    }
+                }, 100);
+            }
 
             // Also regenerate room overlay if active
             const overlay = document.getElementById('room-overlay');
