@@ -1460,12 +1460,6 @@ function generateVideoSeats() {
         }, 100);
     }
 
-    function closeNamePronounsModal() {
-        document.getElementById('name-pronouns-modal').classList.remove('visible');
-        window.pendingSeatNumber = null;
-        window.editingNamePronouns = false;
-    }
-
     function submitNameAndPronouns() {
         const name = document.getElementById('modal-name-input').value.trim();
         const pronouns = document.getElementById('modal-pronouns-input').value.trim();
@@ -1545,6 +1539,12 @@ function generateVideoSeats() {
             claimSeat(window.pendingSeatNumber, trimmedName, trimmedPronouns);
         }
     }
+
+        function closeNamePronounsModal() {
+            document.getElementById('name-pronouns-modal').classList.remove('visible');
+            window.pendingSeatNumber = null;
+            window.editingNamePronouns = false;
+        }
 
     function claimSeat(seatNumber, playerName, pronouns) {
         console.log('Attempting to claim seat:', seatNumber, 'for player:', playerName);

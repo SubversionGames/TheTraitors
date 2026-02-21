@@ -2070,7 +2070,9 @@
         }
 
         function closeNamePronounsModal() {
-            document.getElementById('name-pronouns-modal').classList.remove('visible');
+            const modal = document.getElementById('name-pronouns-modal');
+            modal.classList.remove('visible');
+            modal.style.display = 'none'; // Add this line
             document.getElementById('name-pronouns-error').style.display = 'none';
         }
 
@@ -2113,64 +2115,53 @@
             `;
             document.body.appendChild(testDiv);
             console.log('🔴 RED TEST LINES ADDED - FUNCTION IS RUNNING!');
-
-            // Find the seat label (name tag)
-            const seatLabel = document.querySelector(`#seat-${seatNumber} .seat-label`);
-            if (!seatLabel) {
-                console.error('❌ Could not find seat label for seat:', seatNumber);
-                return;
+            
+            // Find the seat controls container (should already exist from game.js)
+            let controlsDiv = document.getElementById(`controls-${seatNumber}`);
+            
+            // If it doesn't exist, create it
+            if (!controlsDiv) {
+                console.log('Creating new controls div for seat:', seatNumber);
+                const seat = document.getElementById(`seat-${seatNumber}`);
+                if (!seat) {
+                    console.error('❌ Could not find seat element:', seatNumber);
+                    return;
+                }
+                
+                controlsDiv = document.createElement('div');
+                controlsDiv.className = 'seat-controls';
+                controlsDiv.id = `controls-${seatNumber}`;
+                seat.appendChild(controlsDiv);
             }
             
-            // Check if buttons already exist
-            if (seatLabel.querySelector('.player-media-controls')) {
-                console.log('✅ Media buttons already exist for seat:', seatNumber);
-                return;
-            }
+            // Create mic button
+            const micBtn = document.createElement('button');
+            micBtn.className = 'seat-control-btn';
+            micBtn.id = `mic-${seatNumber}`;
+            micBtn.title = 'Toggle Microphone';
+            micBtn.textContent = '🎤';
+            micBtn.onclick = () => {
+                const playerMicBtn = document.getElementById('player-mic-btn');
+                if (playerMicBtn) playerMicBtn.click();
+            };
             
-            // Find the bottom control buttons
-            const bottomMicBtn = document.getElementById('local-mic-btn');
-            const bottomCamBtn = document.getElementById('local-cam-btn');
+            // Create video button
+            const videoBtn = document.createElement('button');
+            videoBtn.className = 'seat-control-btn';
+            videoBtn.id = `video-${seatNumber}-btn`;
+            videoBtn.title = 'Toggle Video';
+            videoBtn.textContent = '📹';
+            videoBtn.onclick = () => {
+                const playerVideoBtn = document.getElementById('player-video-btn');
+                if (playerVideoBtn) playerVideoBtn.click();
+            };
             
-            if (!bottomMicBtn || !bottomCamBtn) {
-                console.error('❌ Could not find bottom control buttons');
-                return;
-            }
+            // Add buttons to controls div
+            controlsDiv.appendChild(micBtn);
+            controlsDiv.appendChild(videoBtn);
             
-            // Create container for the buttons on the name tag
-            const controlsContainer = document.createElement('div');
-            controlsContainer.className = 'player-media-controls';
-            controlsContainer.style.cssText = `
-                position: absolute;
-                bottom: 5px;
-                left: 5px;
-                display: flex;
-                gap: 5px;
-                z-index: 10;
-            `;
-            
-            // Clone the buttons
-            const micBtn = bottomMicBtn.cloneNode(true);
-            const camBtn = bottomCamBtn.cloneNode(true);
-            
-            // Remove IDs from clones to avoid duplicates
-            micBtn.removeAttribute('id');
-            camBtn.removeAttribute('id');
-            
-            // Make buttons smaller for name tag
-            micBtn.style.cssText = 'width: 30px; height: 30px; padding: 5px;';
-            camBtn.style.cssText = 'width: 30px; height: 30px; padding: 5px;';
-            
-            // Wire up the cloned buttons to control the same media as the bottom buttons
-            micBtn.addEventListener('click', () => bottomMicBtn.click());
-            camBtn.addEventListener('click', () => bottomCamBtn.click());
-            
-            // Add buttons to container
-            controlsContainer.appendChild(micBtn);
-            controlsContainer.appendChild(camBtn);
-            
-            // Add container to seat label
-            seatLabel.style.position = 'relative'; // Ensure positioning context
-            seatLabel.appendChild(controlsContainer);
+            // Show the controls
+            controlsDiv.style.display = 'flex';
             
             console.log('✅ Media buttons added to seat:', seatNumber);
         }
