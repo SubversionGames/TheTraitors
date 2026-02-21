@@ -1104,7 +1104,7 @@ function generateVideoSeats() {
                 <span class="player-name" id="name-${seat.number}">Empty</span>
                 <span class="player-pronouns" id="pronouns-${seat.number}"></span>
             </div>
-            <div class="seat-controls" id="controls-${seat.number}" style="display: none;">
+            <div class="seat-controls" id="controls-${seat.number}">
                 <button class="seat-control-btn" id="mic-${seat.number}" onclick="toggleMic(${seat.number})" title="Toggle Microphone">
                     🎤
                 </button>
