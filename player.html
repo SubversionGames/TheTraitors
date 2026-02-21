@@ -2078,10 +2078,7 @@
             micBtn.id = `mic-${seatNumber}`;
             micBtn.title = 'Toggle Microphone';
             micBtn.textContent = '🎤';
-            micBtn.onclick = () => {
-                const playerMicBtn = document.getElementById('player-mic-btn');
-                if (playerMicBtn) playerMicBtn.click();
-            };
+            micBtn.onclick = () => togglePlayerMic();
             
             // Create video button
             const videoBtn = document.createElement('button');
@@ -2089,10 +2086,7 @@
             videoBtn.id = `video-${seatNumber}-btn`;
             videoBtn.title = 'Toggle Video';
             videoBtn.textContent = '📹';
-            videoBtn.onclick = () => {
-                const playerVideoBtn = document.getElementById('player-video-btn');
-                if (playerVideoBtn) playerVideoBtn.click();
-            };
+            videoBtn.onclick = () => togglePlayerVideo();
             
             // Add buttons to controls div
             controlsDiv.appendChild(micBtn);
