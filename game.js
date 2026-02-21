@@ -1606,14 +1606,19 @@ function generateVideoSeats() {
                 console.log('✅ Updated seat label to show:', playerName);
             }
 
-            // Add mic/video control buttons for PLAYER only
-            if (currentUser.role === 'player' && typeof addPlayerMediaButtons === 'function') {
-                addPlayerMediaButtons(seatNumber);
-            }
-
             // Enable name editing for players
             if (currentUser.role === 'player' && typeof enableNameEdit === 'function') {
                 enableNameEdit();
+            }
+
+            // Setup and show player's own media controls
+            if (currentUser.role === 'player') {
+                if (typeof setupPlayerControls === 'function') {
+                    setupPlayerControls(seatNumber);
+                }
+                if (typeof showPlayerControls === 'function') {
+                    showPlayerControls();
+                }
             }
 
             // Enable video/audio when seat is claimed (ready for Agora)

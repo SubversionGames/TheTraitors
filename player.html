@@ -365,6 +365,14 @@
                     });
                     
                     console.log('✅ Player restored: ' + existingPlayer.name + ' | Seat: ' + existingPlayer.seat);
+
+                    // Setup player controls after restoration
+                    if (typeof setupPlayerControls === 'function') {
+                        setupPlayerControls(existingPlayer.seat);
+                    }
+                    if (typeof showPlayerControls === 'function') {
+                        showPlayerControls();
+                    }
                     
                     // If player has a seat, ensure their label shows immediately after seats generate
                     if (existingPlayer.seat) {
@@ -398,7 +406,6 @@
                                 
                                 // Add media control buttons
                                 console.log('🔍 Attempting to add media controls for seat', existingPlayer.seat);
-                                addPlayerMediaButtons(existingPlayer.seat);
                             } else if (pollAttempts >= maxAttempts) {
                                 clearInterval(waitForSeat);
                                 console.error('❌ Timeout waiting for seat elements after', pollAttempts, 'attempts');
@@ -789,49 +796,6 @@
                     }
                 }
             });
-        }
-
-        // Player mic/video controls
-        async function togglePlayerMic() {
-            if (typeof window.agoraManager !== 'undefined' && window.agoraManager && window.agoraManager.localAudioTrack) {
-                const currentlyEnabled = window.agoraManager.localAudioTrack.enabled;
-                await window.agoraManager.localAudioTrack.setEnabled(!currentlyEnabled);
-                
-                // Update button appearance
-                const btn = document.getElementById(`mic-${currentUser.seat}`);
-                if (btn) {
-                    if (!currentlyEnabled) {
-                        btn.classList.remove('muted');
-                        btn.innerHTML = '🎤';
-                    } else {
-                        btn.classList.add('muted');
-                        btn.innerHTML = '🔇';
-                    }
-                }
-                
-                console.log('🎤 Microphone toggled:', currentlyEnabled ? 'muted' : 'unmuted');
-            }
-        }
-
-        async function togglePlayerVideo() {
-            if (typeof window.agoraManager !== 'undefined' && window.agoraManager && window.agoraManager.localVideoTrack) {
-                const currentlyEnabled = window.agoraManager.localVideoTrack.enabled;
-                await window.agoraManager.localVideoTrack.setEnabled(!currentlyEnabled);
-                
-                // Update button appearance
-                const btn = document.getElementById(`video-${currentUser.seat}-btn`);
-                if (btn) {
-                    if (!currentlyEnabled) {
-                        btn.classList.remove('muted');
-                        btn.innerHTML = '📹';
-                    } else {
-                        btn.classList.add('muted');
-                        btn.innerHTML = '📹❌';
-                    }
-                }
-                
-                console.log('📹 Video toggled:', currentlyEnabled ? 'off' : 'on');
-            }
         }
 
         // Show controls when Agora initializes
@@ -2005,6 +1969,46 @@
             document.getElementById('name-pronouns-error').style.display = 'none';
         }
 
+        // Show media controls for player's own seat
+        function showPlayerControls() {
+            if (!currentUser || !currentUser.seat) return;
+            
+            const controls = document.getElementById(`controls-${currentUser.seat}`);
+            if (controls) {
+                controls.style.display = 'flex';
+                console.log('✅ Showing media controls for player seat:', currentUser.seat);
+            }
+        }
+
+        // Wire up player's controls to use global toggle functions
+        function setupPlayerControls(seatNumber) {
+            console.log('🎮 Setting up player controls for seat:', seatNumber);
+            
+            const micBtn = document.getElementById(`mic-${seatNumber}`);
+            const videoBtn = document.getElementById(`video-${seatNumber}-btn`);
+            
+            if (micBtn && videoBtn) {
+                // Clear old onclick handlers and set new ones
+                micBtn.onclick = async () => {
+                    if (window.toggleAudio) {
+                        const isMuted = await window.toggleAudio();
+                        micBtn.innerHTML = isMuted ? '🔇' : '🎤';
+                    }
+                };
+                
+                videoBtn.onclick = async () => {
+                    if (window.toggleVideo) {
+                        const isOff = await window.toggleVideo();
+                        videoBtn.innerHTML = isOff ? '📹❌' : '📹';
+                    }
+                };
+                
+                console.log('✅ Player controls wired up for seat:', seatNumber);
+            } else {
+                console.error('❌ Could not find control buttons for seat:', seatNumber);
+            }
+        }
+
         // Allow clicking on own name to edit
         function enableNameEdit() {
             if (!currentUser || !currentUser.seat) return;
@@ -2022,57 +2026,6 @@
                     }
                 });
             }
-        }
-
-        // Add media control buttons to player's name tag
-        function addPlayerMediaButtons(seatNumber) {
-            console.log('🎮 Adding media buttons to seat:', seatNumber);
-            
-            // Find the seat controls container
-            let controlsDiv = document.getElementById(`controls-${seatNumber}`);
-            
-            if (!controlsDiv) {
-                console.log('Creating new controls div for seat:', seatNumber);
-                const seat = document.getElementById(`seat-${seatNumber}`);
-                if (!seat) {
-                    console.error('❌ Could not find seat element:', seatNumber);
-                    return;
-                }
-                
-                controlsDiv = document.createElement('div');
-                controlsDiv.className = 'seat-controls';
-                controlsDiv.id = `controls-${seatNumber}`;
-                seat.appendChild(controlsDiv);
-            }
-            
-            // ALWAYS clear all existing buttons and recreate
-            controlsDiv.innerHTML = '';
-            console.log('🧹 Cleared existing buttons from controls div');
-
-            // Create mic button
-            const micBtn = document.createElement('button');
-            micBtn.className = 'seat-control-btn';
-            micBtn.id = `mic-${seatNumber}`;
-            micBtn.title = 'Toggle Microphone';
-            micBtn.textContent = '🎤';
-            micBtn.onclick = () => togglePlayerMic();
-            
-            // Create video button
-            const videoBtn = document.createElement('button');
-            videoBtn.className = 'seat-control-btn';
-            videoBtn.id = `video-${seatNumber}-btn`;
-            videoBtn.title = 'Toggle Video';
-            videoBtn.textContent = '📹';
-            videoBtn.onclick = () => togglePlayerVideo();
-            
-            // Add buttons to controls div
-            controlsDiv.appendChild(micBtn);
-            controlsDiv.appendChild(videoBtn);
-            
-            // Force display with setAttribute to override CSS
-            controlsDiv.setAttribute('style', 'display: flex; visibility: visible; opacity: 1; position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); gap: 5px; z-index: 10;');
-            
-            console.log('✅ Media buttons added and forced visible for seat:', seatNumber);
         }
 
         // Call after claiming seat

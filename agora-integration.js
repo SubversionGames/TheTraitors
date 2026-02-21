@@ -264,7 +264,7 @@ function handleUserLeft(user) {
     }
 }
 
-// Mute/unmute audio
+// Mute/unmute audio - works for both host and player
 async function toggleAudio() {
     if (localAudioTrack) {
         const newState = !localAudioTrack.enabled;
@@ -279,7 +279,10 @@ async function toggleAudio() {
     return false;
 }
 
-// Turn video on/off
+// Make globally accessible
+window.toggleAudio = toggleAudio;
+
+// Turn video on/off - works for both host and player
 async function toggleVideo() {
     if (localVideoTrack) {
         const newState = !localVideoTrack.enabled;
@@ -293,6 +296,9 @@ async function toggleVideo() {
     }
     return false;
 }
+
+// Make globally accessible
+window.toggleVideo = toggleVideo;
 
 // Leave call
 async function leaveAgoraCall() {
