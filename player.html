@@ -803,7 +803,7 @@
 
         // Function to add media control buttons
         function addPlayerMediaButtons(seatNumber) {
-            const nameTag = document.querySelector(`#seat-${seatNumber} .name-tag`);
+            const nameTag = document.querySelector(`#seat-${seatNumber} .seat-label`);
             if (nameTag && !document.getElementById(`player-mic-btn-${seatNumber}`)) {
                 const controlsDiv = document.createElement('div');
                 controlsDiv.style.cssText = 'display: flex; gap: 8px; margin-top: 8px; justify-content: center;';
@@ -1524,7 +1524,7 @@
                                                 
                                                 // Add mic/video control buttons for PLAYER only
                                                 if (currentUser.role === 'player') {
-                                                    const nameTag = document.querySelector(`#seat-${seatNumber} .name-tag`);
+                                                    const nameTag = document.querySelector(`#seat-${seatNumber} .seat-label`);
                                                     if (nameTag) {
                                                         // Check if buttons already exist
                                                         if (!document.getElementById(`player-mic-btn-${seatNumber}`)) {

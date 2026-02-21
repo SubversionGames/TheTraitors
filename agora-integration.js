@@ -95,9 +95,14 @@ async function initializeAgora() {
     // Wait for user to have a seat (for players) or be host
     if (role === 'player' && !currentUser.seat) {
         console.log('Waiting for player to select seat before joining video...');
-        database.ref('players/' + currentUser.id + '/seat').once('value', (snapshot) => {
+        // Use .on() instead of .once() to catch existing seats too
+        const seatListener = database.ref('players/' + currentUser.id + '/seat').on('value', (snapshot) => {
             if (snapshot.val() && !agoraClient) {
                 console.log('✅ Player has seat, initializing Agora...');
+                // Remove listener to prevent duplicate calls
+                database.ref('players/' + currentUser.id + '/seat').off('value', seatListener);
+                // Update currentUser.seat before initializing
+                currentUser.seat = snapshot.val();
                 initializeAgora();
             }
         });

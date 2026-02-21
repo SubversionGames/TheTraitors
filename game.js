@@ -1611,6 +1611,11 @@ function generateVideoSeats() {
                 addPlayerMediaButtons(seatNumber);
             }
 
+            // Enable name editing for players
+            if (currentUser.role === 'player' && typeof enableNameEdit === 'function') {
+                enableNameEdit();
+            }
+
             // Enable video/audio when seat is claimed (ready for Agora)
             if (window.agoraClient) {
                 console.log('📹 Enabling video/audio for seat:', seatNumber);
