@@ -1621,6 +1621,20 @@ function generateVideoSeats() {
                 }
             }
 
+            // Move video element to new seat if it exists
+            if (oldSeat && oldSeat !== seatNumber) {
+                const oldVideoDiv = document.getElementById(`video-${oldSeat}`);
+                const newVideoDiv = document.getElementById(`video-${seatNumber}`);
+                
+                if (oldVideoDiv && newVideoDiv && oldVideoDiv.children.length > 0) {
+                    // Move all video elements from old seat to new seat
+                    while (oldVideoDiv.firstChild) {
+                        newVideoDiv.appendChild(oldVideoDiv.firstChild);
+                    }
+                    console.log('📹 Moved video from seat', oldSeat, 'to seat', seatNumber);
+                }
+            }
+
             // Enable video/audio when seat is claimed (ready for Agora)
             if (window.agoraClient) {
                 console.log('📹 Enabling video/audio for seat:', seatNumber);

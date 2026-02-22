@@ -344,53 +344,63 @@
                     // PLAYER EXISTS - Fast restore path
                     console.log('🔄 Player already exists - FAST RESTORE');
                     
-                    // Restore full player state from Firebase IMMEDIATELY
+                    // Check if last session was more than 1 hour ago
+                    const ONE_HOUR = 60 * 60 * 1000;
+                    const now = Date.now();
+                    const timeSinceLastActive = now - (existingPlayer.lastActive || 0);
+
+                    if (timeSinceLastActive > ONE_HOUR) {
+                        // Session expired - clear everything and start fresh
+                        console.log('⏰ Session expired (' + Math.round(timeSinceLastActive / 1000 / 60) + ' minutes old) - starting fresh');
+                        localStorage.removeItem('currentPlayerId');
+                        localStorage.removeItem('userId');
+                        sessionStorage.clear();
+                        
+                        // Remove from Firebase
+                        database.ref('players/' + currentPlayerId).remove();
+                        
+                        // Reload to start as new player
+                        window.location.reload();
+                        return; // Stop execution
+                    }
+
+                    // Session still valid - restore player state
                     window.currentUser.name = existingPlayer.name || 'New Player';
                     window.currentUser.pronouns = existingPlayer.pronouns || '';
                     window.currentUser.seat = existingPlayer.seat;
                     window.currentUser.room = existingPlayer.room || initialRoom;
-                    currentUser.pronouns = existingPlayer.pronouns || '';
-                    currentUser.seat = existingPlayer.seat;
-                    currentUser.room = existingPlayer.room || initialRoom;
                     
-                    sessionStorage.setItem('playerName', existingPlayer.name);
-                    if (existingPlayer.seat) {
-                        sessionStorage.setItem('playerSeat', existingPlayer.seat);
-                    }
-                    
-                    // Only update lastActive, don't overwrite their data
+                    // Update timestamp
                     database.ref('players/' + currentPlayerId).update({
-                        lastActive: Date.now(),
+                        lastActive: now,
                         status: 'active'
                     });
-                    
+
                     console.log('✅ Player restored: ' + existingPlayer.name + ' | Seat: ' + existingPlayer.seat);
 
                     // Setup player controls after restoration
-                    if (typeof setupPlayerControls === 'function') {
+                    if (existingPlayer.seat && typeof setupPlayerControls === 'function') {
                         setupPlayerControls(existingPlayer.seat);
                     }
-                    if (typeof showPlayerControls === 'function') {
+                    if (existingPlayer.seat && typeof showPlayerControls === 'function') {
                         showPlayerControls();
                     }
                     
-                    // If player has a seat, ensure their label shows immediately after seats generate
+                    // If player has a seat, update seat label after seats generate
                     if (existingPlayer.seat) {
                         console.log('⏰ Starting polling for seat elements for seat', existingPlayer.seat);
                         let pollAttempts = 0;
-                        const maxAttempts = 200; // 10 seconds max (200 * 50ms)
+                        const maxAttempts = 200;
                         
-                        // Wait for seats to be created before adding buttons
                         const waitForSeat = setInterval(() => {
                             pollAttempts++;
                             const seatLabel = document.getElementById('name-' + existingPlayer.seat);
-                            const nameTag = document.querySelector(`#seat-${existingPlayer.seat} .name-tag`);
                             
                             if (pollAttempts % 20 === 0) {
-                                console.log(`⏰ Poll attempt ${pollAttempts}: seatLabel=${!!seatLabel}, nameTag=${!!nameTag}`);
+                                console.log(`⏰ Poll attempt ${pollAttempts}: seatLabel=${!!seatLabel}`);
                             }
                             
-                            if (seatLabel && nameTag) {
+                            if (seatLabel) {
                                 clearInterval(waitForSeat);
                                 
                                 // Update name and pronouns
@@ -403,14 +413,11 @@
                                         pronounsLabel.textContent = existingPlayer.pronouns;
                                     }
                                 }
-                                
-                                // Add media control buttons
-                                console.log('🔍 Attempting to add media controls for seat', existingPlayer.seat);
                             } else if (pollAttempts >= maxAttempts) {
                                 clearInterval(waitForSeat);
                                 console.error('❌ Timeout waiting for seat elements after', pollAttempts, 'attempts');
                             }
-                        }, 50); // Check every 50ms
+                        }, 50);
                     }
                     
                     // Hide name modal if they already have a name
@@ -418,12 +425,9 @@
                     if (existingPlayer.name && existingPlayer.name !== 'New Player') {
                         nameModal.classList.remove('visible');
                         nameModal.style.display = 'none';
-                        
-                        // Mark as ready - show UI instantly
                         document.body.classList.remove('player-loading');
                         document.body.classList.add('player-ready');
                         
-                        // Show seats if they're in main room
                         if (existingPlayer.room === 'main') {
                             document.querySelectorAll('.video-seat').forEach(seat => {
                                 seat.style.display = '';
@@ -431,21 +435,16 @@
                             document.querySelector('.tab-container')?.style.setProperty('display', '', 'important');
                         }
                     } else {
-                        // Still needs to enter name
                         nameModal.classList.add('visible');
-                        
-                        // Show UI now (but keep seats hidden)
                         document.body.classList.remove('player-loading');
                         document.body.classList.add('player-ready');
                         
-                        // Hide seats while entering name
                         document.querySelectorAll('.video-seat').forEach(seat => {
                             seat.style.display = 'none';
                         });
                         document.querySelector('.tab-container')?.style.setProperty('display', 'none', 'important');
                     }
                     
-                    // Verification
                     console.log('✅ Player ID is:', currentPlayerId);
                     console.log('✅ Verification - Player data in Firebase:', existingPlayer);
                     
