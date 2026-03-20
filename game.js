@@ -1,4 +1,3 @@
-// Version: 2025-01-18 1:09 REBUILD
 // ============================================
 // GAME STATE MANAGEMENT
 // ============================================
@@ -8,7 +7,7 @@ let gameState = {
     players: {},
     seats: {},
     timer: null,
-    voting: null,
+    firstVote: null,
     currentRoom: 'main'
 };
 
@@ -80,6 +79,37 @@ function getLayoutForSeatCount(seatCount) {
     document.addEventListener('touchstart', unlock, true);
     document.addEventListener('click', unlock, true);
 })();
+
+// ============================================
+// PHASE MANAGER - Handles clean phase transitions
+// ============================================
+
+const PhaseManager = {
+    currentPhase: null,
+    
+    changePhase(newPhase) {
+        // Exit current phase
+        if (this.currentPhase) {
+            console.log(`🚪 Exiting phase: ${this.currentPhase}`);
+            
+            // Call the appropriate exit function
+            const exitFunctionName = `exit${this.currentPhase.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')}`;
+            
+            // Try to call it if it exists
+            try {
+                if (typeof window[exitFunctionName] === 'function') {
+                    window[exitFunctionName]();
+                }
+            } catch (e) {
+                console.log('No exit function for:', this.currentPhase);
+            }
+        }
+        
+        // Update phase
+        this.currentPhase = newPhase;
+        console.log(`🚪 Entering phase: ${newPhase}`);
+    }
+};
 
 // ============================================
 // INITIALIZATION
@@ -262,22 +292,40 @@ function setupFirebaseListeners() {
                 'breakfast': 'Breakfast',
                 'talk': 'Talk Time',
                 'deliberation': 'Roundtable',
-                'voting': 'Voting Phase',
-                'vote-reveal': 'Vote Reveal',
+                'first-vote': 'Voting Phase',
+                'first-vote-reveal': 'Vote Reveal',
+                'second-vote': 'Revote Phase',
                 'circle-of-truth': 'Circle of Truth',
-                'night': 'Night'
+                'night': 'Night',
+                'end-game': 'End Game'
             };
-            phaseElement.textContent = phaseNames[phase] || phase;
+            if (phaseNames[phase]) {
+                phaseElement.textContent = phaseNames[phase];
+            }
         }
         
-        // Force seats visible during lobby phase
+        // Force seats visible during lobby phase - with polling to ensure seats exist
         if (phase === 'lobby' && currentUser.role === 'player' && currentUser.room === 'main') {
-            setTimeout(() => {
-                document.querySelectorAll('.video-seat').forEach(seat => {
-                    seat.style.display = 'flex';
-                    seat.style.visibility = 'visible';
-                });
-            }, 100);
+            let attempts = 0;
+            const checkSeats = setInterval(() => {
+                const firstSeat = document.getElementById('seat-2');
+                attempts++;
+                
+                if (firstSeat || attempts > 20) { // Try for max 1 second
+                    clearInterval(checkSeats);
+                    
+                    if (firstSeat) {
+                        document.querySelectorAll('.video-seat').forEach(seat => {
+                            seat.style.display = 'flex';
+                            seat.style.visibility = 'visible';
+                            seat.style.opacity = '1';
+                        });
+                        console.log('✅ Seats forced visible in lobby phase');
+                    } else {
+                        console.error('❌ Seats never appeared after', attempts, 'attempts');
+                    }
+                }
+            }, 50);
         }
 
         // Clean up role reveal text when leaving circle-of-truth
@@ -289,8 +337,17 @@ function setupFirebaseListeners() {
             // Also restore phase-name visibility
             const phaseEl = document.getElementById('phase-name');
             const timerEl = document.getElementById('timer');
-            if (phaseEl) phaseEl.style.display = '';
-            if (timerEl && phase !== 'night' && phase !== 'breakfast') timerEl.style.display = '';
+            if (phaseEl) phaseEl.style.display = 'block';
+            if (timerEl && phase !== 'night' && phase !== 'breakfast') {
+                // Only show timer if one is actually active in Firebase
+                database.ref('game/timer').once('value', (timerSnap) => {
+                    const timerData = timerSnap.val();
+                    if (timerData && timerData.totalSeconds && timerData.isRunning) {
+                        timerEl.style.display = '';
+                    }
+                    // If no active timer, leave it hidden
+                });
+            }
         }
         
         // Update the phase title for ALL roles
@@ -410,8 +467,9 @@ function setupFirebaseListeners() {
                 'breakfast': 'Breakfast',
                 'talk': 'Talk Time',
                 'deliberation': 'Roundtable',
-                'voting': 'Voting Phase',
-                'vote-reveal': 'Vote Reveal',
+                'first-vote': 'Voting Phase',
+                'first-vote-reveal': 'Vote Reveal',
+                'second-vote': 'Revote Phase',
                 'circle-of-truth': 'Circle of Truth',
                 'night': 'Night'
             };
@@ -420,16 +478,30 @@ function setupFirebaseListeners() {
             if (!timer || !timer.totalSeconds) {
                 console.log('🚫 No timer data - HIDING timer');
                 timerElement.style.display = 'none';
-                timerElement.style.visibility = 'hidden'; // Also hide visibility!
-                phaseElement.textContent = phaseNames[currentPhase] || currentPhase;
+                timerElement.style.visibility = 'hidden';
+                if (phaseNames[currentPhase]) {
+                    phaseElement.textContent = phaseNames[currentPhase];
+                }
                 phaseElement.style.display = 'block';
                 return;
             }
-            
-            // TIMER EXISTS: Show it
+
+            // CHECK PHASE BEFORE SHOWING TIMER
+            if (currentPhase === 'lobby' || currentPhase === 'circle-of-truth') {
+                console.log('🚫 Timer hidden (phase:', currentPhase, ')');
+                timerElement.style.display = 'none';
+                timerElement.style.visibility = 'hidden';
+                phaseElement.style.display = 'block';
+                if (phaseNames[currentPhase]) {
+                    phaseElement.textContent = phaseNames[currentPhase];
+                }
+                return;
+            }
+
+            // TIMER EXISTS AND PHASE ALLOWS IT: Show it
             console.log('✨ Timer exists - SHOWING timer');
             timerElement.style.display = 'block';
-            timerElement.style.visibility = 'visible'; // Also set visibility!
+            timerElement.style.visibility = 'visible';
             phaseElement.style.display = 'block';
             
             // Use timer label if provided, otherwise use phase name
@@ -491,12 +563,12 @@ function setupFirebaseListeners() {
                                 gong.play().catch(err => console.error('Gong failed:', err));
                                 
                                 // Lock votes
-                                database.ref('game/voting/votingLocked').set(true);
+                                database.ref('game/firstVote/votingLocked').set(true);
                                 
                                 // Show voting ended animation
-                                database.ref('game/votingEndedAnimation').set(true);
+                                database.ref('game/firstVoteEndedAnimation').set(true);
                                 setTimeout(() => {
-                                    database.ref('game/votingEndedAnimation').remove();
+                                    database.ref('game/firstVoteEndedAnimation').remove();
                                 }, 6000);
                                 
                                 // Auto-vote non-voters
@@ -529,63 +601,686 @@ function setupFirebaseListeners() {
             });
         }
     }, 1000);
+
+    // ============================================
+    // VOTING ENDED ANIMATION LISTENER (ALL USERS)
+    // ============================================
     
+    // Players listen for voting ended animation to play gong
+    if (currentUser.role === 'player') {
+        database.ref('game/firstVoteEndedAnimation').on('value', (snapshot) => {
+            if (snapshot.val() === true) {
+                console.log('🔔 VOTING ENDED - Playing gong for player');
+                
+                // Play gong sound
+                const gong = new Audio('gong.mp3');
+                gong.volume = 0.7;
+                gong.play().catch(err => console.error('Gong failed:', err));
+            }
+        });
+    }
+
     // Listen to player changes
     database.ref('players').on('value', (snapshot) => {
         const players = snapshot.val() || {};
         gameState.players = players;
         updatePlayerDisplay();
     });
-    
-    // Listen to voting changes
-    database.ref('game/voting').on('value', (snapshot) => {
-        const voting = snapshot.val();
-        if (voting) {
-            gameState.voting = voting;
-            handleVotingUpdate(voting);
-            
-            // Enable voting for players when voting starts (only once)
-            if (voting.active && !voting.votingLocked && currentUser.role === 'player') {
-                if (!window.votingAlreadyEnabled) {
-                    console.log('🗳️ Voting is active - enabling seat clicks');
-                    enableVoting();
-                    window.votingAlreadyEnabled = true;
-                }
-            }
 
-            // Reset voting enabled flag when voting ends
-            if (!voting.active && window.votingAlreadyEnabled) {
-                window.votingAlreadyEnabled = false;
-                console.log('🗳️ Voting ended - resetting flag');
-            }
+    // ============================================
+    // MAIN PHASE LISTENER - Handles all phase changes
+    // ============================================
+    
+    database.ref('game/phase').on('value', (snapshot) => {
+        const newPhase = snapshot.val();
+        console.log('Phase changed to:', newPhase);
+        
+        // Exit current phase and enter new one
+        PhaseManager.changePhase(newPhase);
+        
+        // Enter new phase
+        switch(newPhase) {
+            case 'first-vote':
+                enterVoting();
+                break;
+            case 'first-vote-reveal':
+                // Voting listener is already active, do nothing
+                break;
+            case 'second-vote':
+                enterRevote();
+                break;
+            case 'second-vote-reveal':
+                enterRevoteReveal();
+                break;
+            case 'circle-of-truth':
+                enterCircleOfTruth();
+                break;
+            case 'lobby':
+                // Lobby has no special setup
+                break;
+            case 'night':
+                enterNightPhase();
+                break;
+            case 'breakfast':
+                enterBreakfastPhase();
+                break;
+            case 'end-game':
+                // End Game phase — players stay visible, seats remain
+                break;
+            default:
+                console.log('Unknown phase:', newPhase);
         }
     });
+    
+    // ============================================
+    // VOTING PHASE
+    // ============================================
 
-    // Clear vote tallies when phase changes away from voting/reveal
-    database.ref('game/phase').on('value', (snapshot) => {
-        const phase = snapshot.val();
+    function enterVoting() {
+        console.log('📥 ENTERING VOTING PHASE');
         
-        // Clear vote displays if not in voting or vote-reveal phase
-        if (phase !== 'voting' && phase !== 'vote-reveal') {
-            // Clear all vote tally sections
-            const sections = ['original-count', 'reveal-count', 'revote-total', 'revote-reveal-count'];
-            sections.forEach(sectionId => {
-                const element = document.getElementById(sectionId);
-                if (element) {
-                    element.innerHTML = '<div style="color: #666;">No votes cast yet</div>';
+        // Only players can vote
+        if (currentUser.role !== 'player') return;
+        
+        // Listen for voting phase updates - STORE REFERENCE
+        window.votingListener = (snapshot) => {
+            console.log('🔔 Voting listener fired, phase:', document.getElementById('phase-name')?.textContent);
+            const voting = snapshot.val();
+            if (!voting) {
+                console.log('⚠️ No voting data');
+                return;
+            }
+            console.log('📊 Voting data:', voting);
+            
+            // Only show reveal controls if revealed is active
+            if (voting.revealed && currentUser && currentUser.id) {
+                console.log('✅ REVEAL MODE ACTIVE');
+                console.log('  Current revealer:', voting.currentRevealer);
+                console.log('  My ID:', currentUser.id);
+                console.log('  Match?', voting.currentRevealer === currentUser.id);
+                
+                // Update phase title FIRST - for ALL players
+                const revealerId = voting.currentRevealer;
+                if (revealerId) {
+                    // Look up player in gameState (which we already have)
+                    const revealer = gameState.players[revealerId];
+                    if (revealer && revealer.name) {
+                        const phaseTitle = document.getElementById('phase-name');
+                        if (phaseTitle) {
+                            phaseTitle.textContent = `${revealer.name} is revealing their vote.`;
+                            console.log('✅ Updated phase title to:', phaseTitle.textContent);
+                        }
+                    } else {
+                        console.log('⚠️ Revealer not found in gameState:', revealerId);
+                    }
+                } else {
+                    console.log('⚠️ No current revealer');
+                }
+                
+                // THEN check if it's my turn to reveal
+                if (voting.currentRevealer === currentUser.id) {
+                    const votedSeat = voting.votes?.[currentUser.id];
+                    if (votedSeat && !voting.alreadyRevealed?.[currentUser.id]) {
+                        // Show reveal button
+                        showRevealButton();
+                        
+                        // Listen for spacebar
+                        document.addEventListener('keydown', handleRevealKeypress);
+                    }
+                } else {
+                    hideRevealButton();
+                    document.removeEventListener('keydown', handleRevealKeypress);
+                }
+            } else {
+                hideRevealButton();
+                document.removeEventListener('keydown', handleRevealKeypress);
+            }
+        };
+
+        // Attach the listener
+        database.ref('game/firstVote').on('value', window.votingListener);
+        console.log('✅ Voting listener attached');
+
+        // Listen for revote reveal updates
+        database.ref('game/secondVoteReveal').on('value', (snapshot) => {
+            const revoteRevealData = snapshot.val();
+            const phaseName = document.getElementById('phase-name');
+            
+            console.log('🔄 REVOTE REVEAL LISTENER FIRED:', revoteRevealData);
+            
+            if (!phaseName) return;
+            
+            if (revoteRevealData && revoteRevealData.active) {
+                // Get current revealer from revealOrder and currentIndex
+                const currentIndex = revoteRevealData.currentIndex || 0;
+                const revealOrder = revoteRevealData.revealOrder || [];
+                const currentRevealerId = revealOrder[currentIndex];
+                
+                if (currentRevealerId) {
+                    // During revote reveal, show which player is revealing
+                    database.ref(`players/${currentRevealerId}`).once('value', (playerSnap) => {
+                        const revealerData = playerSnap.val();
+                        if (revealerData) {
+                            phaseName.textContent = `${revealerData.name} is revealing their vote.`;
+                            console.log(`🔄 REVOTE REVEAL: Phase title updated to "${revealerData.name} is revealing their vote."`);
+                        }
+                    });
+                }
+            } else {
+                // Check if we're in revote phase (not reveal)
+                database.ref('game/phase').once('value', (phaseSnap) => {
+                    if (phaseSnap.val() === 'second-vote') {
+                        phaseName.textContent = 'Revote Phase';
+                        console.log('✅ REVOTE: Phase title set to "Revote Phase"');
+                    }
+                });
+            }
+        });
+        console.log('✅ Revote reveal listener attached');
+
+        // Listen for revote reveal to show reveal button
+        database.ref('game/secondVoteReveal').on('value', (snapshot) => {
+            const revoteRevealData = snapshot.val();
+            
+            console.log('🔄 REVOTE REVEAL BUTTON LISTENER:', revoteRevealData);
+            
+            // Remove purple glow from all seats when reveal starts
+            if (revoteRevealData && revoteRevealData.active) {
+                for (let i = 1; i <= 25; i++) {
+                    const seat = document.getElementById(`seat-${i}`);
+                    if (seat) {
+                        // Remove purple glow
+                        const currentShadow = seat.style.boxShadow;
+                        if (currentShadow.includes('138, 43, 226')) {
+                            seat.style.boxShadow = '';
+                            seat.style.border = '';
+                            console.log(`💜 Removed purple glow from seat ${i}`);
+                        }
+                    }
+                }
+            }
+            
+            if (!revoteRevealData || !revoteRevealData.active) {
+                hideRevealButton();
+                document.removeEventListener('keydown', handleRevealKeypress);
+                removeGlowFromMySeat();
+                return;
+            }
+            
+            // Get current revealer from revealOrder and currentIndex
+            const currentIndex = revoteRevealData.currentIndex || 0;
+            const revealOrder = revoteRevealData.revealOrder || [];
+            const currentRevealerId = revealOrder[currentIndex];
+            
+            console.log('🔄 REVOTE REVEAL: Checking if it\'s my turn');
+            console.log('  Current index:', currentIndex);
+            console.log('  Current revealer from revealOrder:', currentRevealerId);
+            console.log('  My ID:', currentUser.id);
+            
+            // Check if it's my turn to reveal
+            if (currentRevealerId === currentUser.id) {
+                // Check if I have a second vote and haven't already revealed
+                database.ref(`game/secondVote/votes/${currentUser.id}`).once('value', (voteSnap) => {
+                    const votedSeat = voteSnap.val();
+                    const alreadyRevealed = revoteRevealData.alreadyRevealed?.[currentUser.id];
+                    
+                    console.log('  My second vote:', votedSeat);
+                    console.log('  Already revealed?:', alreadyRevealed);
+                    
+                    if (votedSeat && !alreadyRevealed) {
+                        console.log('✅ REVOTE REVEAL: Showing reveal button');
+                        showRevealButton();
+                        document.addEventListener('keydown', handleRevealKeypress);
+                        glowMySeat();
+                    } else {
+                        console.log('⚠️ REVOTE REVEAL: Already revealed or no vote');
+                        hideRevealButton();
+                        document.removeEventListener('keydown', handleRevealKeypress);
+                    }
+                });
+            } else {
+                console.log('❌ REVOTE: Not my turn, hiding button');
+                hideRevealButton();
+                document.removeEventListener('keydown', handleRevealKeypress);
+                removeGlowFromMySeat();
+            }
+        });
+        console.log('✅ Revote reveal button listener attached');
+        
+        // Enable seat clicking for voting
+        enableVotingClicks();
+
+        // Check if this is a revote - apply purple glow to tied seats
+        database.ref('game/phase').once('value', (phaseSnap) => {
+            if (phaseSnap.val() === 'second-vote') {
+                database.ref('game/secondVote/tiedSeats').once('value', (tiedSnap) => {
+                    const tiedSeats = tiedSnap.val() || [];
+                    
+                    console.log('💜 Applying purple glow to tied seats:', tiedSeats);
+                    
+                    // Glow tied seats purple
+                    tiedSeats.forEach(seatNum => {
+                        const seat = document.getElementById(`seat-${seatNum}`);
+                        if (seat) {
+                            seat.style.boxShadow = '0 0 30px 10px rgba(138, 43, 226, 0.8)';
+                            seat.style.border = '3px solid #8A2BE2';
+                            console.log('💜 Purple glow applied to seat', seatNum);
+                        }
+                    });
+                });
+            }
+        });
+    }
+
+    function exitVoting() {
+        console.log('📤 EXITING VOTING PHASE');
+        
+        // Remove click handlers
+        document.querySelectorAll('.video-seat').forEach(seat => {
+            seat.style.cursor = 'default';
+            seat.onclick = null;
+        });
+
+        // Only remove voting listener if NOT going to vote-reveal phase
+        database.ref('game/phase').once('value', (snapshot) => {
+            const currentPhase = snapshot.val();
+            
+            // Keep listener active if entering vote-reveal
+            if (currentPhase !== 'first-vote-reveal') {
+                if (window.votingListener) {
+                    database.ref('game/firstVote').off('value', window.votingListener);
+                    window.votingListener = null;
+                    console.log('✅ Removed voting listener (not in vote-reveal)');
+                }
+            } else {
+                console.log('✅ Keeping voting listener active for vote-reveal phase');
+            }
+        });
+        
+        // Disable voting clicks
+        disableVotingClicks();
+    }
+
+    function enableVotingClicks() {
+        console.log('🗳️ Enabling voting clicks on seats');
+        
+        for (let i = 2; i <= 25; i++) {
+            const seat = document.getElementById(`seat-${i}`);
+            if (!seat || seat.classList.contains('empty')) continue;
+            
+            seat.style.cursor = 'pointer';
+            seat.dataset.votingClickHandler = 'true';
+            seat.onclick = (e) => {
+                if (e.target.closest('.seat-label')) return;
+                showVoteConfirmation(i);
+            };
+        }
+    }
+
+    function disableVotingClicks() {
+        console.log('🚫 Disabling voting clicks');
+        
+        for (let i = 2; i <= 25; i++) {
+            const seat = document.getElementById(`seat-${i}`);
+            if (!seat) continue;
+            
+            seat.onclick = null;
+            seat.style.cursor = '';
+            delete seat.dataset.votingClickHandler;
+        }
+    }
+
+    // ============================================
+    // VOTE TALLY LISTENERS (HOST ONLY)
+    // ============================================
+
+    // Listen for ORIGINAL votes (never cleared) - HOST ONLY
+    // DELAYED to ensure seats exist first
+    if (currentUser.role === 'host') {
+        setTimeout(() => {
+            database.ref('game/firstVote/originalVotes').on('value', (snapshot) => {
+                const votes = snapshot.val();
+                if (votes) {
+                    updateVoteTally(votes, 'original-count');
+                
+                    // Show votes on name tags during voting phase only
+                    database.ref('game/phase').once('value', (phaseSnap) => {
+                        if (phaseSnap.val() === 'first-vote') {
+                            database.ref('game/firstVote/revealed').once('value', (revealedSnapshot) => {
+                                if (!revealedSnapshot.val()) {
+                                    database.ref('players').once('value', (playersSnapshot) => {
+                                        const players = playersSnapshot.val() || {};
+                                        
+                                        for (let voterId in votes) {
+                                            const voterPlayer = players[voterId];
+                                            if (voterPlayer && voterPlayer.seat) {
+                                                const targetSeat = votes[voterId];
+                                                const targetPlayer = Object.values(players).find(p => p.seat === targetSeat);
+                                                const targetName = targetPlayer ? targetPlayer.name : `Seat ${targetSeat}`;
+                                                
+                                                showVoteOnNameTag(voterPlayer.seat, targetName, false);
+                                            }
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
                 }
             });
+        }, 2000); // Close setTimeout - wait for seats to generate
+        
+        // Listen for CURRENT votes (can be cleared during revotes) - HOST ONLY
+        database.ref('game/firstVote/votes').on('value', (snapshot) => {
+            const votes = snapshot.val();
+            console.log('🎯 Host updating vote displays:', votes);
             
-            // Hide revote sections
-            const revoteSection = document.getElementById('revote-section');
-            const revoteRevealSection = document.getElementById('revote-reveal-section');
-            if (revoteSection) revoteSection.style.display = 'none';
-            if (revoteRevealSection) revoteRevealSection.style.display = 'none';
+            if (votes) {
+                updateVoteTally(votes, 'current-count');
+                
+                // Update host's view of all player votes during voting
+                database.ref('game/phase').once('value', (phaseSnap) => {
+                    if (phaseSnap.val() === 'first-vote') {
+                        database.ref('players').once('value', (playersSnapshot) => {
+                            const players = playersSnapshot.val() || {};
+                            
+                            for (let voterId in votes) {
+                                const voter = players[voterId];
+                                if (voter && voter.seat) {
+                                    const targetSeat = votes[voterId];
+                                    const targetPlayer = Object.values(players).find(p => p.seat === targetSeat);
+                                    const targetName = targetPlayer ? targetPlayer.name : `Seat ${targetSeat}`;
+                                    
+                                    showVoteOnNameTag(voter.seat, targetName, false);
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    }
+
+    function showVoteConfirmation(seatNumber) {
+        database.ref('game/firstVote/votingLocked').once('value', (snap) => {
+            if (snap.val()) {
+                alert('Voting is closed');
+                return;
+            }
+            
+            // Check if this is a revote
+            database.ref('game/phase').once('value', (phaseSnap) => {
+                if (phaseSnap.val() === 'second-vote') {
+                    // During revote, only allow voting for tied players
+                    database.ref('game/secondVote/tiedSeats').once('value', (tiedSnap) => {
+                        const tiedSeats = tiedSnap.val() || [];
+                        
+                        if (!tiedSeats.includes(seatNumber)) {
+                            // Get the names of tied players
+                            database.ref('players').once('value', (playersSnap) => {
+                                const allPlayers = playersSnap.val() || {};
+                                const tiedNames = tiedSeats.map(seat => {
+                                    const player = Object.values(allPlayers).find(p => p.seat === seat);
+                                    return player ? player.name : `Seat ${seat}`;
+                                }).join(', ');
+                                
+                                if (typeof showConfirmation === 'function') {
+                                    showConfirmation(
+                                        'Revote Restriction',
+                                        `You can only vote for players with a purple glow:\n\n${tiedNames}`,
+                                        'OK',
+                                        () => {} // Do nothing on OK
+                                    );
+                                } else {
+                                    alert(`You can only vote for players who are tied: ${tiedNames}`);
+                                }
+                            });
+                            return;
+                        }
+                        
+                        // Proceed with vote confirmation
+                        proceedWithVoteConfirmation(seatNumber);
+                    });
+                } else {
+                    // Normal voting - allow any player
+                    proceedWithVoteConfirmation(seatNumber);
+                }
+            });
+        });
+    }
+
+    // Helper function to avoid code duplication
+    function proceedWithVoteConfirmation(seatNumber) {
+        // Get player name
+        const targetPlayer = Object.values(gameState.players).find(p => p.seat === seatNumber);
+        const playerName = targetPlayer ? targetPlayer.name : `Seat ${seatNumber}`;
+        
+        if (typeof showConfirmation === 'function') {
+            showConfirmation(
+                'Confirm Your Vote',
+                `Lock in your vote for ${playerName}?`,
+                'Lock In',
+                () => castVote(seatNumber)
+            );
+        } else {
+            if (confirm(`Lock in your vote for ${playerName}?`)) {
+                castVote(seatNumber);
+            }
         }
-    }); 
+    }
+
+    function castVote(seatNumber) {
+        console.log('🗳️ Casting vote for seat:', seatNumber);
+        
+        // Check if voting is still active
+        database.ref('game/firstVote').once('value', (snapshot) => {
+            const voting = snapshot.val();
+            if (!voting || !voting.active || voting.votingLocked) {
+                alert('Voting is closed.');
+                return;
+            }
+            
+            // Check if this is a revote
+            database.ref('game/phase').once('value', (phaseSnap) => {
+                const isRevote = phaseSnap.val() === 'second-vote';
+                
+                const voteUpdates = {};
+                
+                if (isRevote) {
+                    // Store in game/revote/votes
+                    voteUpdates['game/secondVote/votes/' + currentUser.id] = seatNumber;
+                } else {
+                    // Store in both current and original for first vote
+                    voteUpdates['game/firstVote/votes/' + currentUser.id] = seatNumber;
+                    voteUpdates['game/firstVote/originalVotes/' + currentUser.id] = seatNumber;
+                }
+                
+                database.ref().update(voteUpdates).then(() => {
+                    console.log('✅ Vote recorded for player:', currentUser.id, 'voting for seat:', seatNumber);
+
+                    // Show vote on name tag immediately
+                    database.ref('players').once('value', (allPlayersSnap) => {
+                        const targetPlayer = Object.values(allPlayersSnap.val() || {}).find(p => p.seat === seatNumber);
+                        const targetName = targetPlayer ? targetPlayer.name : `Seat ${seatNumber}`;
+                        
+                        if (currentUser.role === 'player' && currentUser.seat) {
+                            console.log('🎯 Showing vote on player name tag:', currentUser.seat, '→', targetName);
+                            showVoteOnNameTag(currentUser.seat, targetName, true);
+                        }
+                    });
+                });
+            });
+        });
+    }
+
+    // ============================================
+    // REVOTE PHASE (Stub - to be implemented)
+    // ============================================
+
+    function enterRevote() {
+        console.log('📥 ENTERING REVOTE PHASE');
+        
+        // Only players can vote
+        if (currentUser.role !== 'player') return;
+
+        // Remove all seat glows from previous phases
+        for (let i = 1; i <= 25; i++) {
+            const seat = document.getElementById(`seat-${i}`);
+            if (seat) {
+                seat.style.boxShadow = '';
+                seat.style.border = '';
+            }
+        }
+        console.log('🧹 Cleared all seat glows');
+        
+        // Clear all vote displays from previous round
+        for (let i = 1; i <= 25; i++) {
+            const nameElement = document.getElementById(`name-${i}`);
+            const pronounsElement = document.getElementById(`pronouns-${i}`);
+            const seatLabel = nameElement ? nameElement.parentElement : null;
+            
+            if (nameElement && nameElement.dataset.showingVote) {
+                delete nameElement.dataset.showingVote;
+                nameElement.style.cssText = '';
+            }
+            if (pronounsElement && pronounsElement.dataset.showingVote) {
+                delete pronounsElement.dataset.showingVote;
+                pronounsElement.style.display = '';
+                pronounsElement.style.cssText = '';
+            }
+            if (seatLabel && seatLabel.dataset.showingVote) {
+                delete seatLabel.dataset.showingVote;
+                seatLabel.style.cssText = '';
+            }
+        }
+        
+        // Force player display update to restore names
+        updatePlayerDisplay();
+        
+        // Enable voting clicks
+        enableVotingClicks();
+        
+        // Apply purple glow to tied seats
+        database.ref('game/secondVote/tiedSeats').once('value', (tiedSnap) => {
+            const tiedSeats = tiedSnap.val() || [];
+            
+            console.log('💜 Revote: Applying purple glow to tied seats:', tiedSeats);
+            
+            tiedSeats.forEach(seatNum => {
+                const seat = document.getElementById(`seat-${seatNum}`);
+                if (seat) {
+                    seat.style.boxShadow = '0 0 30px 10px rgba(138, 43, 226, 0.8)';
+                    seat.style.border = '3px solid #8A2BE2';
+                    console.log('💜 Purple glow applied to seat', seatNum);
+                }
+            });
+        });
+
+        // Clear vote displays from name tags
+        for (let i = 1; i <= 25; i++) {
+            const nameElement = document.getElementById(`name-${i}`);
+            const pronounsElement = document.getElementById(`pronouns-${i}`);
+            
+            if (nameElement && nameElement.dataset.showingVote) {
+                delete nameElement.dataset.showingVote;
+                nameElement.style.cssText = '';
+            }
+            if (pronounsElement && pronounsElement.dataset.showingVote) {
+                delete pronounsElement.dataset.showingVote;
+                pronounsElement.style.display = '';
+            }
+        }
+        console.log('🧹 Cleared vote displays from player name tags');
+    }
+
+    function exitRevote() {
+        console.log('📤 EXITING REVOTE PHASE');
+        // TODO: Implement revote exit
+    }
+
+    // ============================================
+    // REVOTE REVEAL PHASE (Stub - to be implemented)
+    // ============================================
+
+    function enterRevoteReveal() {
+        console.log('📥 ENTERING REVOTE REVEAL PHASE');
+        // TODO: Implement revote reveal phase
+    }
+
+    function exitRevoteReveal() {
+        console.log('📤 EXITING REVOTE REVEAL PHASE');
+        // TODO: Implement revote reveal exit
+    }
+
+    // ============================================
+    // CIRCLE OF TRUTH PHASE (Enter/Exit)
+    // ============================================
+
+    function enterCircleOfTruth() {
+        console.log('📥 ENTERING CIRCLE OF TRUTH PHASE');
+
+        // ✅ CLEAR ALL VOTE REVEAL GLOWS
+        document.querySelectorAll('.video-seat').forEach(seat => {
+            seat.style.boxShadow = '';
+            seat.style.border = '';
+        });
+
+        console.log('🎯 Setting up Circle of Truth listener');
+        console.log('handleCircleUpdate function exists?', typeof handleCircleUpdate);
+        
+        // Listen for Circle data
+        window.circleListener = database.ref('game/circleOfTruth').on('value', handleCircleUpdate);
+        
+        console.log('✅ Circle listener attached');
+        
+        // Players also listen for reveal readiness
+        if (currentUser.role === 'player' && currentUser.id) {
+            console.log('🎯 Setting up reveal ready listener for player');
+            window.revealReadyListener = database.ref('players/' + currentUser.id + '/readyToRevealRole')
+                .on('value', handleRevealReady);
+        }
+    }
+
+    function exitCircleOfTruth() {
+        console.log('📤 EXITING CIRCLE OF TRUTH PHASE');
+            
+        // Remove listeners
+        if (window.circleListener) {
+            database.ref('game/circleOfTruth').off('value', window.circleListener);
+            window.circleListener = null;
+        }
+            
+        if (window.revealReadyListener && currentUser.id) {
+            database.ref('players/' + currentUser.id + '/readyToRevealRole').off('value', window.revealReadyListener);
+            window.revealReadyListener = null;
+        }
+            
+        // Remove spacebar listener
+        document.removeEventListener('keydown', handleRoleRevealKeypress);
+        window.roleRevealKeypressAdded = false;
+            
+        // Hide reveal button
+        hideRoleRevealButton();
+            
+        // Remove glow from all seats
+        document.querySelectorAll('.video-seat').forEach(seat => {
+            seat.style.boxShadow = '';
+            seat.style.border = '';
+        });
+
+        // Reset seat sizes
+        document.querySelectorAll('.video-seat').forEach(seat => {
+            seat.style.transform = '';
+            seat.style.zIndex = '';
+        });
+    }
+
+    // ============================================
+    // OTHER NECESSITIES
+    // ============================================
 
     // Highlight current revealer's seat with yellow glow
-    database.ref('game/voting/currentRevealer').on('value', (snapshot) => {
+    database.ref('game/firstVote/currentRevealer').on('value', (snapshot) => {
         const currentRevealerId = snapshot.val();
         
         // Remove all existing glows
@@ -609,6 +1304,41 @@ function setupFirebaseListeners() {
             }
         });
     });
+
+    // Highlight current revealer's seat during SECOND VOTE REVEAL
+    database.ref('game/secondVoteReveal').on('value', (snapshot) => {
+        const revealData = snapshot.val();
+        
+        if (!revealData || !revealData.active) return;
+        
+        // Get current revealer from revealOrder and currentIndex
+        const currentIndex = revealData.currentIndex || 0;
+        const revealOrder = revealData.revealOrder || [];
+        const currentRevealerId = revealOrder[currentIndex];
+        
+        if (!currentRevealerId) return;
+        
+        console.log('🔄 REVOTE REVEAL: Current revealer ID:', currentRevealerId);
+        
+        // Remove all existing glows
+        document.querySelectorAll('.video-seat').forEach(seat => {
+            seat.style.boxShadow = '';
+            seat.style.border = '';
+        });
+        
+        // Find and highlight the current revealer's seat
+        database.ref('players/' + currentRevealerId).once('value', (playerSnap) => {
+            const player = playerSnap.val();
+            if (!player || !player.seat) return;
+            
+            const seatElement = document.getElementById(`seat-${player.seat}`);
+            if (seatElement) {
+                seatElement.style.boxShadow = '0 0 30px 10px #FFD700';
+                seatElement.style.border = '4px solid #FFD700';
+                console.log('✨ REVOTE: Highlighting seat', player.seat, 'with yellow glow');
+            }
+        });
+    });
     
     // Listen to announcements (only show new ones, not old ones)
     database.ref('game/announcement').on('value', (snapshot) => {
@@ -628,80 +1358,580 @@ function setupFirebaseListeners() {
             }
         }
     });
-    
-    // Listen to Circle of Truth
-    database.ref('game/circleOfTruth').on('value', (snapshot) => {
-        console.log('🎯 Circle of Truth listener fired. Data:', snapshot.val());
-        const circle = snapshot.val();
-        
-        if (circle && circle.active) {
-            console.log('🎯 Circle is ACTIVE - Processing for user role:', currentUser.role);
-            console.log('🎯 Calling handleCircleOfTruth for player:', circle.playerId);
-            
-            // Hide phase title during Circle of Truth
-            const phaseElement = document.getElementById('phase-name');
-            if (phaseElement) {
-                phaseElement.style.display = 'none';
-                console.log('✅ Phase title hidden');
-            }
-            
-            // Call handler for ALL users (host and players)
-            handleCircleOfTruth(circle.playerId);
-            
-        } else {
-            console.log('❌ Circle data invalid or not active');
-            
-            // Reset any enlarged seats
-            document.querySelectorAll('.video-seat').forEach(seat => {
-                seat.style.transform = '';
-                seat.style.zIndex = '';
-            });
-            
-            // Show phase title again
-            const phaseElement = document.getElementById('phase-name');
-            if (phaseElement) {
-                phaseElement.style.display = 'block';
-                console.log('✅ Phase title shown');
-            }
-        }
-    });
 
-    // Preserve vote displays during window resize
+    // Preserve vote displays AND player info during window resize
     window.addEventListener('resize', () => {
-        // Store current vote displays before resize
-        const voteDisplays = {};
+        // Store current displays before resize
+        const seatData = {};
         for (let i = 1; i <= 25; i++) {
             const nameElement = document.getElementById(`name-${i}`);
-            if (nameElement && nameElement.dataset.showingVote) {
-                voteDisplays[i] = {
-                    votedFor: nameElement.textContent,
-                    showing: true
+            const pronounsElement = document.getElementById(`pronouns-${i}`);
+            
+            if (nameElement) {
+                seatData[i] = {
+                    isShowingVote: nameElement.dataset.showingVote === 'true',
+                    votedFor: nameElement.dataset.showingVote ? nameElement.textContent : null,
+                    playerName: !nameElement.dataset.showingVote ? nameElement.textContent : null,
+                    pronouns: pronounsElement ? pronounsElement.textContent : null
                 };
             }
         }
         
-        // Restore vote displays after resize completes
+        // Restore displays after resize completes
         setTimeout(() => {
-            for (let seat in voteDisplays) {
+            for (let seat in seatData) {
+                const data = seatData[seat];
                 const nameElement = document.getElementById(`name-${seat}`);
                 const pronounsElement = document.getElementById(`pronouns-${seat}`);
                 const seatLabel = nameElement ? nameElement.parentElement : null;
                 
-                if (nameElement && seatLabel && voteDisplays[seat].showing) {
+                if (!nameElement || !seatLabel) continue;
+                
+                if (data.isShowingVote) {
+                    // Restore vote display
                     nameElement.dataset.showingVote = 'true';
-                    pronounsElement.dataset.showingVote = 'true';
+                    if (pronounsElement) pronounsElement.dataset.showingVote = 'true';
                     seatLabel.dataset.showingVote = 'true';
                     
                     seatLabel.style.background = '#B2BEB5';
-                    pronounsElement.textContent = '';
-                    pronounsElement.style.visibility = 'hidden';
-                    nameElement.textContent = voteDisplays[seat].votedFor;
+                    if (pronounsElement) {
+                        pronounsElement.textContent = '';
+                        pronounsElement.style.visibility = 'hidden';
+                    }
+                    nameElement.textContent = data.votedFor;
                     nameElement.style.fontFamily = "'ShootingStar', cursive";
                     nameElement.style.color = '#fff';
                     nameElement.style.fontSize = '1.3rem';
+                } else if (data.playerName && data.playerName !== 'Empty') {
+                    // Restore normal player display
+                    nameElement.textContent = data.playerName;
+                    if (pronounsElement && data.pronouns) {
+                        pronounsElement.textContent = data.pronouns;
+                        pronounsElement.style.visibility = 'visible';
+                    }
                 }
             }
         }, 100);
+    });
+}
+
+// TEST: Verify functions are global
+console.log('🧪 Testing global function availability:');
+console.log('showVoteOnNameTag:', typeof showVoteOnNameTag);
+console.log('updateVoteTally:', typeof updateVoteTally);
+console.log('handleCircleUpdate:', typeof handleCircleUpdate);
+console.log('revealMyVote:', typeof revealMyVote);
+console.log('revealRole:', typeof revealRole);
+
+// ============================================
+// VOTE DISPLAY HELPER FUNCTIONS (GLOBAL)
+// ============================================
+
+function showVoteOnNameTag(seatNumber, votedForName, playerView) {
+    console.log('showVoteOnNameTag called:', {seatNumber, votedForName, playerView, currentUserRole: currentUser.role});
+
+    const nameElement = document.getElementById(`name-${seatNumber}`);
+    const pronounsElement = document.getElementById(`pronouns-${seatNumber}`);
+    const seatLabel = nameElement ? nameElement.parentElement : null;
+    
+    if (!nameElement || !pronounsElement || !seatLabel) {
+        console.error('Name tag elements not found for seat', seatNumber);
+        return;
+    }
+
+    console.log('✅ Found name tag elements for seat', seatNumber);
+    
+    // Mark elements to prevent overwriting
+    nameElement.dataset.showingVote = 'true';
+    pronounsElement.dataset.showingVote = 'true';
+    seatLabel.dataset.showingVote = 'true';
+    
+    // Change background color
+    seatLabel.style.background = '#B2BEB5';
+    
+    // Keep pronouns element visible but empty
+    pronounsElement.textContent = '';
+    pronounsElement.style.visibility = 'hidden'; // Keep space but hide text
+    
+    // Set all styles EXCEPT display
+    nameElement.style.fontFamily = "'ShootingStar', cursive";
+    nameElement.style.color = '#fff';
+    nameElement.style.fontSize = '1.3rem';
+    nameElement.style.textAlign = 'center';
+    nameElement.style.visibility = 'hidden'; // Hide but keep space
+    nameElement.style.display = 'block';
+
+    // Set the text
+    nameElement.textContent = votedForName;
+
+    // Wait for ShootingStar font to load, then show
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => {
+            document.fonts.load("1.3rem 'ShootingStar'").then(() => {
+                nameElement.style.visibility = 'visible';
+                console.log('✅ Vote displayed with font loaded');
+            }).catch(() => {
+                // Fallback if font fails to load
+                nameElement.style.visibility = 'visible';
+                console.warn('⚠️ Font load failed, showing anyway');
+            });
+        });
+    } else {
+        // Fallback for older browsers
+        setTimeout(() => {
+            nameElement.style.visibility = 'visible';
+        }, 50);
+    }
+    
+    console.log('✅ Vote displayed on seat', seatNumber, '→', votedForName);
+}
+
+function updateVoteTally(votes, targetElement = 'original-count') {
+    console.log('📊 updateVoteTally called with:', votes, 'target:', targetElement);
+    console.log('Current user role:', currentUser.role);
+
+    const contentElement = document.getElementById(targetElement);
+    
+    if (!contentElement) {
+        console.log(targetElement + ' element not found');
+        return;
+    }
+    
+    console.log('Updating vote tally with votes:', votes);
+    
+    // Count votes per seat
+    const voteCounts = {};
+    for (let voterId in votes) {
+        const targetSeat = votes[voterId];
+        voteCounts[targetSeat] = (voteCounts[targetSeat] || 0) + 1;
+    }
+    
+    console.log('Vote counts:', voteCounts);
+    
+    // Display tally
+    if (Object.keys(voteCounts).length === 0) {
+        contentElement.innerHTML = '<div style="color: #666;">No votes cast yet</div>';
+        return;
+    }
+    
+    contentElement.innerHTML = '';
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+    let colorIndex = 0;
+    
+    for (let seat in voteCounts) {
+        const player = Object.values(gameState.players).find(p => p.seat === parseInt(seat));
+        const name = player ? player.name : seat;
+        const count = voteCounts[seat];
+        const color = colors[colorIndex % colors.length];
+        
+        const item = document.createElement('div');
+        item.style.cssText = `
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            color: ${color};
+            font-weight: bold;
+        `;
+        item.textContent = `${name}: ${count} vote${count > 1 ? 's' : ''}`;
+        contentElement.appendChild(item);
+        
+        colorIndex++;
+    }
+}
+
+// ============================================
+// VOTE REVEAL HELPER FUNCTIONS (GLOBAL)
+// ============================================
+
+function showRevealButton() {
+    let revealBtn = document.getElementById('my-reveal-button');
+    
+    if (!revealBtn) {
+        revealBtn = document.createElement('button');
+        revealBtn.id = 'my-reveal-button';
+        revealBtn.className = 'control-button primary';
+        revealBtn.textContent = 'Reveal Vote';
+        revealBtn.style.cssText = `
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            font-size: 1rem;
+            z-index: 200;
+            white-space: nowrap;
+            background: #4CAF50;
+            border: 2px solid #45a049;
+        `;
+        revealBtn.onclick = revealMyVote;
+        document.body.appendChild(revealBtn);
+    }
+    
+    revealBtn.style.display = 'block';
+}
+
+function hideRevealButton() {
+    const btn = document.getElementById('my-reveal-button');
+    if (btn) btn.remove();
+}
+
+function handleRevealKeypress(e) {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        console.log('🎯 SPACEBAR - Revealing vote');
+        console.log('🎯 About to call revealMyVote');
+        console.log('🎯 typeof revealMyVote:', typeof revealMyVote);
+        try {
+            revealMyVote();
+            console.log('🎯 revealMyVote() called successfully');
+        } catch (err) {
+            console.error('🎯 ERROR calling revealMyVote:', err);
+        }
+    }
+}
+
+function glowMySeat() {
+    const mySeat = document.getElementById(`seat-${currentUser.seat}`);
+    if (mySeat) {
+        mySeat.style.boxShadow = '0 0 30px 10px #FFD700';
+        mySeat.style.border = '3px solid #FFD700';
+    }
+}
+
+function removeGlowFromMySeat() {
+    const mySeat = document.getElementById(`seat-${currentUser.seat}`);
+    if (mySeat) {
+        mySeat.style.boxShadow = '';
+        mySeat.style.border = '';
+    }
+}
+
+function showCurrentRevealerName(revealerSeat) {
+    console.log('👤 Showing revealer name for seat:', revealerSeat);
+    
+    // Find the player by their seat number
+    const player = Object.values(gameState.players).find(p => p.seat === revealerSeat);
+    
+    if (!player) {
+        console.error('❌ Player not found for seat:', revealerSeat);
+        return;
+    }
+    
+    console.log('✅ Found player:', player.name);
+    
+    // Update phase title with correct selector
+    const phaseTitle = document.getElementById('phase-name');
+    
+    if (phaseTitle) {
+        phaseTitle.textContent = `${player.name} is revealing their vote.`;
+        console.log('✅ Updated phase title to:', phaseTitle.textContent);
+    } else {
+        console.warn('⚠️ Phase title element not found. Checked: .phase-name, #phase-name, h1, .game-phase');
+    }
+}
+
+function revealMyVote() {
+    console.log('📣 📣 📣 REVEALYMVOTE CALLED - TOP OF FUNCTION');
+    console.log('📣 currentUser:', currentUser);
+    console.log('📣 database:', database);
+    
+    try {
+        console.log('📣 Inside try block');
+        // Check if we're in revote reveal mode
+        database.ref('game/secondVoteReveal').once('value', (revoteRevealSnap) => {
+            try {
+                const revoteRevealData = revoteRevealSnap.val();
+                const isRevoteReveal = revoteRevealData && revoteRevealData.active;
+                
+                console.log('🔍 Reveal mode check - isRevoteReveal:', isRevoteReveal);
+                
+                // Determine which vote path to use
+                const votePath = isRevoteReveal ? 'game/secondVote/votes' : 'game/firstVote/votes';
+                const revealPath = isRevoteReveal ? 'game/secondVoteReveal/revealedVotes' : 'game/revealedVoteDisplay';
+                
+                console.log('📍 Using vote path:', votePath);
+                console.log('📍 Using reveal path:', revealPath);
+                
+                // Get my vote
+                database.ref(votePath).once('value', (votesSnap) => {
+                    try {
+                        const allVotes = votesSnap.val() || {};
+                        const votedSeat = allVotes[currentUser.id];
+                        
+                        console.log('🗳️ All votes:', allVotes);
+                        console.log('🗳️ My vote (seat):', votedSeat);
+                        
+                        if (!votedSeat) {
+                            console.error('❌ No vote found for current user!');
+                            return;
+                        }
+                        
+                        // Get the name of the player I voted for
+                        database.ref('players').once('value', (playersSnap) => {
+                            try {
+                                const players = playersSnap.val() || {};
+                                const targetPlayer = Object.values(players).find(p => p.seat === votedSeat);
+                                const targetName = targetPlayer ? targetPlayer.name : `Seat ${votedSeat}`;
+                                
+                                console.log('👤 Target player:', targetPlayer);
+                                console.log('👤 Target name:', targetName);
+                                
+                                // Write reveal to Firebase
+                                const revealData = {
+                                    seat: currentUser.seat,
+                                    name: currentUser.name,
+                                    votedFor: targetName,
+                                    timestamp: Date.now()
+                                };
+                                
+                                console.log('💾 About to write reveal data:', revealData);
+                                console.log('💾 To path:', revealPath + '/' + currentUser.id);
+                                
+                                database.ref(revealPath + '/' + currentUser.id).set(revealData).then(() => {
+                                    console.log('✅ Vote revealed successfully:', {
+                                        path: revealPath + '/' + currentUser.id,
+                                        seat: currentUser.seat,
+                                        name: currentUser.name,
+                                        votedFor: targetName
+                                    });
+                                    
+                                    // Mark as already revealed
+                                    const alreadyRevealedPath = isRevoteReveal 
+                                        ? 'game/secondVoteReveal/alreadyRevealed/' + currentUser.id
+                                        : 'game/firstVote/alreadyRevealed/' + currentUser.id;
+                                    
+                                    database.ref(alreadyRevealedPath).set(true);
+                                    hideRevealButton();
+                                    removeGlowFromMySeat();
+                                }).catch(err => {
+                                    console.error('❌ Error writing reveal to Firebase:', err);
+                                });
+                            } catch (err) {
+                                console.error('❌ Error in players callback:', err);
+                            }
+                        });
+                    } catch (err) {
+                        console.error('❌ Error in votes callback:', err);
+                    }
+                });
+            } catch (err) {
+                console.error('❌ Error in secondVoteReveal callback:', err);
+            }
+        });
+    } catch (err) {
+        console.error('❌ Error in revealMyVote:', err);
+    }
+}
+
+function updateRevealedVotesDisplay() {
+    console.log('🔄 Updating revealed votes display');
+    
+    database.ref('game/voteReveal').once('value', (snapshot) => {
+        const data = snapshot.val();
+        if (!data || !data.revealedVotes) {
+            console.log('⚠️ No revealed votes yet');
+            return;
+        }
+        
+        console.log('📋 ALL revealed so far:', data.revealedVotes);
+        console.log('📊 Total count:', data.revealedVotes.length);
+        
+        database.ref('game/firstVote/votes').once('value', (votesSnap) => {
+            const allVotes = votesSnap.val() || {};
+            
+            // CRITICAL: Only show the LAST player's vote (most recent)
+            const justRevealedId = data.revealedVotes[data.revealedVotes.length - 1];
+            console.log('🆕 Only processing player ID:', justRevealedId);
+            
+            // Show ONLY this one player's vote
+            database.ref('players/' + justRevealedId).once('value', (playerSnap) => {
+                const playerData = playerSnap.val();
+                if (!playerData) {
+                    console.log('❌ Player not found:', justRevealedId);
+                    return;
+                }
+                
+                const votedForSeat = allVotes[justRevealedId];
+                if (votedForSeat) {
+                    console.log(`✅ Player in seat ${playerData.seat} voted for seat ${votedForSeat}`);
+                    
+                    // Get the name of who they voted for
+                    database.ref('players').once('value', (playersSnap) => {
+                        const allPlayers = playersSnap.val() || {};
+                        let votedForName = 'Unknown';
+                        
+                        // Find player name by seat number
+                        for (const pid in allPlayers) {
+                            if (allPlayers[pid].seat === votedForSeat) {
+                                votedForName = allPlayers[pid].name;
+                                break;
+                            }
+                        }
+                        
+                        console.log(`✅ Displaying: "${playerData.name}" → "${votedForName}"`);
+                        
+                        // CORRECT SYNTAX: seat number, voted-for name, is player view
+                        showVoteOnNameTag(playerData.seat, votedForName, false);
+                    });
+                } else {
+                    console.log(`⚠️ No vote found for player in seat ${playerData.seat}`);
+                }
+            });
+        });
+    });
+}
+
+// ============================================
+// CIRCLE OF TRUTH PHASE (GLOBAL)
+// ============================================
+
+function handleCircleUpdate(snapshot) {
+    const data = snapshot.val();
+    
+    console.log('🔍 Circle update received:', data);
+    
+    if (!data || !data.active) {
+        console.log('❌ Circle of Truth not active');
+        return;
+    }
+    
+    console.log('🎯 Circle of Truth active for seat:', data.seatNumber);
+    
+    // Enlarge the selected player's seat FOR EVERYONE
+    const seat = document.getElementById(`seat-${data.seatNumber}`);
+    
+    if (!seat) {
+        console.error('❌ Seat element not found:', `seat-${data.seatNumber}`);
+        return;
+    }
+    
+    console.log('📏 Applying transform to seat', data.seatNumber);
+    
+    // Apply transform with higher specificity
+    seat.style.transition = 'transform 0.5s ease';
+    seat.style.transform = 'translate(-50%, -50%) scale(2.0)';
+    seat.style.zIndex = '1000';
+    
+    // Counter-scale label
+    const label = seat.querySelector('.seat-label');
+    if (label) {
+        label.style.transform = 'scale(0.5)';
+        label.style.transformOrigin = 'center';
+    }
+    
+    console.log('✅ Enlarged seat', data.seatNumber);
+    
+    // Reset all other seats
+    for (let i = 1; i <= 25; i++) {
+        if (i !== data.seatNumber) {
+            const otherSeat = document.getElementById(`seat-${i}`);
+            if (otherSeat) {
+                otherSeat.style.transform = 'translate(-50%, -50%)';
+                otherSeat.style.zIndex = '';
+                
+                const otherLabel = otherSeat.querySelector('.seat-label');
+                if (otherLabel) {
+                    otherLabel.style.transform = '';
+                }
+            }
+        }
+    }
+}
+
+function handleRevealReady(snapshot) {
+    console.log('🔔 readyToRevealRole changed:', snapshot.val());
+        
+    if (snapshot.val() === true) {
+        console.log('✅ Showing role reveal button!');
+        showRoleRevealButton();
+            
+        // Add spacebar listener (only once)
+        if (!window.roleRevealKeypressAdded) {
+            document.addEventListener('keydown', handleRoleRevealKeypress);
+            window.roleRevealKeypressAdded = true;
+        }
+    }
+}
+
+function handleRoleRevealKeypress(e) {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        console.log('⌨️ Spacebar pressed for role reveal');
+        revealRole();
+    }
+}
+
+function showRoleRevealButton() {
+    let btn = document.getElementById('role-reveal-btn');
+    if (!btn) {
+        console.log('➕ Creating role reveal button');
+        btn = document.createElement('button');
+        btn.id = 'role-reveal-btn';
+        btn.textContent = 'Reveal Role (SPACE)';
+        btn.style.cssText = `
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 30px;
+            background: #DC143C;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        `;
+        btn.onclick = revealRole;
+        document.body.appendChild(btn);
+        console.log('✅ Role reveal button added to page');
+    }
+}
+
+function hideRoleRevealButton() {
+    const btn = document.getElementById('role-reveal-btn');
+    if (btn) {
+        btn.remove();
+        console.log('🗑️ Role reveal button removed');
+    }
+}
+
+function revealRole() {
+    console.log('🎭 Revealing role!');
+        
+    database.ref('game/circleOfTruth').once('value', (snapshot) => {
+        const data = snapshot.val();
+            
+        if (!data) {
+            console.error('❌ No Circle of Truth data found');
+            return;
+        }
+        
+        // Get the role from the player's Firebase data (assigned by host)
+        database.ref('players/' + currentUser.id + '/role').once('value', (roleSnap) => {
+            const playerRole = roleSnap.val();
+            
+            if (!playerRole) {
+                console.error('❌ Player has no role assigned');
+                return;
+            }
+            
+            // Trigger role reveal
+            database.ref('game/roleReveal').set({
+                role: playerRole,
+                playerId: data.playerId,
+                seatNumber: data.seatNumber,
+                timestamp: Date.now()
+            });
+                
+            hideRoleRevealButton();
+                
+            // Remove readyToRevealRole flag
+            database.ref('players/' + currentUser.id + '/readyToRevealRole').set(false);
+        });
     });
 }
 
@@ -723,12 +1953,15 @@ function setupFirebaseListeners() {
                 'breakfast': 'Breakfast',
                 'talk': 'Talk Time',
                 'deliberation': 'Roundtable',
-                'voting': 'Voting Phase',
-                'vote-reveal': 'Vote Reveal',
+                'first-vote': 'Voting Phase',
+                'first-vote-reveal': 'Vote Reveal',
+                'second-vote': 'Revote Phase',
                 'circle-of-truth': 'Circle of Truth',
                 'night': 'Night'
             };
-            phaseElement.textContent = phaseNames[phase] || phase;
+            if (phaseNames[phase]) {
+                phaseElement.textContent = phaseNames[phase];
+            }
         }
         
         // Update body class for phase-specific overlay
@@ -777,7 +2010,9 @@ function setupFirebaseListeners() {
             hideNightOverlay();
             
             // For PLAYERS, show seats when leaving night phase (if not in waiting room)
-            if (currentUser.role === 'player' && currentUser.room !== 'waiting') {
+            // But only for phases where seats should actually be shown
+            const phasesWithSeats = ['lobby', 'circle-of-truth', 'first-vote', 'first-vote-reveal', 'second-vote', 'second-vote-reveal', 'talk', 'deliberation'];
+            if (currentUser.role === 'player' && currentUser.room !== 'waiting' && phasesWithSeats.includes(phase)) {
                 console.log('Leaving night phase - showing seats for player');
                 document.querySelectorAll('.video-seat').forEach(seat => {
                     seat.style.removeProperty('display');
@@ -793,17 +2028,16 @@ function setupFirebaseListeners() {
     }
 
 function showNightOverlay() {
-    // Check if player is in turret (invited traitors)
-    if (currentUser.role === 'player') {
-        database.ref('players/' + currentUser.id + '/room').once('value', (snapshot) => {
-            const room = snapshot.val();
-            if (room !== 'turret') {
-                // Show "The Traitors Are Meeting In The Turret..." screen
-                const overlay = document.getElementById('night-overlay') || createNightOverlay();
-                overlay.classList.add('visible');
-            }
-        });
-    }
+    if (currentUser.role !== 'player') return;
+    if (currentUser.room === 'turret') return;
+    const overlay = document.getElementById('night-overlay') || createNightOverlay();
+    const roomOverlay = document.getElementById('room-overlay');
+    if (roomOverlay) roomOverlay.style.display = 'none';
+    overlay.classList.add('visible');
+    overlay.style.display = 'flex';
+    overlay.style.position = 'fixed'; overlay.style.top = '0'; overlay.style.left = '0';
+    overlay.style.width = '100%'; overlay.style.height = '100%'; overlay.style.zIndex = '9999';
+    // Removed async Firebase re-verification — it read stale 'turret' and re-hid the overlay
 }
 
 function hideNightOverlay() {
@@ -1104,14 +2338,6 @@ function generateVideoSeats() {
                 <span class="player-name" id="name-${seat.number}">Empty</span>
                 <span class="player-pronouns" id="pronouns-${seat.number}"></span>
             </div>
-            <div class="seat-controls" id="controls-${seat.number}">
-                <button class="seat-control-btn" id="mic-${seat.number}" onclick="toggleMic(${seat.number})" title="Toggle Microphone">
-                    🎤
-                </button>
-                <button class="seat-control-btn" id="video-${seat.number}-btn" onclick="toggleVideo(${seat.number})" title="Toggle Video">
-                    📹
-                </button>
-            </div>
             ${currentUser.role === 'host' ? `
             <button class="seat-remove-btn" id="remove-${seat.number}" onclick="removeSeatVisually(${seat.number})" title="Remove this seat" style="display: none;">
                 ✕
@@ -1121,18 +2347,22 @@ function generateVideoSeats() {
         `;
         
         seatElement.addEventListener('click', (e) => {
-            // Check if in vote reveal selection mode (host only)
-            if (window.voteRevealSelectionMode && currentUser.role === 'host') {
-                window.selectSeatForReveal(seat.number);
-                return;
-            }
             // Don't trigger if clicking controls, labels, or remove buttons
-            if (e.target.closest('.seat-controls') || 
+            if (
                 e.target.closest('.seat-label') || 
                 e.target.closest('.seat-remove-btn') ||
                 e.target.closest('.vote-indicator')) {
                 return;
             }
+            
+            // NEW: Check if in Circle of Truth selection mode
+            if (window.circleOfTruthSelectionMode) {
+                e.stopPropagation();
+                window.removeSeatVisually(seat.number);
+                return;
+            }
+            
+            // Normal seat claiming
             handleSeatClick(seat.number);
         });
         document.body.appendChild(seatElement);
@@ -1416,7 +2646,7 @@ function generateVideoSeats() {
         
         // Check game state first
         Promise.all([
-            database.ref('game/voting/active').once('value'),
+            database.ref('game/firstVote/active').once('value'),
             database.ref('game/seats/' + seatNumber).once('value')
         ]).then(([votingSnapshot, seatSnapshot]) => {
             const votingActive = votingSnapshot.val();
@@ -1588,6 +2818,13 @@ function generateVideoSeats() {
             currentUser.seat = seatNumber;
             currentUser.room = 'main';
 
+            // IMMEDIATELY update display (don't wait for Firebase)
+            const seatElement = document.getElementById(`seat-${seatNumber}`);
+            if (seatElement) {
+                seatElement.classList.remove('empty');
+                seatElement.classList.add('active');
+            }
+
             // Update global window reference for Agora
             window.currentUser = currentUser;
 
@@ -1671,32 +2908,44 @@ function generateVideoSeats() {
                     break;
                 }
             }
-            
+
             if (playerInSeat) {
                 seatElement.classList.remove('empty');
                 seatElement.classList.add('active');
 
-                // Only update if not showing vote
+                // ✅ ALWAYS update name if not showing vote
                 if (!nameElement.dataset.showingVote) {
-                    nameElement.textContent = playerInSeat.name;
-                    nameElement.style.cssText = ''; // Reset styling
+                    nameElement.textContent = playerInSeat.name || 'Unknown';
+                    nameElement.style.color = '#fff';
+                    nameElement.style.fontSize = '1.2rem';
+                    nameElement.style.fontFamily = 'Arial, sans-serif'; // ← Normal font for names
+                    console.log(`✅ Updated seat ${i} with name: ${playerInSeat.name}`);
                 }
-                if (pronounsElement && !pronounsElement.dataset.showingVote) {
-                    pronounsElement.textContent = playerInSeat.pronouns || '';
-                    pronounsElement.style.cssText = ''; // Reset styling
-                }
+
                 if (seatLabel && !seatLabel.dataset.showingVote) {
                     seatLabel.style.cssText = ''; // Reset background
                 }
                 
-                // Update pronouns display
-                if (pronounsElement) {
-                    if (playerInSeat.pronouns) {
-                        pronounsElement.textContent = playerInSeat.pronouns;
-                        pronounsElement.style.opacity = '0.7';
-                    } else {
-                        pronounsElement.textContent = 'pronouns';
-                        pronounsElement.style.opacity = '0.4';
+                // Update pronouns display (SINGLE UPDATE - no flashing)
+                if (pronounsElement && !pronounsElement.dataset.showingVote) {
+                    const newPronounsText = (playerInSeat.pronouns && playerInSeat.pronouns.trim() !== '') 
+                        ? playerInSeat.pronouns 
+                        : 'pronouns';
+                    
+                    // ONLY update if the text actually changed
+                    if (pronounsElement.textContent !== newPronounsText) {
+                        pronounsElement.textContent = newPronounsText;
+                        
+                        if (playerInSeat.pronouns && playerInSeat.pronouns.trim() !== '') {
+                            pronounsElement.style.opacity = '0.7';
+                        } else {
+                            pronounsElement.style.opacity = '0.4';
+                        }
+                        
+                        pronounsElement.style.visibility = 'visible';
+                        pronounsElement.style.display = 'block';
+                        
+                        console.log(`✅ Updated pronouns for seat ${i}: ${newPronounsText}`);
                     }
                 }
                 
@@ -1777,281 +3026,20 @@ function generateVideoSeats() {
         }
     }
 
-// ============================================
-// VOTING SYSTEM
-// ============================================
-
-    function handleVotingUpdate(voting) {
-        if (!voting.active) return;
-        
-        // Enable clicking on player names to vote (for players only)
-        if (currentUser.role === 'player' && !voting.votingLocked) {
-            enableVoting();
-        }
-        
-        // Show vote tally (for host)
-        if (currentUser.role === 'host') {
-            updateVoteTally(voting.votes || {});
-        }
-        
-        // Handle reveal phase
-        if (voting.revealed) {
-            handleVoteReveal(voting);
-        }
-    }
-
-    function enableVoting() {
-        // Check if this is a revote
-        database.ref('game/voting/revote').once('value', (revoteSnap) => {
-            const isRevote = revoteSnap.val();
-            
-            if (isRevote) {
-                // Revote mode - only tied seats clickable
-                database.ref('game/voting/tiedSeats').once('value', (seatsSnap) => {
-                    const allowedSeats = seatsSnap.val() || [];
-                    
-                    for (let i = 2; i <= 25; i++) {
-                        const seatElement = document.getElementById(`seat-${i}`);
-                        if (!seatElement || seatElement.classList.contains('empty')) continue;
-                        
-                        if (allowedSeats.includes(i)) {
-                            // Tied seat - clickable and highlighted
-                            if (!seatElement.dataset.votingEnabled) {
-                                seatElement.style.cursor = 'pointer';
-                                seatElement.style.border = '3px solid #FFD700';
-                                seatElement.style.boxShadow = '0 0 20px #FFD700';
-                                seatElement.onclick = (e) => {
-                                    if (e.target.closest('.seat-controls')) return;
-                                    showVoteConfirmation(i);
-                                };
-                                seatElement.dataset.votingEnabled = 'true';
-                            }
-                        } else {
-                            // Not tied - disabled
-                            seatElement.style.cursor = 'not-allowed';
-                            seatElement.style.opacity = '0.3';
-                            seatElement.onclick = null;
-                        }
-                    }
-                });
-            } else {
-                // Normal voting - all seats clickable
-                for (let i = 2; i <= 25; i++) {
-                    const seatElement = document.getElementById(`seat-${i}`);
-                    if (!seatElement || seatElement.classList.contains('empty')) continue;
-                    
-                    if (!seatElement.dataset.votingEnabled) {
-                        seatElement.style.cursor = 'pointer';
-                        seatElement.onclick = (e) => {
-                            if (e.target.closest('.seat-controls')) return;
-                            showVoteConfirmation(i);
-                        };
-                        seatElement.dataset.votingEnabled = 'true';
-                    }
-                }
-            }
-        });
-    }
-
-    function showVoteConfirmation(seatNumber) {
-        // Get player name
-        const targetPlayer = Object.values(gameState.players).find(p => p.seat === seatNumber);
-        const playerName = targetPlayer ? targetPlayer.name : `Seat ${seatNumber}`;
-        
-        // Check if we're in reveal phase - don't allow voting
-        database.ref('game/voting/revealed').once('value', (revealSnap) => {
-            if (revealSnap.val()) {
-                alert('Voting has ended. You cannot change your vote during reveal.');
-                return;
-            }
-            
-            // Show confirmation modal
-            if (typeof showConfirmation === 'function') {
-                showConfirmation(
-                    'Confirm Your Vote',
-                    `You are about to lock in your vote for ${playerName}.`,
-                    'Lock In',
-                    () => {
-                        castVote(seatNumber);
-                    }
-                );
-            } else {
-                // Fallback if showConfirmation doesn't exist
-                if (confirm(`Lock in your vote for ${playerName}?`)) {
-                    castVote(seatNumber);
-                }
-            }
-        });
-    }
-
-    function castVote(seatNumber) {
-        // Check if voting is still active
-        database.ref('game/voting').once('value', (snapshot) => {
-            const voting = snapshot.val();
-            if (!voting || !voting.active || voting.votingLocked) {
-                alert('Voting is closed.');
-                return;
-            }
-            
-            // Record vote in BOTH locations
-            const voteUpdates = {};
-            voteUpdates['game/voting/votes/' + currentUser.id] = seatNumber;
-            
-            // Check if this is the first vote (original) or a revote
-            database.ref('game/voting/isRevote').once('value', (revoteSnap) => {
-                const isRevote = revoteSnap.val() || false;
-                
-                // Always save original votes (never overwritten)
-                if (!isRevote) {
-                    voteUpdates['game/voting/originalVotes/' + currentUser.id] = seatNumber;
-                }
-                
-                database.ref().update(voteUpdates).then(() => {
-                    console.log('About to create vote overlay');
-                    console.log('Vote recorded for player:', currentUser.id, 'voting for seat:', seatNumber);
-                    console.log('Current user seat:', currentUser.seat);
-
-                    // Show vote on name tag (for player and host) - INCLUDING SELF-VOTES
-                    database.ref('players').once('value', (allPlayersSnap) => {
-                        const targetPlayer = Object.values(allPlayersSnap.val() || {}).find(p => p.seat === seatNumber);
-                        const targetName = targetPlayer ? targetPlayer.name : `Seat ${seatNumber}`;
-                        
-                        if (currentUser.role === 'player' && currentUser.seat) {
-                            console.log('🎯 Showing vote on player name tag:', currentUser.seat, '→', targetName);
-                            showVoteOnNameTag(currentUser.seat, targetName, true);
-                        }
-                    });
-                    
-                    // Visual feedback - modify name tag
-                    if (currentUser.seat && (currentUser.role === 'player' || currentUser.role === 'host')) {
-                        console.log('🎯 VOTE CAST - Modifying name tag');
-                        
-                        database.ref('game/voting/revealed').once('value', (revealedSnapshot) => {
-                            if (revealedSnapshot.val()) {
-                                console.log('❌ Reveal phase active - not showing vote');
-                                return;
-                            }
-                            
-                            // Find the target player's name
-                            const targetPlayer = Object.values(gameState.players).find(p => p.seat === seatNumber);
-                            const targetName = targetPlayer ? targetPlayer.name : `Seat ${seatNumber}`;
-                            
-                            // Store the vote display data
-                            showVoteOnNameTag(currentUser.seat, targetName, currentUser.role === 'player');
-                        });
-                    } else {
-                        console.error('❌ Cannot show overlay - seat:', currentUser.seat, 'role:', currentUser.role);
-                    }
-                });
-            });
-        });
-    }
-
-    function showVoteOnNameTag(seatNumber, votedForName, playerView) {
-        console.log('showVoteOnNameTag called:', {seatNumber, votedForName, playerView, currentUserRole: currentUser.role});
-
-        const nameElement = document.getElementById(`name-${seatNumber}`);
-        const pronounsElement = document.getElementById(`pronouns-${seatNumber}`);
-        const seatLabel = nameElement ? nameElement.parentElement : null;
-        
-        if (!nameElement || !pronounsElement || !seatLabel) {
-            console.error('Name tag elements not found for seat', seatNumber);
-            return;
-        }
-
-        console.log('✅ Found name tag elements for seat', seatNumber);
-        
-        // Mark elements to prevent overwriting
-        nameElement.dataset.showingVote = 'true';
-        pronounsElement.dataset.showingVote = 'true';
-        seatLabel.dataset.showingVote = 'true';
-        
-        // Change background color
-        seatLabel.style.background = '#B2BEB5';
-        
-        // Keep pronouns element visible but empty
-        pronounsElement.textContent = '';
-        pronounsElement.style.visibility = 'hidden'; // Keep space but hide text
-        
-        // Name spot shows who they voted for
-        nameElement.textContent = votedForName;
-        nameElement.style.fontFamily = "'ShootingStar', cursive";
-        nameElement.style.color = '#fff';
-        nameElement.style.fontSize = '1.3rem';
-        nameElement.style.textAlign = 'center';
-        nameElement.style.display = 'block';
-        
-        console.log('✅ Vote displayed on seat', seatNumber, '→', votedForName);
-    }
-
-    function updateVoteTally(votes, targetElement = 'original-count') {
-        console.log('📊 updateVoteTally called with:', votes, 'target:', targetElement);
-        console.log('Current user role:', currentUser.role);
-
-        const contentElement = document.getElementById(targetElement);
-        
-        if (!contentElement) {
-            console.log(targetElement + ' element not found');
-            return;
-        }
-        
-        console.log('Updating vote tally with votes:', votes);
-        
-        // Count votes per seat
-        const voteCounts = {};
-        for (let voterId in votes) {
-            const targetSeat = votes[voterId];
-            voteCounts[targetSeat] = (voteCounts[targetSeat] || 0) + 1;
-        }
-        
-        console.log('Vote counts:', voteCounts);
-        
-        // Display tally
-        if (Object.keys(voteCounts).length === 0) {
-            contentElement.innerHTML = '<div style="color: #666;">No votes cast yet</div>';
-            return;
-        }
-        
-        contentElement.innerHTML = '';
-        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
-        let colorIndex = 0;
-        
-        for (let seat in voteCounts) {
-            const player = Object.values(gameState.players).find(p => p.seat === parseInt(seat));
-            const name = player ? player.name : seat;
-            const count = voteCounts[seat];
-            const color = colors[colorIndex % colors.length];
-            
-            const item = document.createElement('div');
-            item.style.cssText = `
-                padding: 10px;
-                margin: 5px 0;
-                background: rgba(255,255,255,0.1);
-                border-radius: 5px;
-                color: ${color};
-                font-weight: bold;
-            `;
-            item.textContent = `${name}: ${count} vote${count > 1 ? 's' : ''}`;
-            contentElement.appendChild(item);
-            
-            colorIndex++;
-        }
-    }
-
     // ============================================
     // VOTE TALLY SYSTEM - COMPLETE REWRITE
     // ============================================
     
     // Listen for ORIGINAL votes (never cleared)
-    database.ref('game/voting/originalVotes').on('value', (snapshot) => {
+    database.ref('game/firstVote/originalVotes').on('value', (snapshot) => {
         const votes = snapshot.val();
         if (currentUser.role === 'host' && votes) {
             updateVoteTally(votes, 'original-count');
             
             // Show votes on name tags during voting phase only
             database.ref('game/phase').once('value', (phaseSnap) => {
-                if (phaseSnap.val() === 'voting') {
-                    database.ref('game/voting/revealed').once('value', (revealedSnapshot) => {
+                if (phaseSnap.val() === 'first-vote') {
+                    database.ref('game/firstVote/revealed').once('value', (revealedSnapshot) => {
                         if (!revealedSnapshot.val()) {
                             database.ref('players').once('value', (playersSnapshot) => {
                                 const players = playersSnapshot.val() || {};
@@ -2074,104 +3062,79 @@ function generateVideoSeats() {
         }
     });
     
-    // Listen for CURRENT votes (used during revote)
-    database.ref('game/voting/votes').on('value', (snapshot) => {
-        const votes = snapshot.val();
+    // Listen for CURRENT votes (used during revote) - HOST ONLY
+    // DELAYED to ensure seats exist first
+    setTimeout(() => {
+        database.ref('game/firstVote/votes').on('value', (snapshot) => {
+            const votes = snapshot.val();
+            console.log('🎯 Host updating vote displays:', votes);
         
-        if (!votes) return;
+            if (!votes) return;
         
-        // Determine if this is a revote
-        database.ref('game/voting/isRevote').once('value', (revoteSnapshot) => {
-            const isRevote = revoteSnapshot.val() || false;
-            
-            if (currentUser.role === 'host') {
-                // Show/hide revote sections
-                const revoteSection = document.getElementById('revote-section');
-                const revoteRevealSection = document.getElementById('revote-reveal-section');
+            // Determine if this is a revote
+            database.ref('game/firstVote/isRevote').once('value', (revoteSnapshot) => {
+                const isRevote = revoteSnapshot.val() || false;
                 
-                if (isRevote) {
-                    // During revote, show revote sections and update revote total
-                    if (revoteSection) revoteSection.style.display = 'block';
-                    updateVoteTally(votes, 'revote-total');
-                } else {
-                    // During original vote, hide revote sections
-                    if (revoteSection) revoteSection.style.display = 'none';
-                    if (revoteRevealSection) revoteRevealSection.style.display = 'none';
-                }
-                
-                // Show votes on name tags during voting phase only
-                database.ref('game/phase').once('value', (phaseSnap) => {
-                    if (phaseSnap.val() === 'voting') {
-                        database.ref('game/voting/revealed').once('value', (revealedSnapshot) => {
-                            if (!revealedSnapshot.val()) {
-                                database.ref('players').once('value', (playersSnapshot) => {
-                                    const players = playersSnapshot.val() || {};
-                                    
-                                    for (let voterId in votes) {
-                                        const voterPlayer = players[voterId];
-                                        if (voterPlayer && voterPlayer.seat) {
-                                            const targetSeat = votes[voterId];
-                                            const targetPlayer = Object.values(players).find(p => p.seat === targetSeat);
-                                            const targetName = targetPlayer ? targetPlayer.name : `Seat ${targetSeat}`;
-                                            
-                                            showVoteOnNameTag(voterPlayer.seat, targetName, false);
-                                        }
-                                    }
-                                });
-                            }
-                        });
+                if (currentUser.role === 'host') {
+                    // Show/hide revote sections
+                    const revoteSection = document.getElementById('revote-section');
+                    const revoteRevealSection = document.getElementById('revote-reveal-section');
+                    
+                    if (isRevote) {
+                        // During revote, show revote sections and update revote total
+                        if (revoteSection) revoteSection.style.display = 'block';
+                        updateVoteTally(votes, 'revote-total');
+                    } else {
+                        // During original vote, hide revote sections
+                        if (revoteSection) revoteSection.style.display = 'none';
+                        if (revoteRevealSection) revoteRevealSection.style.display = 'none';
                     }
-                });
-            }
+                    
+                    // Show votes on name tags during voting phase only
+                    database.ref('game/phase').once('value', (phaseSnap) => {
+                        if (phaseSnap.val() === 'first-vote') {
+                            database.ref('game/firstVote/revealed').once('value', (revealedSnapshot) => {
+                                if (!revealedSnapshot.val()) {
+                                    database.ref('players').once('value', (playersSnapshot) => {
+                                        const players = playersSnapshot.val() || {};
+                                        
+                                        for (let voterId in votes) {
+                                            const voterPlayer = players[voterId];
+                                            if (voterPlayer && voterPlayer.seat) {
+                                                const targetSeat = votes[voterId];
+                                                const targetPlayer = Object.values(players).find(p => p.seat === targetSeat);
+                                                const targetName = targetPlayer ? targetPlayer.name : `Seat ${targetSeat}`;
+                                                
+                                                showVoteOnNameTag(voterPlayer.seat, targetName, false);
+                                            }
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
         });
-    });
-
-function handleVoteReveal(voting) {
-    // Handle space bar press to reveal vote
-    if (currentUser.role === 'player') {
-        const isMyTurn = voting.currentRevealer === currentUser.id;
-        
-        if (isMyTurn) {
-            // Allow space bar to reveal
-            document.addEventListener('keydown', handleRevealKeyPress);
-        }
-    }
-}
-
-function handleRevealKeyPress(e) {
-    if (e.code === 'Space') {
-        e.preventDefault();
-        revealMyVote();
-    }
-}
-
-function revealMyVote() {
-    database.ref('game/voting/votes/' + currentUser.id).once('value', (snapshot) => {
-        const votedFor = snapshot.val();
-        if (!votedFor) return;
-        
-        // Mark as revealed
-        database.ref('game/voting/revealed/' + currentUser.id).set(true);
-        
-        // Show vote to everyone
-        const voteIndicator = document.getElementById(`vote-${currentUser.seat}`);
-        if (voteIndicator) {
-            voteIndicator.classList.add('visible');
-        }
-        
-        // Move to next player (host will handle this)
-        database.ref('game/voting/lastRevealed').set(currentUser.id);
-        
-        // Remove event listener
-        document.removeEventListener('keydown', handleRevealKeyPress);
-    });
-}
+    }, 2000); // Close setTimeout - wait for seats to generate
 
 // Listen for revealed votes during reveal phase
 database.ref('game/revealedVoteDisplay').on('child_added', (snapshot) => {
     const data = snapshot.val();
     if (data && data.seat && data.votedFor) {
+        console.log('🎯 Vote revealed:', data);
         showVoteOnNameTag(data.seat, data.votedFor, false);
+        if (data.timestamp && Date.now() - data.timestamp < 10000) {
+            document.getElementById('vote-big-reveal-text')?.remove();
+            const _el = document.createElement('div');
+            _el.id = 'vote-big-reveal-text';
+            _el.textContent = (data.votedFor || '').toUpperCase();
+            _el.style.cssText = 'position:fixed;top:100px;left:50%;transform:translateX(-50%);font-size:5rem;font-weight:900;color:white;text-shadow:0 0 40px rgba(255,255,255,0.4);background:rgba(0,0,0,0.55);padding:10px 36px;border-radius:14px;border:2px solid rgba(255,255,255,0.35);z-index:9500;opacity:0;transition:opacity 0.5s;pointer-events:none;text-align:center;white-space:nowrap;letter-spacing:0.06em;text-transform:uppercase;';
+            document.body.appendChild(_el);
+            setTimeout(() => { _el.style.opacity = '1'; }, 10);
+            setTimeout(() => { _el.style.opacity = '0'; }, 3000);
+            setTimeout(() => { _el.remove(); }, 3500);
+        }
     }
 });
 
@@ -2225,55 +3188,194 @@ database.ref('game/revealedVoteDisplay').on('value', (snapshot) => {
     }
 });
 
-// ============================================
-// CIRCLE OF TRUTH
-// ============================================
-
-function handleCircleOfTruth(playerId) {
-    console.log('🎯 handleCircleOfTruth called for playerId:', playerId);
-    console.log('🎯 Current gameState.players:', gameState.players);
+// PLAYER: Listen for FIRST VOTE revealed votes to update vote count display
+database.ref('game/revealedVoteDisplay').on('value', (snapshot) => {
+    if (currentUser.role !== 'player') return;
     
-    const player = gameState.players[playerId];
-    
-    // Check if player exists
-    if (!player || !player.seat) {
-        console.error('❌ Player not found in gameState or has no seat:', playerId);
-        return;
-    }
-    
-    console.log('🎯 Found player:', player);
-    console.log('🎯 Player seat:', player.seat);
-    
-    const seatElement = document.getElementById(`seat-${player.seat}`);
-    
-    if (seatElement) {
-        console.log('✅ Found seat element, enlarging it for Circle of Truth');
+    // Check if we're in second vote reveal
+    database.ref('game/secondVoteReveal/active').once('value', (revoteSnap) => {
+        const inSecondVoteReveal = revoteSnap.val() === true;
         
-        // Enlarge the seat (2x size) - works for both host and player
-        seatElement.style.transition = 'transform 0.5s ease, z-index 0s';
-        seatElement.style.transform = 'scale(2)';
-        seatElement.style.zIndex = '1000';
-        
-        // Reset all other seats to normal size
-        document.querySelectorAll('.video-seat').forEach(seat => {
-            if (seat.id !== `seat-${player.seat}`) {
-                seat.style.transform = 'scale(1)';
-                seat.style.zIndex = '';
-            }
-        });
-        
-        // Counter-scale the seat label so it stays normal size
-        const seatLabel = seatElement.querySelector('.seat-label');
-        if (seatLabel) {
-            seatLabel.style.transform = 'scale(0.5)';
-            seatLabel.style.transformOrigin = 'center';
+        // If we're in second vote reveal, don't update - let the firstVote listener handle it
+        if (inSecondVoteReveal) {
+            console.log('⏭️ In second vote reveal - first vote listener will handle display');
+            return;
         }
         
-        console.log('✅ Circle of Truth transform applied to seat', player.seat);
-    } else {
-        console.error('❌ Seat element not found for seat:', player.seat);
+        // We're in first vote reveal - show the tally as votes are revealed
+        const revealedVotes = snapshot.val() || {};
+        const revealCountElement = document.getElementById('first-vote-tally-content');
+        
+        if (!revealCountElement) {
+            console.log('⚠️ PLAYER: vote-tally-content element not found');
+            return;
+        }
+        
+        const revealCounts = {};
+        for (let voterId in revealedVotes) {
+            const voteData = revealedVotes[voterId];
+            if (voteData && voteData.votedFor) {
+                revealCounts[voteData.votedFor] = (revealCounts[voteData.votedFor] || 0) + 1;
+            }
+        }
+        
+        if (Object.keys(revealCounts).length === 0) {
+            revealCountElement.innerHTML = '<p style="color: #bbb; text-align: center;">No votes revealed yet</p>';
+            return;
+        }
+        
+        revealCountElement.innerHTML = '';
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+        let colorIndex = 0;
+        const sortedNames = Object.keys(revealCounts).sort((a, b) => revealCounts[b] - revealCounts[a]);
+        
+        for (let name of sortedNames) {
+            const count = revealCounts[name];
+            const color = colors[colorIndex % colors.length];
+            const item = document.createElement('div');
+            item.style.cssText = `padding: 10px; margin: 5px 0; background: rgba(255,255,255,0.1); border-radius: 5px; color: ${color}; font-weight: bold;`;
+            item.textContent = `${name}: ${count} vote${count > 1 ? 's' : ''}`;
+            revealCountElement.appendChild(item);
+            colorIndex++;
+        }
+        
+        console.log('📊 PLAYER: First vote reveal counts displayed:', revealCounts);
+    });
+});
+
+// PLAYER: Listen to firstVote/votes to keep first vote tally visible during second vote reveal
+database.ref('game/firstVote/votes').on('value', (snapshot) => {
+    if (currentUser.role !== 'player') return;
+    
+    // Only show this during second vote reveal
+    database.ref('game/secondVoteReveal/active').once('value', (revoteSnap) => {
+        if (revoteSnap.val() !== true) return; // Only run during second vote reveal
+        
+        const votes = snapshot.val() || {};
+        
+        // Show the second vote tally section
+        const secondVoteTallySection = document.getElementById('second-vote-tally');
+        if (secondVoteTallySection) {
+            secondVoteTallySection.style.display = 'block';
+        }
+
+        const revealCountElement = document.getElementById('second-vote-tally-content');
+        
+        if (!revealCountElement) return;
+        
+        // Count the votes
+        const voteCounts = {};
+        Object.values(votes).forEach(votedSeat => {
+            // Get player name from seat
+            database.ref('players').once('value', (playersSnap) => {
+                const players = playersSnap.val() || {};
+                let votedName = `Seat ${votedSeat}`;
+                
+                for (let id in players) {
+                    if (players[id].seat === votedSeat) {
+                        votedName = players[id].name;
+                        break;
+                    }
+                }
+                
+                voteCounts[votedName] = (voteCounts[votedName] || 0) + 1;
+                
+                // Update display
+                revealCountElement.innerHTML = '';
+                const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+                let colorIndex = 0;
+                const sortedNames = Object.keys(voteCounts).sort((a, b) => voteCounts[b] - voteCounts[a]);
+                
+                for (let name of sortedNames) {
+                    const count = voteCounts[name];
+                    const color = colors[colorIndex % colors.length];
+                    const item = document.createElement('div');
+                    item.style.cssText = `padding: 10px; margin: 5px 0; background: rgba(255,255,255,0.1); border-radius: 5px; color: ${color}; font-weight: bold;`;
+                    item.textContent = `${name}: ${count} vote${count > 1 ? 's' : ''}`;
+                    revealCountElement.appendChild(item);
+                    colorIndex++;
+                }
+            });
+        });
+        
+        console.log('📊 PLAYER: Keeping first vote tally visible during second vote reveal');
+    });
+});
+
+// PLAYER & HOST: Listen for SECOND VOTE reveals and display on name tags AND tally
+database.ref('game/secondVoteReveal/revealedVotes').on('value', (snapshot) => {
+    const revealedVotes = snapshot.val() || {};
+    
+    console.log('🎯 SECOND VOTE REVEALS updated:', revealedVotes);
+    
+    // Skip if no data
+    if (Object.keys(revealedVotes).length === 0) return;
+    
+    // PART 1: Display each revealed vote on name tags
+    Object.entries(revealedVotes).forEach(([playerId, voteData]) => {
+        if (voteData && voteData.seat && voteData.votedFor) {
+            console.log(`📝 Showing second vote reveal: Seat ${voteData.seat} → ${voteData.votedFor}`);
+            showVoteOnNameTag(voteData.seat, voteData.votedFor, false);
+        }
+    });
+    
+    // PART 2: Update vote tally (players only)
+    if (currentUser.role === 'player') {
+        // Show the second vote tally section
+        const secondVoteTallySection = document.getElementById('second-vote-section');
+        if (secondVoteTallySection) {
+            secondVoteTallySection.style.display = 'block';
+        }
+
+        const revealCountElement = document.getElementById('second-vote-tally-content');
+
+        if (!revealCountElement) {
+            console.log('⚠️ PLAYER: second-vote-tally-content element not found');
+            return;
+        }
+        
+        const revealCounts = {};
+        for (let voterId in revealedVotes) {
+            const voteData = revealedVotes[voterId];
+            if (voteData && voteData.votedFor) {
+                revealCounts[voteData.votedFor] = (revealCounts[voteData.votedFor] || 0) + 1;
+            }
+        }
+        
+        revealCountElement.innerHTML = '';
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+        let colorIndex = 0;
+        const sortedNames = Object.keys(revealCounts).sort((a, b) => revealCounts[b] - revealCounts[a]);
+        
+        for (let name of sortedNames) {
+            const count = revealCounts[name];
+            const color = colors[colorIndex % colors.length];
+            const item = document.createElement('div');
+            item.style.cssText = `padding: 10px; margin: 5px 0; background: rgba(255,255,255,0.1); border-radius: 5px; color: ${color}; font-weight: bold;`;
+            item.textContent = `${name}: ${count} vote${count > 1 ? 's' : ''}`;
+            revealCountElement.appendChild(item);
+            colorIndex++;
+        }
+        
+        console.log('📊 PLAYER: Second vote reveal counts displayed:', revealCounts);
     }
-}
+})
+
+// Second vote big text — child_added fires once per new entry
+database.ref('game/secondVoteReveal/revealedVotes').on('child_added', (snapshot) => {
+    const voteData = snapshot.val();
+    if (!voteData || !voteData.votedFor) return;
+    if (voteData.timestamp && Date.now() - voteData.timestamp > 10000) return;
+    document.getElementById('vote-big-reveal-text')?.remove();
+    const _el = document.createElement('div');
+    _el.id = 'vote-big-reveal-text';
+    _el.textContent = (voteData.votedFor || '').toUpperCase();
+    _el.style.cssText = 'position:fixed;top:100px;left:50%;transform:translateX(-50%);font-size:5rem;font-weight:900;color:white;text-shadow:0 0 40px rgba(255,255,255,0.4);background:rgba(0,0,0,0.55);padding:10px 36px;border-radius:14px;border:2px solid rgba(255,255,255,0.35);z-index:9500;opacity:0;transition:opacity 0.5s;pointer-events:none;text-align:center;white-space:nowrap;letter-spacing:0.06em;text-transform:uppercase;';
+    document.body.appendChild(_el);
+    setTimeout(() => { _el.style.opacity = '1'; }, 10);
+    setTimeout(() => { _el.style.opacity = '0'; }, 3000);
+    setTimeout(() => { _el.remove(); }, 3500);
+});;
 
 // ============================================
 // ANNOUNCEMENTS
@@ -2430,7 +3532,29 @@ window.addEventListener('resize', () => {
             console.log(`Window resized: ${lastWidth}x${lastHeight} → ${currentWidth}x${currentHeight}`);
             lastWidth = currentWidth;
             lastHeight = currentHeight;
+
+            // PRESERVE VIDEO ELEMENTS before regenerating
+            const videoElements = {};
+            for (let i = 1; i <= 25; i++) {
+                const videoDiv = document.getElementById(`video-${i}`);
+                if (videoDiv && videoDiv.children.length > 0) {
+                    // Store the entire video container HTML
+                    videoElements[i] = videoDiv.innerHTML;
+                }
+            }
+            
             generateVideoSeats(); // Regenerate with new dimensions
+            
+            // RESTORE VIDEO ELEMENTS after regenerating
+            setTimeout(() => {
+                for (let seat in videoElements) {
+                    const videoDiv = document.getElementById(`video-${seat}`);
+                    if (videoDiv) {
+                        videoDiv.innerHTML = videoElements[seat];
+                    }
+                }
+                console.log('✅ Video elements preserved through resize');
+            }, 10);
             
             // Re-setup player controls after resize regenerates seats
             if (typeof currentUser !== 'undefined' && currentUser.role === 'player' && currentUser.seat) {
@@ -2452,81 +3576,12 @@ window.addEventListener('resize', () => {
                     generateRoomSeats(window.currentUser.room, limit);
                 });
             }
-        }, 250); // Debounce for 250ms
+        }, 50); // Debounce for 250ms
     });
 });
 
 // Make rename available globally
 window.renameSelf = renameSelf;
-
-// Toggle microphone for a seat
-function toggleMic(seatNumber) {
-    // Only allow controlling own seat
-    if (currentUser.seat !== seatNumber) {
-        return;
-    }
-    
-    const micBtn = document.getElementById(`mic-${seatNumber}`);
-    
-    // Toggle muted state
-    const isMuted = micBtn.classList.contains('muted');
-    
-    if (isMuted) {
-        micBtn.classList.remove('muted');
-        console.log('Microphone ON for seat', seatNumber);
-        
-        // Update Firebase to track mute status
-        database.ref('players/' + currentUser.id + '/audioMuted').set(false);
-        
-        // Unmute Agora audio
-        if (typeof agoraManager !== 'undefined' && agoraManager.localAudioTrack) {
-            agoraManager.localAudioTrack.setEnabled(true);
-        }
-    } else {
-        micBtn.classList.add('muted');
-        console.log('Microphone OFF for seat', seatNumber);
-        
-        // Update Firebase to track mute status IMMEDIATELY
-        database.ref('players/' + currentUser.id + '/audioMuted').set(true).then(() => {
-            console.log('✅ Mute status updated in Firebase');
-        });
-        
-        // Mute Agora audio
-        if (typeof agoraManager !== 'undefined' && agoraManager.localAudioTrack) {
-            agoraManager.localAudioTrack.setEnabled(false);
-        }
-    }
-}
-
-// Optimized mute icon updates with minimal delay
-let muteIconUpdateTimeout = null;
-
-database.ref('game/muteAllPlayers').on('value', () => {
-    clearTimeout(muteIconUpdateTimeout);
-    muteIconUpdateTimeout = setTimeout(updateMuteIcons, 100); // Debounce 100ms
-});
-
-database.ref('players').on('child_changed', (snapshot) => {
-    const player = snapshot.val();
-    
-    // Update mute icon
-    if (player.audioMuted !== undefined) {
-        updateSingleMuteIcon(player.seat, player.audioMuted);
-    }
-    
-    // Update seat label if name or pronouns changed
-    if (player.seat && (player.name || player.pronouns !== undefined)) {
-        const nameLabel = document.getElementById('name-' + player.seat);
-        const pronounsLabel = document.getElementById('pronouns-' + player.seat);
-        
-        if (nameLabel && player.name) {
-            nameLabel.textContent = player.name;
-        }
-        if (pronounsLabel && player.pronouns !== undefined) {
-            pronounsLabel.textContent = player.pronouns;
-        }
-    }
-});
 
 function updateSingleMuteIcon(seatNumber, isMuted) {
     if (!seatNumber) return;
@@ -2595,45 +3650,69 @@ function updateMuteIcons() {
     });
 }
 
-// Toggle video for a seat
-function toggleVideo(seatNumber) {
-    // Only allow controlling own seat
-    if (currentUser.seat !== seatNumber) {
-        return;
-    }
-    
-    const videoBtn = document.getElementById(`video-${seatNumber}-btn`);
-    
-    // Toggle video-off state
-    if (videoBtn.classList.contains('video-off')) {
-        videoBtn.classList.remove('video-off');
-        console.log('Video ON for seat', seatNumber);
-        // TODO: Enable Agora video when re-enabled
-    } else {
-        videoBtn.classList.add('video-off');
-        console.log('Video OFF for seat', seatNumber);
-        // TODO: Disable Agora video when re-enabled
-    }
-}
-
 // Listen for role reveals (show on all clients)
 database.ref('game/roleReveal').on('value', (snapshot) => {
     const reveal = snapshot.val();
-    if (!reveal) return;
+    console.log('🎭 Role reveal listener fired:', reveal);
     
-    // Hide the phase name and timer
+    if (!reveal) {
+        console.log('⏹️ No role reveal data, returning');
+        return;
+    }
+    
+    // Ignore stale role reveals (older than 10 seconds)
+    const now = Date.now();
+    const age = now - reveal.timestamp;
+    
+    if (age > 10000) {
+        console.log('⏭️ Ignoring stale role reveal (age:', age, 'ms)');
+        return;
+    }
+    
+    // Hide ALL THREE phase/timer elements
     const phaseEl = document.getElementById('phase-name');
+    const timerPhaseEl = document.getElementById('timer-phase-display');
     const timerEl = document.getElementById('timer');
-    if (phaseEl) phaseEl.style.display = 'none';
-    if (timerEl) timerEl.style.display = 'none';
+
+    if (phaseEl) {
+        phaseEl.style.setProperty('display', 'none', 'important');
+        phaseEl.style.setProperty('visibility', 'hidden', 'important');
+        console.log('✅ Force-hid phase-name');
+    }
+    if (timerPhaseEl) {
+        timerPhaseEl.style.setProperty('display', 'none', 'important');
+        timerPhaseEl.style.setProperty('visibility', 'hidden', 'important');
+        console.log('✅ Force-hid timer-phase-display');
+    }
+    if (timerEl) {
+        timerEl.style.setProperty('display', 'none', 'important');
+        timerEl.style.setProperty('visibility', 'hidden', 'important');
+        console.log('✅ Force-hid timer');
+    }
+    if (timerEl) {
+        timerEl.style.display = 'none';
+        console.log('✅ Set timer display to none');
+    }
     
     // Show role text in place of the phase name
     const roleColor = reveal.role === 'faithful' ? '#4169E1' : '#DC143C'; // blue or red
     const roleText = reveal.role === 'faithful' ? 'Faithful' : 'Traitor';
     
+    console.log('🎨 Creating role reveal text:', roleText, 'in color:', roleColor);
+
+    // DIAGNOSTIC: Find all elements that might show phase text
+    const allPhaseElements = document.querySelectorAll('[id*="phase"], .phase-name, .game-phase, h1');
+    console.log('🔍 FOUND', allPhaseElements.length, 'potential phase elements:');
+    allPhaseElements.forEach((el, i) => {
+        console.log(`  ${i + 1}. Tag: ${el.tagName}, ID: ${el.id}, Class: ${el.className}, Text: "${el.textContent}"`);
+    });
+    
     // Create the role reveal text element
     const existing = document.getElementById('role-reveal-text');
-    if (existing) existing.remove();
+    if (existing) {
+        console.log('🗑️ Removing existing role reveal text');
+        existing.remove();
+    }
     
     const roleEl = document.createElement('div');
     roleEl.id = 'role-reveal-text';
@@ -2653,28 +3732,61 @@ database.ref('game/roleReveal').on('value', (snapshot) => {
         pointer-events: none;
     `;
     document.body.appendChild(roleEl);
+    console.log('✅ Role reveal element added to page');
     
     // Fade in
-    setTimeout(() => { roleEl.style.opacity = '1'; }, 10);
+    setTimeout(() => { 
+        roleEl.style.opacity = '1';
+        console.log('✅ Role reveal faded in');
+    }, 10);
     
     // Auto-remove after 8 seconds, then restore phase name
     setTimeout(() => {
+        console.log('⏱️ 8 seconds elapsed, fading out role reveal');
         roleEl.style.opacity = '0';
         setTimeout(() => {
+            console.log('🗑️ Removing role reveal element');
             roleEl.remove();
-            // Restore phase name with correct text
-            if (phaseEl) {
-                phaseEl.textContent = 'Circle of Truth';
-                phaseEl.style.display = '';
-            }
-            // Timer stays hidden during circle-of-truth phase
+            
+            // Check current phase before restoring
+            database.ref('game/phase').once('value', (phaseSnapshot) => {
+                const currentPhase = phaseSnapshot.val();
+                console.log('📍 Restoring elements, current phase:', currentPhase);
+                
+                // Restore phase name after delay - remove the !important overrides
+                if (phaseEl) {
+                    phaseEl.style.removeProperty('display');
+                    phaseEl.style.removeProperty('visibility');
+                    phaseEl.style.display = 'block';
+                    console.log('✅ Phase name restored');
+                }
+                if (timerPhaseEl) {
+                    timerPhaseEl.style.removeProperty('display');
+                    timerPhaseEl.style.removeProperty('visibility');
+                    timerPhaseEl.style.display = 'block';
+                    console.log('✅ Timer-phase-display restored');
+                }
+                
+                // Only restore timer if NOT in lobby or circle-of-truth
+                if (timerEl) {
+                    timerEl.style.removeProperty('display');
+                    timerEl.style.removeProperty('visibility');
+                    
+                    if (currentPhase === 'lobby' || currentPhase === 'circle-of-truth' || currentPhase === 'night' || currentPhase === 'breakfast') {
+                        timerEl.style.display = 'none';
+                        console.log('✅ Timer kept hidden (phase:', currentPhase, ')');
+                    } else {
+                        console.log('✅ Timer element restored');
+                    }
+                }
+            });
         }, 500);
     }, 8000);
 });
 
 // Host sees all votes in real-time on name tags
 if (currentUser && currentUser.role === 'host') {
-    database.ref('game/voting/votes').on('value', (snapshot) => {
+    database.ref('game/firstVote/votes').on('value', (snapshot) => {
         const votes = snapshot.val();
         if (!votes) return;
         
@@ -2736,7 +3848,7 @@ database.ref('players').on('child_changed', (snapshot) => {
 });
 
 // Listen for revote starting - clear all vote displays
-database.ref('game/voting/revote').on('value', (snapshot) => {
+database.ref('game/secondVote/active').on('value', (snapshot) => {
     if (snapshot.val() === true) {
         console.log('🔄 Revote started - clearing vote displays');
         
@@ -2768,7 +3880,7 @@ database.ref('game/voting/revote').on('value', (snapshot) => {
         });
 
         // Clear current revealer
-        database.ref('game/voting/currentRevealer').remove();
+        database.ref('game/firstVote/currentRevealer').remove();
         
         // Force player display update
         updatePlayerDisplay();
@@ -2938,4 +4050,1273 @@ database.ref('game/roomLimits/main').on('value', () => {
             });
         }, 100);
     }
+});
+
+// ============================================
+// END GAME — SMOKE REVEAL DISPLAY (all clients)
+// ============================================
+// smokeReveal handled in End Game block);
+
+// ============================================
+// END GAME — BANISHMENT REVEAL (all clients)
+// ============================================
+// revealedVotes handled in End Game block;
+
+// game/endGame/roleReveal handled in End Game block
+
+// ============================================
+// END GAME — WINNERS DISPLAY (all clients)
+// ============================================
+database.ref('game/endGame/winners').on('value', (snapshot) => {
+    const data = snapshot.val();
+    const overlay = document.getElementById('endgame-winners-overlay');
+    if (!overlay) return;
+    if (!data) { overlay.style.display = 'none'; return; }
+    const teamNameEl = document.getElementById('winners-team-name');
+    const playerNamesEl = document.getElementById('winners-player-names');
+    if (teamNameEl) { teamNameEl.textContent = data.teamName || ''; teamNameEl.style.color = data.teamColor || '#FFD700'; }
+    if (playerNamesEl) { playerNamesEl.textContent = data.winnerText || ''; playerNamesEl.style.color = data.teamColor || '#FFD700'; }
+    overlay.style.display = 'flex';
+});
+// ============================================================
+// LIVEKIT VIDEO INTEGRATION
+// ============================================================
+//
+// Architecture:
+//   - Token fetched from Firebase Cloud Function: /livekitToken?room=X&identity=Y
+//   - One LiveKit room per game room: "subversion-main", "subversion-turret", etc.
+//   - Each participant's video track is injected into their seat's video-N div
+//   - Night / Breakfast phases: disconnect fully (cameras off, zero bandwidth)
+//   - Re-entering a room: fetch a new token and reconnect
+//
+// To understand the flow:
+//   joinLiveKitRoom(gameRoom)  →  fetch token  →  connect to LiveKit
+//   →  publish own tracks  →  subscribe to others  →  attach video to seats
+//
+// Firebase Cloud Function URL (set after deploy):
+const LIVEKIT_TOKEN_URL = 'https://us-central1-subversion-the-traitors.cloudfunctions.net/livekitToken';
+const LIVEKIT_WS_URL    = 'wss://subversion-the-traitors-h0coqxjc.livekit.cloud';
+
+// ── State ─────────────────────────────────────────────────────
+window._lkRoom         = null;   // active LiveKit Room instance
+window._lkGameRoom     = null;   // current game room name (e.g. "main")
+window._lkLocalTracks  = [];     // own published tracks
+window._lkConnecting   = false;  // guard against double-connects
+
+// ── Helpers ───────────────────────────────────────────────────
+
+// Get current user safely (works in both host.html and player.html scope)
+function _lkCurrentUser() {
+    return window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
+}
+
+// Map a LiveKit participant identity to their seat number
+// Identity is the player's display name; we look it up in Firebase
+async function _lkIdentityToSeat(identity, isMainRoom) {
+    return new Promise((resolve) => {
+        database.ref('players')
+            .orderByChild('name')
+            .equalTo(identity)
+            .once('value', (snap) => {
+                let seat = null;
+                snap.forEach((child) => {
+                    const p = child.val();
+                    seat = isMainRoom ? (p.seat || null) : (p.roomSeat || null);
+                });
+                resolve(seat);
+            });
+    });
+}
+
+// Attach a video track to a seat's video-N div
+function _lkAttachVideo(track, seatNumber, isMainRoom) {
+    const divId = isMainRoom ? `video-${seatNumber}` : `room-video-${seatNumber}`;
+    const container = document.getElementById(divId);
+    if (!container) {
+        console.warn('📹 No container found for seat:', seatNumber, divId);
+        return;
+    }
+
+    // Remove any existing video element we put there
+    const old = container.querySelector('.lk-video');
+    if (old) old.remove();
+
+    // Create and style the video element
+    const videoEl = track.attach();
+    videoEl.className = 'lk-video';
+    videoEl.style.cssText = [
+        'width: 100%',
+        'height: 100%',
+        'object-fit: cover',
+        'border-radius: 50%',
+        'position: absolute',
+        'top: 0',
+        'left: 0',
+        'pointer-events: none',
+    ].join('; ');
+
+    // Make container relative so video fills it
+    container.style.position = 'relative';
+    container.style.overflow = 'hidden';
+    container.style.borderRadius = '50%';
+
+    container.appendChild(videoEl);
+    console.log('📹 Attached video to:', divId);
+}
+
+// Detach all video from a seat
+function _lkDetachSeat(seatNumber, isMainRoom) {
+    const divId = isMainRoom ? `video-${seatNumber}` : `room-video-${seatNumber}`;
+    const container = document.getElementById(divId);
+    if (!container) return;
+    const old = container.querySelector('.lk-video');
+    if (old) {
+        old.srcObject = null;
+        old.remove();
+    }
+}
+
+// ── Core: join a LiveKit room ─────────────────────────────────
+window.joinLiveKitRoom = async function(gameRoom) {
+    // Don't rejoin if already in the same room
+    if (window._lkGameRoom === gameRoom && window._lkRoom) {
+        console.log('📹 Already in LiveKit room:', gameRoom);
+        return;
+    }
+
+    // Prevent double-connect race
+    if (window._lkConnecting) {
+        console.log('📹 Already connecting, skipping');
+        return;
+    }
+
+    // Disconnect any existing room first
+    await disconnectLiveKit();
+
+    const user = _lkCurrentUser();
+    if (!user || !user.name) {
+        console.warn('📹 joinLiveKitRoom: currentUser not ready yet');
+        return;
+    }
+
+    window._lkConnecting = true;
+    window._lkGameRoom = gameRoom;
+    const isMainRoom = (gameRoom === 'main');
+
+    console.log('📹 Joining LiveKit room:', gameRoom, '| identity:', user.name);
+
+    try {
+        // 1. Fetch a signed token from the Cloud Function
+        const tokenUrl = `${LIVEKIT_TOKEN_URL}?room=${encodeURIComponent(gameRoom)}&identity=${encodeURIComponent(user.name)}`;
+        const resp = await fetch(tokenUrl);
+        if (!resp.ok) throw new Error(`Token fetch failed: ${resp.status}`);
+        const { token } = await resp.json();
+
+        // 2. Create Room and set up event listeners BEFORE connecting
+        const room = new LivekitClient.Room({
+            adaptiveStream:    true,  // auto quality based on network
+            dynacast:          true,  // only send video to participants who need it
+            videoCaptureDefaults: {
+                resolution: LivekitClient.VideoPresets.h360.resolution,
+            },
+        });
+
+        window._lkRoom = room;
+
+        // ── Remote participant joined ──────────────────────────
+        room.on(LivekitClient.RoomEvent.ParticipantConnected, async (participant) => {
+            console.log('📹 Participant connected:', participant.identity);
+            const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
+            if (!seat) return;
+
+            // Subscribe to their tracks
+            participant.on(LivekitClient.ParticipantEvent.TrackSubscribed, (track) => {
+                if (track.kind === LivekitClient.Track.Kind.Video) {
+                    _lkAttachVideo(track, seat, isMainRoom);
+                }
+            });
+
+            // Handle tracks already published before we subscribed
+            participant.trackPublications.forEach((pub) => {
+                if (pub.track && pub.kind === LivekitClient.Track.Kind.Video) {
+                    _lkAttachVideo(pub.track, seat, isMainRoom);
+                }
+            });
+        });
+
+        // ── Remote participant left ────────────────────────────
+        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, async (participant) => {
+            console.log('📹 Participant disconnected:', participant.identity);
+            const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
+            if (seat) _lkDetachSeat(seat, isMainRoom);
+        });
+
+        // ── Track subscribed (covers participants already in room) ──
+        room.on(LivekitClient.RoomEvent.TrackSubscribed, async (track, _pub, participant) => {
+            if (track.kind !== LivekitClient.Track.Kind.Video) return;
+            const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
+            if (seat) _lkAttachVideo(track, seat, isMainRoom);
+        });
+
+        // ── Track unsubscribed ─────────────────────────────────
+        room.on(LivekitClient.RoomEvent.TrackUnsubscribed, async (_track, _pub, participant) => {
+            const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
+            if (seat) _lkDetachSeat(seat, isMainRoom);
+        });
+
+        // ── Disconnected (network drop, etc.) ─────────────────
+        room.on(LivekitClient.RoomEvent.Disconnected, () => {
+            console.log('📹 LiveKit room disconnected');
+            window._lkRoom = null;
+            window._lkGameRoom = null;
+        });
+
+        // 3. Connect to LiveKit
+        await room.connect(LIVEKIT_WS_URL, token);
+        console.log('✅ LiveKit connected:', room.name);
+
+        // 4. Publish own camera + mic
+        const tracks = await LivekitClient.createLocalTracks({
+            audio: true,
+            video: {
+                resolution: LivekitClient.VideoPresets.h360.resolution,
+                facingMode: 'user',
+            },
+        });
+
+        window._lkLocalTracks = tracks;
+        await room.localParticipant.publishTracks(tracks);
+        console.log('✅ Local tracks published');
+
+        // 5. Attach own video to own seat
+        const mySeat = user.seat || (isMainRoom ? null : user.roomSeat);
+        if (mySeat) {
+            tracks.forEach((track) => {
+                if (track.kind === LivekitClient.Track.Kind.Video) {
+                    _lkAttachVideo(track, mySeat, isMainRoom);
+                }
+            });
+        }
+
+        // 6. Handle already-connected participants
+        room.remoteParticipants.forEach(async (participant) => {
+            const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
+            if (!seat) return;
+            participant.trackPublications.forEach((pub) => {
+                if (pub.track && pub.kind === LivekitClient.Track.Kind.Video) {
+                    _lkAttachVideo(pub.track, seat, isMainRoom);
+                }
+            });
+        });
+
+    } catch (err) {
+        console.error('❌ LiveKit connection failed:', err);
+        window._lkRoom = null;
+        window._lkGameRoom = null;
+    } finally {
+        window._lkConnecting = false;
+    }
+};
+
+// ── Core: fully disconnect ────────────────────────────────────
+window.disconnectLiveKit = async function() {
+    if (window._lkLocalTracks.length) {
+        window._lkLocalTracks.forEach((track) => track.stop());
+        window._lkLocalTracks = [];
+    }
+    if (window._lkRoom) {
+        try {
+            await window._lkRoom.disconnect();
+        } catch (e) {
+            // Already disconnected — ignore
+        }
+        window._lkRoom = null;
+    }
+    window._lkGameRoom  = null;
+    window._lkConnecting = false;
+    console.log('📹 LiveKit disconnected');
+};
+
+// ── Phase hooks ───────────────────────────────────────────────
+
+// Called by PhaseManager when entering Night phase
+window.enterNightPhase = function() {
+    console.log('🌙 Entering Night — disconnecting LiveKit (cameras off)');
+    disconnectLiveKit();
+};
+
+window.exitNight = function() {
+    console.log('🌙 Exiting Night phase');
+    // Room re-join is handled by the room watcher below
+};
+
+// Called by PhaseManager when entering Breakfast phase
+window.enterBreakfastPhase = function() {
+    console.log('🍳 Entering Breakfast — disconnecting LiveKit (cameras off)');
+    disconnectLiveKit();
+};
+
+window.exitBreakfast = function() {
+    console.log('🍳 Exiting Breakfast phase');
+};
+
+// ── Room change watcher ───────────────────────────────────────
+// Watches Firebase for room changes and joins/leaves LiveKit accordingly.
+// Waits until currentUser is fully populated before attaching.
+(function setupLiveKitRoomWatcher() {
+    const trySetup = () => {
+        const user = _lkCurrentUser();
+        const uid  = user && user.id;
+        if (!uid) {
+            setTimeout(trySetup, 300);
+            return;
+        }
+
+        database.ref('players/' + uid + '/room').on('value', (snap) => {
+            const room  = snap.val();
+            const phase = sessionStorage.getItem('currentPhase');
+            const blocked = (phase === 'night' || phase === 'breakfast');
+
+            console.log('📹 Room changed to:', room, '| phase:', phase);
+
+            if (!room || room === 'waiting' || blocked) {
+                disconnectLiveKit();
+                return;
+            }
+
+            // Only join if user has a name (fully registered)
+            const u = _lkCurrentUser();
+            if (!u || !u.name) {
+                // Name not set yet — wait a moment and retry
+                setTimeout(() => joinLiveKitRoom(room), 1000);
+                return;
+            }
+
+            joinLiveKitRoom(room);
+        });
+    };
+
+    trySetup();
+})();
+
+// ── Host: auto-join main room ─────────────────────────────────
+if (typeof currentUser !== 'undefined' && currentUser.role === 'host') {
+    database.ref('game/phase').once('value', (snap) => {
+        const phase = snap.val();
+        if (phase !== 'night' && phase !== 'breakfast') {
+            // Delay to let the host seat render and currentUser be fully set
+            setTimeout(() => {
+                const user = _lkCurrentUser();
+                if (user && user.name) {
+                    joinLiveKitRoom('main');
+                }
+            }, 1500);
+        }
+    });
+}
+
+// ── Cleanup on page unload ────────────────────────────────────
+window.addEventListener('beforeunload', () => {
+    disconnectLiveKit();
+});
+
+console.log('✅ LiveKit integration loaded');
+
+
+// ============================================================
+// END GAME BLOCK
+// ============================================================
+// NOTE: readyToRevealEndGameRole listener is in player.html (uses window.currentUser)
+// All big text reveals use top:100px (directly below phase title at top:50px)
+
+function clearVoteNameTag(seatNumber) {
+    const nameEl     = document.getElementById('name-' + seatNumber);
+    const pronounsEl = document.getElementById('pronouns-' + seatNumber);
+    const seatLabel  = nameEl ? nameEl.parentElement : null;
+
+    if (!nameEl || !seatLabel || !nameEl.dataset.showingVote) return;
+
+    delete nameEl.dataset.showingVote;
+
+    if (pronounsEl) {
+        delete pronounsEl.dataset.showingVote;
+        pronounsEl.style.visibility = '';
+    }
+
+    seatLabel.style.background  = '';
+    nameEl.style.fontFamily     = '';
+    nameEl.style.color          = '';
+    nameEl.style.fontSize       = '';
+    nameEl.style.visibility     = '';
+
+    database.ref('players').orderByChild('seat').equalTo(seatNumber).once('value', (snap) => {
+        snap.forEach((child) => {
+            const p = child.val();
+            nameEl.textContent = p.name || '';
+            if (pronounsEl) pronounsEl.textContent = p.pronouns || '';
+        });
+    });
+}
+
+function clearAllVoteNameTags() {
+    for (let s = 1; s <= 24; s++) clearVoteNameTag(s);
+}
+
+database.ref('game/endGame/clearNameTagsSignal').on('value', (snap) => {
+    if (snap.val()) clearAllVoteNameTags();
+});
+
+// ── Smoke Vote ────────────────────────────────────────────────
+
+function startSmokeVote() {
+    showConfirmation('Start Smoke Vote', 'Enable players to cast their Smoke Vote?', 'Start', () => {
+        database.ref('game/endGame/smokeVote').set({
+            active:    true,
+            votes:     {},
+            locked:    {},
+            timestamp: Date.now(),
+        });
+        const btn = document.getElementById('endgame-reveal-smoke-btn');
+        if (btn) btn.disabled = false;
+        const t = document.getElementById('smoke-vote-tally');
+        if (t) t.textContent = 'Waiting for players...';
+    });
+}
+
+function clearSmokeVote() {
+    showConfirmation('Clear Smoke Vote', 'Clear all smoke votes?', 'Clear', () => {
+        database.ref('game/endGame/smokeVote').remove();
+        database.ref('game/endGame/smokeReveal').remove();
+        database.ref('game/phaseTitle').set('End Game');
+        database.ref('game/endGame/clearNameTagsSignal').set(Date.now());
+        const btn = document.getElementById('endgame-reveal-smoke-btn');
+        if (btn) btn.disabled = true;
+        const nb = document.getElementById('smoke-next-btn');
+        if (nb) nb.style.display = 'none';
+        const t = document.getElementById('smoke-vote-tally');
+        if (t) t.textContent = 'No smoke vote active';
+    });
+}
+
+function revealSmokeVote() {
+    database.ref('players').once('value', (snap) => {
+        const seated = [];
+        snap.forEach((child) => {
+            const p = child.val();
+            if (p.seat && !p.isHost) seated.push({ id: child.key, name: p.name, seat: p.seat });
+        });
+        if (!seated.length) { alert('No players found'); return; }
+
+        document.getElementById('smoke-revealer-picker')?.remove();
+        const ov = document.createElement('div');
+        ov.id = 'smoke-revealer-picker';
+        ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:10001;display:flex;align-items:center;justify-content:center;';
+        ov.innerHTML = `
+            <div style="background:#1a1a2e;border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:28px 32px;max-width:480px;width:90%;text-align:center;">
+                <h3 style="color:#FFD700;margin:0 0 8px;">Reveal Smoke Vote</h3>
+                <p style="color:#bbb;margin:0 0 20px;font-size:0.9rem;">Who reveals first?</p>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;">
+                    ${seated.map((p) => `
+                        <button onclick="startSmokeRevealQueue('${p.id}')"
+                            style="padding:10px 16px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.35);border-radius:8px;color:white;cursor:pointer;font-size:1rem;"
+                            onmouseover="this.style.background='rgba(255,255,255,0.25)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.1)'">${p.name}</button>
+                    `).join('')}
+                </div>
+                <button onclick="document.getElementById('smoke-revealer-picker').remove();"
+                    style="padding:8px 20px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#aaa;cursor:pointer;">Cancel</button>
+            </div>`;
+        document.body.appendChild(ov);
+    });
+}
+
+function startSmokeRevealQueue(firstPlayerId) {
+    document.getElementById('smoke-revealer-picker').remove();
+    database.ref('game/endGame/clearNameTagsSignal').set(Date.now());
+    database.ref('players').once('value', (snap) => {
+        const all = [];
+        snap.forEach((child) => {
+            const p = child.val();
+            if (p.seat && !p.isHost) all.push({ id: child.key, name: p.name, seat: p.seat });
+        });
+        all.sort((a, b) => a.seat - b.seat);
+        const fi    = all.findIndex((p) => p.id === firstPlayerId);
+        const queue = [...all.slice(fi), ...all.slice(0, fi)].map((p) => p.id);
+        const firstName = all.find((p) => p.id === firstPlayerId)?.name || '';
+
+        database.ref('game/endGame/smokeVote').update({
+            revealActive:      true,
+            revealQueue:       queue,
+            revealIndex:       0,
+            currentRevealerId: firstPlayerId,
+        });
+        database.ref('players/' + firstPlayerId + '/endGameReadyToRevealSmoke').set(true);
+        database.ref('game/phaseTitle').set(firstName + ' has decided to...');
+    });
+}
+
+function nextSmokeRevealer() {
+    const nb = document.getElementById('smoke-next-btn');
+    if (nb) nb.style.display = 'none';
+    database.ref('game/endGame/smokeVote').once('value', (snap) => {
+        const data = snap.val();
+        if (!data || !data.revealQueue) return;
+        const ni = (data.revealIndex || 0) + 1;
+        if (ni >= data.revealQueue.length) {
+            database.ref('game/phaseTitle').set('End Game');
+            return;
+        }
+        const nid = data.revealQueue[ni];
+        database.ref('game/endGame/smokeVote').update({ revealIndex: ni, currentRevealerId: nid });
+        database.ref('players/' + nid + '/endGameReadyToRevealSmoke').set(true);
+        database.ref('players/' + nid).once('value', (s) => {
+            database.ref('game/phaseTitle').set((s.val()?.name || 'Next') + ' has decided to...');
+        });
+    });
+}
+
+// Smoke vote tally (host)
+database.ref('game/endGame/smokeVote').on('value', (snap) => {
+    const data = snap.val();
+    const t    = document.getElementById('smoke-vote-tally');
+    if (!t) return;
+    if (!data || !data.active) { t.textContent = 'No smoke vote active'; return; }
+
+    const votes  = data.votes  || {};
+    const locked = data.locked || {};
+    let e = 0, b = 0, tot = 0;
+    Object.keys(locked).forEach((pid) => {
+        if (!locked[pid]) return;
+        tot++;
+        if (votes[pid] === 'end')    e++;
+        else if (votes[pid] === 'banish') b++;
+    });
+    t.innerHTML = `<span style="color:#4169E1">End: ${e}</span> &nbsp;|&nbsp; <span style="color:#DC143C">Banish: ${b}</span> &nbsp;|&nbsp; Locked: ${tot}`;
+
+    if (currentUser.role === 'host' && tot > 0 && !data.revealActive) {
+        database.ref('players').once('value', (pSnap) => {
+            pSnap.forEach((child) => {
+                const p = child.val();
+                if (!p.seat || !locked[child.key]) return;
+                if (typeof showVoteOnNameTag === 'function') {
+                    showVoteOnNameTag(p.seat, votes[child.key] === 'end' ? 'End' : 'Banish', true);
+                }
+            });
+        });
+    }
+});
+
+// Smoke reveal big text
+database.ref('game/endGame/smokeReveal').on('value', (snap) => {
+    const reveal = snap.val();
+    if (!reveal || Date.now() - reveal.timestamp > 10000) return;
+    const color = reveal.color || '#4169E1';
+
+    document.getElementById('endgame-smoke-reveal-text')?.remove();
+    const el = document.createElement('div');
+    el.id = 'endgame-smoke-reveal-text';
+    el.textContent = reveal.label || '';
+    el.style.cssText = [
+        'position:fixed', 'top:100px', 'left:50%', 'transform:translateX(-50%)',
+        'font-size:5rem', 'font-weight:900',
+        `color:${color}`, `text-shadow:0 0 40px ${color},0 0 80px ${color}`,
+        'background:rgba(0,0,0,0.55)', 'padding:10px 36px', 'border-radius:14px',
+        `border:2px solid ${color}88`, 'z-index:9500', 'opacity:0',
+        'transition:opacity 0.5s', 'pointer-events:none', 'text-align:center',
+        'white-space:nowrap', 'letter-spacing:0.06em', 'text-transform:uppercase',
+    ].join(';');
+    document.body.appendChild(el);
+
+    setTimeout(() => { el.style.opacity = '1'; }, 10);
+    setTimeout(() => { el.style.opacity = '0'; }, 3000);
+    setTimeout(() => {
+        el.remove();
+        if (reveal.playerSeat && typeof showVoteOnNameTag === 'function') {
+            showVoteOnNameTag(reveal.playerSeat, reveal.nameBoxLabel || reveal.label, true);
+        }
+        if (currentUser.role === 'host') {
+            const nb = document.getElementById('smoke-next-btn');
+            if (nb) nb.style.display = 'inline-block';
+        }
+    }, 3500);
+});
+
+// ── Banishment Vote ───────────────────────────────────────────
+
+function _clearBanishFlags(cb) {
+    database.ref('players').once('value', (snap) => {
+        const updates = {};
+        snap.forEach((child) => {
+            updates['players/' + child.key + '/endGameReadyToRevealBanish'] = null;
+        });
+        if (Object.keys(updates).length) {
+            database.ref().update(updates).then(() => { if (cb) cb(); });
+        } else {
+            if (cb) cb();
+        }
+    });
+}
+
+function startBanishmentVote() {
+    showConfirmation('Begin Banishment', 'Start the Banishment vote?', 'Begin', () => {
+        _clearBanishFlags(() => {
+            database.ref('game/endGame/banishment').set({
+                active: true, votes: {}, locked: {}, revealed: false, timestamp: Date.now(),
+            });
+            database.ref('game/endGame/banishmentTie').remove();
+            database.ref('game/endGame/banishTiedSeats').remove();
+            const btn = document.getElementById('endgame-reveal-banish-btn');
+            if (btn) btn.disabled = false;
+            const sec = document.getElementById('endgame-banish-tie-section');
+            if (sec) sec.style.display = 'none';
+        });
+    });
+}
+
+function clearBanishmentVotes() {
+    showConfirmation('Clear Banishment', 'Clear all banishment votes?', 'Clear', () => {
+        database.ref('game/endGame/banishment').remove();
+        database.ref('game/endGame/banishmentTie').remove();
+        database.ref('game/endGame/banishTiedSeats').remove();
+        database.ref('game/phaseTitle').set('End Game');
+        database.ref('game/endGame/clearNameTagsSignal').set(Date.now());
+        _clearBanishFlags();
+        ['endgame-reveal-banish-btn', 'endgame-reveal-banish-tie-btn'].forEach((id) => {
+            const b = document.getElementById(id);
+            if (b) b.disabled = true;
+        });
+        ['banish-next-btn', 'banish-tie-next-btn'].forEach((id) => {
+            const b = document.getElementById(id);
+            if (b) b.style.display = 'none';
+        });
+        const sec = document.getElementById('endgame-banish-tie-section');
+        if (sec) sec.style.display = 'none';
+    });
+}
+
+function startBanishmentTieVote() {
+    showConfirmation('Second Banishment', 'Start second banishment vote?', 'Begin', () => {
+        _clearBanishFlags(() => {
+            database.ref('game/endGame/banishment/votes').once('value', (vSnap) => {
+                const votes    = vSnap.val() || {};
+                const counts   = {};
+                Object.values(votes).forEach((seat) => {
+                    counts[seat] = (counts[seat] || 0) + 1;
+                });
+                const vals      = Object.values(counts);
+                const maxVotes  = vals.length ? Math.max(...vals) : 0;
+                const tiedSeats = Object.entries(counts)
+                    .filter(([, c]) => c === maxVotes)
+                    .map(([s]) => parseInt(s));
+
+                database.ref('game/endGame/clearNameTagsSignal').set(Date.now());
+                database.ref('game/endGame/banishTiedSeats').set(tiedSeats, () => {
+                    database.ref('game/endGame/banishmentTie').set({
+                        active: true, votes: {}, locked: {}, revealed: false, timestamp: Date.now(),
+                    });
+                    const btn = document.getElementById('endgame-reveal-banish-tie-btn');
+                    if (btn) btn.disabled = false;
+                    const sec = document.getElementById('endgame-banish-tie-section');
+                    if (sec) sec.style.display = 'block';
+                });
+            });
+        });
+    });
+}
+
+function startBanishmentReveal()    { _beginBanishRevealPicker('banishment'); }
+function startBanishmentTieReveal() { _beginBanishRevealPicker('banishmentTie'); }
+
+function _beginBanishRevealPicker(voteKey) {
+    database.ref('game/endGame/' + voteKey).update({ revealed: true });
+    setTimeout(() => {
+        database.ref('game/endGame/' + voteKey).once('value', (snap) => {
+            const data     = snap.val();
+            if (!data) return;
+            const locked   = data.locked || {};
+            const voterIds = Object.keys(locked).filter((k) => locked[k]);
+            if (!voterIds.length) { alert('No locked votes'); return; }
+
+            database.ref('players').once('value', (pSnap) => {
+                const voters = [];
+                pSnap.forEach((child) => {
+                    if (voterIds.includes(child.key)) {
+                        voters.push({ id: child.key, name: child.val().name, seat: child.val().seat });
+                    }
+                });
+                voters.sort((a, b) => a.seat - b.seat);
+
+                document.getElementById('banish-revealer-picker')?.remove();
+                const ov = document.createElement('div');
+                ov.id = 'banish-revealer-picker';
+                ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:10001;display:flex;align-items:center;justify-content:center;';
+                ov.innerHTML = `
+                    <div style="background:#1a1a2e;border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:28px 32px;max-width:480px;width:90%;text-align:center;">
+                        <h3 style="color:#FFD700;margin:0 0 8px;">Reveal ${voteKey === 'banishmentTie' ? 'Second ' : ''}Banishment Vote</h3>
+                        <p style="color:#bbb;margin:0 0 20px;font-size:0.9rem;">Who reveals first?</p>
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;">
+                            ${voters.map((p) => `
+                                <button onclick="startBanishRevealQueue('${p.id}','${voteKey}')"
+                                    style="padding:10px 16px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.35);border-radius:8px;color:white;cursor:pointer;font-size:1rem;"
+                                    onmouseover="this.style.background='rgba(255,255,255,0.25)'"
+                                    onmouseout="this.style.background='rgba(255,255,255,0.1)'">${p.name}</button>
+                            `).join('')}
+                        </div>
+                        <button onclick="document.getElementById('banish-revealer-picker').remove();"
+                            style="padding:8px 20px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#aaa;cursor:pointer;">Cancel</button>
+                    </div>`;
+                document.body.appendChild(ov);
+            });
+        });
+    }, 300);
+}
+
+function startBanishRevealQueue(firstPlayerId, voteKey) {
+    document.getElementById('banish-revealer-picker')?.remove();
+    database.ref('game/endGame/' + voteKey).once('value', (snap) => {
+        const locked   = (snap.val() || {}).locked || {};
+        const voterIds = Object.keys(locked).filter((k) => locked[k]);
+        database.ref('players').once('value', (pSnap) => {
+            const voters = [];
+            pSnap.forEach((child) => {
+                if (voterIds.includes(child.key)) {
+                    voters.push({ id: child.key, name: child.val().name, seat: child.val().seat });
+                }
+            });
+            voters.sort((a, b) => a.seat - b.seat);
+            const fi        = voters.findIndex((p) => p.id === firstPlayerId);
+            const queue     = [...voters.slice(fi), ...voters.slice(0, fi)].map((p) => p.id);
+            const firstName = voters.find((p) => p.id === firstPlayerId)?.name || '';
+
+            database.ref('game/endGame/' + voteKey).update({ revealQueue: queue, revealIndex: 0 });
+            database.ref('game/endGame/' + voteKey + '/currentRevealer').set(firstPlayerId);
+            database.ref('game/phaseTitle').set(firstName + ' voted for...');
+        });
+    });
+}
+
+function nextBanishRevealer(voteKey) {
+    const nbId = voteKey === 'banishmentTie' ? 'banish-tie-next-btn' : 'banish-next-btn';
+    const nb   = document.getElementById(nbId);
+    if (nb) nb.style.display = 'none';
+
+    database.ref('game/endGame/' + voteKey).once('value', (snap) => {
+        const data = snap.val();
+        if (!data || !data.revealQueue) return;
+        const ni = (data.revealIndex || 0) + 1;
+        if (ni >= data.revealQueue.length) {
+            database.ref('game/phaseTitle').set('End Game');
+            return;
+        }
+        const nid = data.revealQueue[ni];
+        database.ref('game/endGame/' + voteKey).update({ revealIndex: ni });
+        database.ref('game/endGame/' + voteKey + '/currentRevealer').set(nid);
+        database.ref('players/' + nid).once('value', (s) => {
+            database.ref('game/phaseTitle').set((s.val()?.name || 'Next') + ' voted for...');
+        });
+    });
+}
+
+function listenEndGameBanishTally(voteKey, elId) {
+    database.ref('game/endGame/' + voteKey).on('value', (snap) => {
+        const data = snap.val();
+        const el   = document.getElementById(elId);
+        if (!el) return;
+        if (!data || !data.active) { el.textContent = 'No votes yet'; return; }
+
+        const votes  = data.votes  || {};
+        const locked = data.locked || {};
+        const counts = {};
+        Object.keys(locked).forEach((pid) => {
+            if (!locked[pid]) return;
+            const t = votes[pid];
+            if (!t) return;
+            counts[t] = (counts[t] || 0) + 1;
+        });
+        if (!Object.keys(counts).length) { el.textContent = 'No votes yet'; return; }
+
+        database.ref('players').once('value', (pSnap) => {
+            const s2n = {};
+            pSnap.forEach((child) => {
+                const p = child.val();
+                if (p.seat) s2n[p.seat] = p.name;
+            });
+            el.innerHTML = Object.entries(counts)
+                .sort((a, b) => b[1] - a[1])
+                .map(([s, c]) => `
+                    <div style="display:flex;justify-content:space-between;padding:3px 0;">
+                        <span>${s2n[s] || 'Seat ' + s}</span>
+                        <span style="color:#DC143C;font-weight:bold;">${c} vote${c !== 1 ? 's' : ''}</span>
+                    </div>`)
+                .join('');
+
+            if (currentUser.role === 'host' && !data.revealed) {
+                pSnap.forEach((child) => {
+                    const p  = child.val();
+                    if (!p.seat || !locked[child.key]) return;
+                    const tn = s2n[votes[child.key]] || 'Seat ' + votes[child.key];
+                    if (typeof showVoteOnNameTag === 'function') showVoteOnNameTag(p.seat, tn, true);
+                });
+            }
+        });
+    });
+}
+
+listenEndGameBanishTally('banishment',    'endgame-banish-tally');
+listenEndGameBanishTally('banishmentTie', 'endgame-banish-tie-tally');
+
+// Show reveal button to the current revealer
+['banishment', 'banishmentTie'].forEach((voteKey) => {
+    database.ref('game/endGame/' + voteKey + '/currentRevealer').on('value', (snap) => {
+        const revealerId = snap.val();
+        const btn = document.getElementById('endgame-banish-reveal-btn');
+        if (!btn) return;
+        if (revealerId && revealerId === currentUser.id) {
+            database.ref('game/endGame/' + voteKey + '/revealedVotes/' + currentUser.id)
+                .once('value', (rSnap) => {
+                    btn.style.display = rSnap.val() ? 'none' : 'block';
+                });
+        } else {
+            btn.style.display = 'none';
+        }
+    });
+});
+
+// Banishment reveal big text
+['banishment', 'banishmentTie'].forEach((voteKey) => {
+    database.ref('game/endGame/' + voteKey + '/revealedVotes').on('child_added', (snap) => {
+        const data = snap.val();
+        if (!data || Date.now() - (data.timestamp || 0) > 10000) return;
+
+        if (data.seat && data.votedFor && typeof showVoteOnNameTag === 'function') {
+            showVoteOnNameTag(data.seat, data.votedFor, false);
+        }
+
+        document.getElementById('endgame-banish-reveal-text')?.remove();
+        const el = document.createElement('div');
+        el.id = 'endgame-banish-reveal-text';
+        el.textContent = (data.votedFor || '').toUpperCase();
+        el.style.cssText = [
+            'position:fixed', 'top:100px', 'left:50%', 'transform:translateX(-50%)',
+            'font-size:5rem', 'font-weight:900', 'color:white',
+            'text-shadow:0 0 40px rgba(255,255,255,0.4)',
+            'background:rgba(0,0,0,0.55)', 'padding:10px 36px', 'border-radius:14px',
+            'border:2px solid rgba(255,255,255,0.35)', 'z-index:9500', 'opacity:0',
+            'transition:opacity 0.5s', 'pointer-events:none', 'text-align:center',
+            'white-space:nowrap', 'letter-spacing:0.06em', 'text-transform:uppercase',
+        ].join(';');
+        document.body.appendChild(el);
+        setTimeout(() => { el.style.opacity = '1'; }, 10);
+        setTimeout(() => { el.style.opacity = '0'; }, 3000);
+        setTimeout(() => { el.remove(); }, 3500);
+
+        if (data.name) database.ref('game/phaseTitle').set(data.name + ' voted for...');
+
+        if (currentUser.role === 'host') {
+            database.ref('game/endGame/' + voteKey).once('value', (vSnap) => {
+                const vd    = vSnap.val() || {};
+                const queue = vd.revealQueue || [];
+                const idx   = vd.revealIndex  || 0;
+                const nbId  = voteKey === 'banishmentTie' ? 'banish-tie-next-btn' : 'banish-next-btn';
+                const nb    = document.getElementById(nbId);
+                if (!nb) return;
+                if (idx < queue.length - 1) {
+                    nb.style.display = 'inline-block';
+                    nb.onclick = () => nextBanishRevealer(voteKey);
+                } else {
+                    nb.style.display = 'none';
+                    database.ref('game/phaseTitle').set('End Game');
+                }
+            });
+        }
+    });
+});
+
+// ── Tiebreaker Wheel ──────────────────────────────────────────
+
+function startEndGameTiebreakerWheel() {
+    const tryKey = (voteKey, fallback) => {
+        database.ref('game/endGame/' + voteKey + '/votes').once('value', (vSnap) => {
+            const votes = vSnap.val();
+            if (votes && Object.keys(votes).length) {
+                const counts   = {};
+                Object.values(votes).forEach((seat) => { counts[seat] = (counts[seat] || 0) + 1; });
+                const maxVotes  = Math.max(...Object.values(counts));
+                const tiedSeats = Object.entries(counts)
+                    .filter(([, c]) => c === maxVotes)
+                    .map(([s]) => parseInt(s));
+                if (typeof showTiebreakerWheel === 'function') showTiebreakerWheel(tiedSeats);
+            } else if (fallback) {
+                fallback();
+            }
+        });
+    };
+    tryKey('banishmentTie', () =>
+        tryKey('banishment', () => {
+            database.ref('players').once('value', (snap) => {
+                const seats = [];
+                snap.forEach((child) => {
+                    const p = child.val();
+                    if (p.seat && !p.isHost) seats.push(p.seat);
+                });
+                if (typeof showTiebreakerWheel === 'function') showTiebreakerWheel(seats);
+            });
+        })
+    );
+}
+
+// ── Final Role Reveal ─────────────────────────────────────────
+
+function startFinalRoleReveal() {
+    database.ref('players').once('value', (snap) => {
+        const players = [];
+        snap.forEach((child) => {
+            const p = child.val();
+            if (p.seat && !p.isHost) players.push({ id: child.key, name: p.name, seat: p.seat });
+        });
+        if (!players.length) { alert('No players'); return; }
+
+        players.sort((a, b) => a.seat - b.seat);
+        window._endGameRoles  = {};
+        window._revealOrder   = [...players];
+
+        document.getElementById('role-assign-picker')?.remove();
+        const ov = document.createElement('div');
+        ov.id = 'role-assign-picker';
+        ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:10001;display:flex;align-items:center;justify-content:center;overflow-y:auto;padding:20px;box-sizing:border-box;';
+
+        const roleRows = players.map((p) => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px;background:rgba(255,255,255,0.05);border-radius:6px;">
+                <span style="font-weight:bold;color:white;min-width:80px;">${p.name}</span>
+                <div style="display:flex;gap:6px;">
+                    <button onclick="setEndGameRole('${p.id}','faithful',this)"
+                        style="padding:6px 10px;background:#1a3a6b;border:2px solid #4169E1;border-radius:4px;color:white;cursor:pointer;font-size:0.8rem;">Faithful</button>
+                    <button onclick="setEndGameRole('${p.id}','traitor',this)"
+                        style="padding:6px 10px;background:#5a0010;border:2px solid #DC143C;border-radius:4px;color:white;cursor:pointer;font-size:0.8rem;">Traitor</button>
+                </div>
+            </div>`).join('');
+
+        const orderItems = players.map((p, i) => `
+            <div class="reveal-order-item" data-player-id="${p.id}" draggable="true"
+                style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:8px;cursor:grab;user-select:none;transition:background 0.15s;">
+                <span style="color:#888;font-size:0.85rem;min-width:20px;text-align:right;">${i + 1}.</span>
+                <span style="color:#FFD700;font-size:0.9rem;">⠿</span>
+                <span style="color:white;font-weight:bold;">${p.name}</span>
+            </div>`).join('');
+
+        ov.innerHTML = `
+            <div style="background:#1a1a2e;border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:28px 32px;max-width:560px;width:95%;max-height:90vh;overflow-y:auto;">
+                <h3 style="color:#FFD700;margin:0 0 6px;text-align:center;font-size:1.4rem;">Final Role Reveal</h3>
+                <p style="color:#888;text-align:center;margin:0 0 20px;font-size:0.85rem;">Assign roles, then drag to set the reveal order.</p>
+                <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:220px;">
+                        <p style="color:#aaa;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;margin:0 0 8px;">Assign Roles</p>
+                        <div style="display:flex;flex-direction:column;gap:6px;">${roleRows}</div>
+                    </div>
+                    <div style="flex:1;min-width:160px;">
+                        <p style="color:#aaa;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;margin:0 0 8px;">Reveal Order <span style="color:#555;font-size:0.75rem;">(drag to reorder)</span></p>
+                        <div id="reveal-order-list" style="display:flex;flex-direction:column;gap:6px;">${orderItems}</div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;margin-top:20px;">
+                    <button onclick="confirmFinalRoleReveal()"
+                        style="flex:1;padding:11px;background:linear-gradient(135deg,#4169E1,#DC143C);border:none;border-radius:6px;color:white;font-weight:bold;cursor:pointer;font-size:1rem;">Confirm &amp; Begin Reveals</button>
+                    <button onclick="document.getElementById('role-assign-picker').remove();"
+                        style="padding:11px 16px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#aaa;cursor:pointer;">Cancel</button>
+                </div>
+            </div>`;
+        document.body.appendChild(ov);
+
+        const list = document.getElementById('reveal-order-list');
+        let dragSrc = null;
+        list.querySelectorAll('.reveal-order-item').forEach((item) => {
+            item.addEventListener('dragstart', (e) => {
+                dragSrc = item;
+                item.style.opacity = '0.4';
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            item.addEventListener('dragend', () => {
+                item.style.opacity = '1';
+                list.querySelectorAll('.reveal-order-item').forEach((i) => {
+                    i.style.background = 'rgba(255,255,255,0.07)';
+                });
+                _updateRevealOrderNumbers();
+            });
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                item.style.background = 'rgba(255,255,255,0.18)';
+            });
+            item.addEventListener('dragleave', () => {
+                item.style.background = 'rgba(255,255,255,0.07)';
+            });
+            item.addEventListener('drop', (e) => {
+                e.preventDefault();
+                if (dragSrc !== item) {
+                    const items  = [...list.querySelectorAll('.reveal-order-item')];
+                    const srcIdx = items.indexOf(dragSrc);
+                    const tgtIdx = items.indexOf(item);
+                    if (srcIdx < tgtIdx) item.after(dragSrc);
+                    else                 item.before(dragSrc);
+                }
+                item.style.background = 'rgba(255,255,255,0.07)';
+                _updateRevealOrderNumbers();
+            });
+        });
+    });
+}
+
+function _updateRevealOrderNumbers() {
+    const list = document.getElementById('reveal-order-list');
+    if (!list) return;
+    const items = list.querySelectorAll('.reveal-order-item');
+    items.forEach((item, i) => {
+        const numEl = item.querySelector('span:first-child');
+        if (numEl) numEl.textContent = (i + 1) + '.';
+    });
+    if (window._revealOrder) {
+        const orderedIds = [...items].map((item) => item.dataset.playerId);
+        window._revealOrder.sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id));
+    }
+}
+
+function setEndGameRole(pid, role, btn) {
+    window._endGameRoles = window._endGameRoles || {};
+    window._endGameRoles[pid] = role;
+    btn.parentElement.querySelectorAll('button').forEach((b) => {
+        b.style.opacity     = '0.5';
+        b.style.borderWidth = '1px';
+    });
+    btn.style.opacity     = '1';
+    btn.style.borderWidth = '3px';
+    database.ref('players/' + pid + '/endGameRole').set(role);
+}
+
+function confirmFinalRoleReveal() {
+    const roles = window._endGameRoles || {};
+    if (!Object.keys(roles).length) { alert('Assign roles first'); return; }
+
+    const list        = document.getElementById('reveal-order-list');
+    const revealQueue = list
+        ? [...list.querySelectorAll('.reveal-order-item')].map((item) => item.dataset.playerId)
+        : (window._revealOrder || []).map((p) => p.id);
+    if (!revealQueue.length) { alert('No players in reveal order'); return; }
+
+    document.getElementById('role-assign-picker')?.remove();
+    database.ref('game/endGame/finalReveal').set({
+        active: true, roles, revealQueue, revealIndex: 0, timestamp: Date.now(),
+    });
+
+    const firstId = revealQueue[0];
+    database.ref('players/' + firstId + '/readyToRevealEndGameRole').set(true);
+    database.ref('players/' + firstId).once('value', (snap) => {
+        database.ref('game/phaseTitle').set((snap.val()?.name || 'First') + ' is revealing their role...');
+    });
+    const b  = document.getElementById('endgame-display-winners-btn');
+    if (b) b.disabled = false;
+    const nb = document.getElementById('role-next-btn');
+    if (nb) nb.style.display = 'none';
+}
+
+function nextRoleRevealer() {
+    const nb = document.getElementById('role-next-btn');
+    if (nb) nb.style.display = 'none';
+    database.ref('game/endGame/finalReveal').once('value', (snap) => {
+        const data = snap.val();
+        if (!data || !data.revealQueue) return;
+        const ni = (data.revealIndex || 0) + 1;
+        if (ni >= data.revealQueue.length) {
+            database.ref('game/phaseTitle').set('All roles revealed!');
+            return;
+        }
+        const nid = data.revealQueue[ni];
+        database.ref('game/endGame/finalReveal').update({ revealIndex: ni });
+        database.ref('players/' + nid + '/readyToRevealEndGameRole').set(true);
+        database.ref('players/' + nid).once('value', (s) => {
+            database.ref('game/phaseTitle').set((s.val()?.name || 'Next') + ' is revealing their role...');
+        });
+    });
+}
+
+function clearWinnerDisplay() {
+    showConfirmation('Clear Winner Display', 'Remove the winner display from all screens?', 'Clear', () => {
+        database.ref('game/endGame/winners').remove();
+        database.ref('game/phaseTitle').set('End Game');
+    });
+}
+
+// Role reveal big text
+database.ref('game/endGame/roleReveal').on('value', (snap) => {
+    const r = snap.val();
+    if (!r || Date.now() - r.timestamp > 15000) return;
+
+    const rc = r.role === 'faithful' ? '#4169E1' : '#DC143C';
+    const rt = r.role === 'faithful' ? 'FAITHFUL' : 'TRAITOR';
+
+    document.getElementById('endgame-role-reveal-text')?.remove();
+    const el = document.createElement('div');
+    el.id = 'endgame-role-reveal-text';
+    el.innerHTML = `
+        <div style="color:white;font-size:2.5rem;margin-bottom:10px;">${r.playerName || ''} is a...</div>
+        <div style="color:${rc};font-size:6rem;font-weight:900;letter-spacing:0.06em;">${rt}</div>`;
+    el.style.cssText = [
+        'position:fixed', 'top:100px', 'left:50%', 'transform:translateX(-50%)',
+        'font-weight:bold', 'text-align:center', `text-shadow:0 0 20px ${rc}`,
+        'background:rgba(0,0,0,0.55)', 'padding:20px 40px', 'border-radius:14px',
+        `border:2px solid ${rc}88`, 'z-index:9500', 'opacity:0',
+        'transition:opacity 0.5s', 'pointer-events:none',
+    ].join(';');
+    document.body.appendChild(el);
+    setTimeout(() => { el.style.opacity = '1'; }, 10);
+    setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 500); }, 8000);
+
+    if (currentUser.role === 'host') {
+        database.ref('game/endGame/finalReveal').once('value', (fSnap) => {
+            const fd    = fSnap.val() || {};
+            const queue = fd.revealQueue || [];
+            const idx   = fd.revealIndex  || 0;
+            const nb    = document.getElementById('role-next-btn');
+            if (!nb) return;
+            nb.style.display = idx < queue.length - 1 ? 'inline-block' : 'none';
+        });
+    }
+});
+
+// ── Winners Display ───────────────────────────────────────────
+
+function showDisplayWinnersButton() {
+    database.ref('game/endGame/finalReveal').once('value', (snap) => {
+        const r = snap.val()?.roles || {};
+        if (!Object.keys(r).length) {
+            database.ref('players').once('value', (pSnap) => {
+                const rr = {};
+                pSnap.forEach((child) => {
+                    const p = child.val();
+                    if (p.seat && !p.isHost && p.endGameRole) rr[child.key] = p.endGameRole;
+                });
+                if (!Object.keys(rr).length) { alert('No roles assigned'); return; }
+                _displayWinners(rr);
+            });
+            return;
+        }
+        _displayWinners(r);
+    });
+}
+
+function _displayWinners(roles) {
+    const ht        = Object.values(roles).some((r) => r === 'traitor');
+    const wt        = ht ? 'traitor'      : 'faithful';
+    const tc        = ht ? '#DC143C'      : '#4169E1';
+    const teamLabel = ht ? 'TRAITORS WIN' : 'FAITHFUL WIN';
+
+    database.ref('players').once('value', (pSnap) => {
+        const ws = [];
+        pSnap.forEach((child) => {
+            const p = child.val();
+            if ((roles[child.key] === wt || p.endGameRole === wt) && !ws.includes(p.name)) {
+                ws.push(p.name);
+            }
+        });
+        database.ref('game/endGame/winners').set({
+            team: wt, teamColor: tc, teamLabel, winnerText: ws.join('  &  '), timestamp: Date.now(),
+        });
+    });
+}
+
+// Override performSmokeReveal and performBanishmentReveal once page is loaded
+window.addEventListener('load', () => {
+    window.performSmokeReveal = function() {
+        const btn = document.getElementById('endgame-smoke-reveal-btn');
+        if (!btn || btn.style.display !== 'block') return;
+        btn.style.display = 'none';
+        database.ref('game/endGame/smokeVote/votes/' + currentUser.id).once('value', (snap) => {
+            const choice = snap.val();
+            const color  = choice === 'end' ? '#4169E1' : '#DC143C';
+            database.ref('game/endGame/smokeReveal').set({
+                playerId:      currentUser.id,
+                playerSeat:    currentUser.seat,
+                choice,
+                label:         choice === 'end' ? 'END THE GAME' : 'BANISH',
+                nameBoxLabel:  choice === 'end' ? 'End' : 'Banish',
+                color,
+                timestamp:     Date.now(),
+            });
+            database.ref('players/' + currentUser.id + '/endGameReadyToRevealSmoke').set(false);
+        });
+    };
+
+    window.performBanishmentReveal = function() {
+        const btn = document.getElementById('endgame-banish-reveal-btn');
+        if (!btn || btn.style.display !== 'block') return;
+        btn.style.display = 'none';
+        const tryKey = (voteKey) => {
+            database.ref('game/endGame/' + voteKey + '/currentRevealer').once('value', (crSnap) => {
+                if (crSnap.val() !== currentUser.id) return;
+                database.ref('game/endGame/' + voteKey + '/votes/' + currentUser.id).once('value', (vSnap) => {
+                    const votedSeat = vSnap.val();
+                    if (!votedSeat) return;
+                    const seatNum = parseInt(votedSeat, 10);
+                    database.ref('players').once('value', (pSnap) => {
+                        const players      = pSnap.val() || {};
+                        const targetPlayer = Object.values(players).find((p) => p.seat === seatNum);
+                        const votedFor     = targetPlayer ? targetPlayer.name : ('Seat ' + seatNum);
+                        database.ref('game/endGame/' + voteKey + '/revealedVotes/' + currentUser.id).set({
+                            seat: currentUser.seat, name: currentUser.name, votedFor, timestamp: Date.now(),
+                        });
+                        database.ref('game/endGame/' + voteKey + '/alreadyRevealed/' + currentUser.id).set(true);
+                    });
+                });
+            });
+        };
+        tryKey('banishment');
+        tryKey('banishmentTie');
+    };
+});
+
+// Winners listener
+database.ref('game/endGame/winners').on('value', (snap) => {
+    const d       = snap.val();
+    const phaseEl = document.getElementById('phase-name');
+    const namesEl = document.getElementById('endgame-winners-names-display');
+
+    if (!d) {
+        if (phaseEl) {
+            phaseEl.textContent  = 'End Game';
+            phaseEl.style.color  = '';
+            phaseEl.style.fontWeight   = '';
+            phaseEl.style.textShadow   = '';
+        }
+        if (namesEl) { namesEl.style.display = 'none'; namesEl.innerHTML = ''; }
+        return;
+    }
+
+    const tc = d.teamColor || '#FFD700';
+    if (phaseEl) {
+        phaseEl.textContent        = d.teamLabel || '';
+        phaseEl.style.color        = tc;
+        phaseEl.style.fontWeight   = '900';
+        phaseEl.style.textShadow   = `0 0 20px ${tc}88`;
+    }
+    if (namesEl) {
+        namesEl.innerHTML          = d.winnerText || '';
+        namesEl.style.color        = tc;
+        namesEl.style.textShadow   = `0 0 30px ${tc}88, 0 0 60px ${tc}44`;
+        namesEl.style.display      = 'block';
+    }
+});
+
+// Phase title listener
+database.ref('game/phaseTitle').on('value', (snap) => {
+    const t = snap.val();
+    if (!t) return;
+    database.ref('game/endGame/winners').once('value', (wSnap) => {
+        if (wSnap.val()) return;
+        const el = document.getElementById('phase-name');
+        if (el) {
+            el.textContent        = t;
+            el.style.color        = '';
+            el.style.fontWeight   = '';
+            el.style.textShadow   = '';
+        }
+    });
 });

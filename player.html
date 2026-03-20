@@ -25,14 +25,6 @@
                         <span class="player-name" id="name-1">Host</span>
                         <span class="player-pronouns" id="pronouns-1"></span>
                     </div>
-                    <div class="seat-controls" id="controls-1" style="display: none;">
-                        <button class="seat-control-btn" id="mic-1" onclick="toggleMic(1)" title="Toggle Microphone">
-                            🎤
-                        </button>
-                        <button class="seat-control-btn" id="video-1-btn" onclick="toggleVideo(1)" title="Toggle Video">
-                            📹
-                        </button>
-                    </div>
                 </div>
             
                 <div class="video-circle" id="video-circle">
@@ -131,9 +123,22 @@
 
                     <!-- Vote Count Tab (Players see revealed votes only) -->
                     <div class="tab-content" id="vote-count">
-                        <h3>Vote Tally</h3>
-                        <div id="vote-tally-content">
-                            <p style="color: #bbb; text-align: center;">No votes revealed yet</p>
+                        <h3>Vote Tallies</h3>
+                        
+                        <!-- First Vote Tally -->
+                        <div class="vote-section">
+                            <div class="vote-section-title">First Vote</div>
+                            <div id="first-vote-tally-content" class="vote-section-content">
+                                <div style="color: #666;">No votes revealed yet</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Second Vote Tally -->
+                        <div class="vote-section" id="second-vote-section" style="display: none;">
+                            <div class="vote-section-title">Second Vote</div>
+                            <div id="second-vote-tally-content" class="vote-section-content">
+                                <div style="color: #666;">No votes revealed yet</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -155,12 +160,46 @@
         </div>
     </div>
 
+    <!-- End Game: Smoke Vote Overlay -->
+    <div id="smoke-vote-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.92); z-index:8000; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+        <h2 style="color:#FFD700; font-size:2rem; margin-bottom:20px;">💨 Smoke Vote</h2>
+        <p style="color:#ccc; margin-bottom:30px; font-size:1.1rem;">What do you choose?</p>
+        <div style="display:flex; gap:20px;">
+            <button onclick="castSmokeVote('end')" id="smoke-end-btn" style="padding:18px 32px; font-size:1.2rem; font-weight:bold; background:#1a3a6b; border:3px solid #4169E1; border-radius:10px; color:white; cursor:pointer; min-width:160px;">End The Game</button>
+            <button onclick="castSmokeVote('banish')" id="smoke-banish-btn" style="padding:18px 32px; font-size:1.2rem; font-weight:bold; background:#5a0010; border:3px solid #DC143C; border-radius:10px; color:white; cursor:pointer; min-width:160px;">Banish</button>
+        </div>
+        <div id="smoke-vote-locked-msg" style="display:none; margin-top:20px; color:#4CAF50; font-size:1rem;">✅ Vote locked in!</div>
+        <button onclick="lockInSmokeVote()" id="smoke-lock-btn" style="display:none; margin-top:20px; padding:12px 28px; background:#4CAF50; border:none; border-radius:8px; color:white; font-weight:bold; font-size:1rem; cursor:pointer;">Lock In Vote</button>
+    </div>
+
+    <!-- End Game: Banishment Vote Overlay -->
+    <div id="banishment-vote-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.92); z-index:8000; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px;">
+        <h2 id="banishment-overlay-header" style="color:#DC143C; font-size:2rem; margin-bottom:8px;">🔥 Banishment</h2>
+        <p style="color:#ccc; margin-bottom:20px; font-size:1rem;">Select who you are voting to banish.</p>
+        <div id="banishment-player-pills" style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; max-width:500px; margin-bottom:20px;"></div>
+        <p id="banishment-vote-display" style="color:#4CAF50; font-weight:bold; margin-bottom:16px; font-size:1.1rem; min-height:1.5em;"></p>
+        <button onclick="lockInBanishmentVote()" id="banishment-lock-btn" style="padding:12px 28px; background:#DC143C; border:none; border-radius:8px; color:white; font-weight:bold; font-size:1rem; cursor:pointer;" disabled>Lock In Vote</button>
+        <div id="banishment-locked-msg" style="display:none; margin-top:15px; color:#4CAF50; font-size:1rem;">✅ Vote locked in! Waiting for host...</div>
+    </div>
+
+    <!-- End Game: Smoke Vote Reveal Button -->
+    <button id="endgame-smoke-reveal-btn" style="display:none; position:fixed; bottom:30px; left:50%; transform:translateX(-50%); padding:16px 36px; background:#4169E1; border:none; border-radius:10px; color:white; font-size:1.2rem; font-weight:bold; cursor:pointer; z-index:9000; box-shadow:0 0 20px rgba(65,105,225,0.6);">Press Space / Tap to Reveal</button>
+
+    <!-- End Game: Banishment Vote Reveal Button -->
+    <button id="endgame-banish-reveal-btn" style="display:none; position:fixed; bottom:30px; left:50%; transform:translateX(-50%); padding:16px 36px; background:#DC143C; border:none; border-radius:10px; color:white; font-size:1.2rem; font-weight:bold; cursor:pointer; z-index:9000; box-shadow:0 0 20px rgba(220,20,60,0.6);">Press Space / Tap to Reveal Vote</button>
+
+    <!-- End Game: Final Role Reveal Button -->
+    <button id="endgame-role-reveal-btn" style="display:none; position:fixed; bottom:30px; left:50%; transform:translateX(-50%); padding:16px 36px; background:linear-gradient(135deg,#4169E1,#DC143C); border:none; border-radius:10px; color:white; font-size:1.2rem; font-weight:bold; cursor:pointer; z-index:9000; box-shadow:0 0 20px rgba(255,215,0,0.5);" onclick="performEndGameRoleReveal()">Tap to Reveal Your Role</button>
+
+    <!-- End Game: Winners Overlay -->
+    <div id="endgame-winners-names-display" style="display:none; position:fixed; top:100px; left:50%; transform:translateX(-50%); font-size:4rem; font-weight:900; text-align:center; z-index:9400; pointer-events:none; letter-spacing:0.04em; white-space:nowrap;"></div>
+
     <!-- Room Invitation Modal -->
     <div class="modal" id="room-invite-modal">
         <div class="modal-content">
             <h2 id="room-invite-title" style="text-align: center;">You've Been Invited To A Room</h2>
             <div class="modal-buttons" style="justify-content: center;">
-                <button onclick="acceptRoomInvite()" class="control-button primary">Enter</button>
+                <button onclick="this.disabled=true; acceptRoomInvite();" class="control-button primary" id="room-invite-enter-btn">Enter</button>
             </div>
         </div>
     </div>
@@ -221,7 +260,7 @@
     </div>
 
     <!-- Agora SDK -->
-    <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
+   
     
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -231,8 +270,9 @@
     <script src="firebase-config.js"></script>
 
     <!-- Game Logic -->
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
     <script src="game.js"></script>
-    <script src="agora-integration.js"></script>
+  
 
     <!-- Player-Specific Logic -->
     <script>
@@ -377,14 +417,6 @@
                     });
 
                     console.log('✅ Player restored: ' + existingPlayer.name + ' | Seat: ' + existingPlayer.seat);
-
-                    // Setup player controls after restoration
-                    if (existingPlayer.seat && typeof setupPlayerControls === 'function') {
-                        setupPlayerControls(existingPlayer.seat);
-                    }
-                    if (existingPlayer.seat && typeof showPlayerControls === 'function') {
-                        showPlayerControls();
-                    }
                     
                     // If player has a seat, update seat label after seats generate
                     if (existingPlayer.seat) {
@@ -821,8 +853,28 @@
                 }
                 
                 // Show/hide room overlay
-                if (room === 'main') {
-                    hideRoomOverlay();
+                if (room === 'main' || room === 'waiting') {
+                    // Direct DOM hide first — no dependency on generateVideoSeats being called
+                    const ro = document.getElementById('room-overlay');
+                    if (ro) ro.style.display = 'none';
+                    if (typeof window.hideRoomOverlay === 'function') window.hideRoomOverlay();
+                    console.log('🚪 Room changed to:', room, '— room overlay hidden');
+                    if (room === 'waiting') {
+                        window.justAcceptedInvite = false;
+                        if (oldRoom === 'turret') {
+                            console.log('🌙 Returning from turret→waiting — showing night overlay immediately');
+                            showWaitingRoomOverlay();
+                        } else {
+                            database.ref('game/phase').once('value', (phaseSnap) => {
+                                const ph = phaseSnap.val();
+                                console.log('🔍 Phase check after room→waiting:', ph);
+                                if (ph === 'night') {
+                                    console.log('🌙 Night phase — showing night overlay');
+                                    showWaitingRoomOverlay();
+                                }
+                            });
+                        }
+                    }
                 } else {
                     database.ref('game/roomLimits/' + room).once('value', (limitSnap) => {
                         const limit = limitSnap.val() || 5;
@@ -896,6 +948,21 @@
                 });
             });
         }
+
+        let lastTurretDismissed = 0;
+        database.ref('game/turretDismissed').on('value', (snapshot) => {
+            const ts = snapshot.val();
+            if (!ts || ts === lastTurretDismissed) return;
+            lastTurretDismissed = ts;
+            if (currentUser.room !== 'turret') return;
+            console.log('🌙 turretDismissed fired — hiding turret overlay, showing night overlay');
+            currentUser.room = 'waiting'; currentUser.roomSeat = null;
+            const roEl = document.getElementById('room-overlay');
+            if (roEl) roEl.style.display = 'none';
+            if (typeof window.hideRoomOverlay === 'function') window.hideRoomOverlay();
+            window.justAcceptedInvite = false;
+            showWaitingRoomOverlay();
+        });
 
         // Listen for phase changes to enable/disable room selection
         database.ref('game/phase').on('value', (snapshot) => {
@@ -977,13 +1044,11 @@
                     console.log('🍳 Player moved to waiting room and seat cleared');
                 }
                 
-                // Show overlay for all non-host players
                 if (!currentUser.isHost) {
-                    // Show Breakfast overlay
+                    const roB = document.getElementById('room-overlay');
+                    if (roB) { roB.style.display = 'none'; }
                     const breakfastOverlay = document.getElementById('breakfast-overlay');
-                    if (breakfastOverlay) {
-                        breakfastOverlay.classList.add('visible');
-                    }
+                    if (breakfastOverlay) { breakfastOverlay.classList.add('visible'); }
                     
                     console.log('🍳 Breakfast overlay shown');
                     
@@ -1001,7 +1066,7 @@
             }
             
             // Show seats for normal gameplay phases
-            if (phase === 'talk' || phase === 'deliberation' || phase === 'voting' || phase === 'vote-reveal' || phase === 'lobby') {
+            if (phase === 'talk' || phase === 'deliberation' || phase === 'voting' || phase === 'vote-reveal' || phase === 'lobby' || phase === 'end-game') {
                 if (currentUser.room === 'main') {
                     document.querySelectorAll('.video-seat').forEach(seat => {
                         seat.style.display = '';
@@ -1016,8 +1081,9 @@
                 }
             }
             
-            // Hide waiting room overlay if not in waiting room
-            if (currentUser.room && currentUser.room !== 'waiting') {
+            // Hide waiting room overlay if not in waiting room — but NOT during night phase
+            // (during night, the overlay was just shown above and currentUser.room hasn't updated yet)
+            if (currentUser.room && currentUser.room !== 'waiting' && phase !== 'night') {
                 hideWaitingRoomOverlay();
             }
         });
@@ -1090,6 +1156,8 @@
                 console.warn('Night overlay not found');
                 return;
             }
+            const roomOverlayEl = document.getElementById('room-overlay');
+            if (roomOverlayEl) { roomOverlayEl.style.display = 'none'; }
             
             // Hide timer/phase display
             const timerPhaseDisplay = document.getElementById('timer-phase-display');
@@ -1104,9 +1172,35 @@
                 phaseName.style.visibility = 'hidden';
             }
             
-            // Show night overlay
+            // Hide seats and tabs FIRST, then show overlay
+            document.querySelectorAll('.video-seat').forEach(seat => {
+                seat.style.setProperty('display', 'none', 'important');
+                seat.style.setProperty('visibility', 'hidden', 'important');
+            });
+            const tabContainer = document.querySelector('.tab-container');
+            if (tabContainer) {
+                tabContainer.style.setProperty('display', 'none', 'important');
+                tabContainer.style.setProperty('visibility', 'hidden', 'important');
+            }
+            
+            // Clear this player's own seat
+            if (currentUser.seat) {
+                database.ref('game/seats/' + currentUser.seat).remove();
+                database.ref('players/' + currentUser.id + '/seat').remove();
+                currentUser.seat = null;
+            }
+            
+            // Must set display explicitly — classList alone can't override inline style="display:none"
+            nightOverlay.style.display = 'flex';
+            nightOverlay.style.position = 'fixed';
+            nightOverlay.style.top = '0';
+            nightOverlay.style.left = '0';
+            nightOverlay.style.width = '100%';
+            nightOverlay.style.height = '100%';
+            nightOverlay.style.zIndex = '9999';
             nightOverlay.classList.add('visible');
             console.log('🌙 Night overlay made visible');
+            console.log('✅ Seats and tabs hidden for night phase');
         }
 
         function hideWaitingRoomOverlay() {
@@ -1121,6 +1215,7 @@
             if (nightOverlay) {
                 nightOverlay.classList.remove('visible');
                 nightOverlay.style.display = 'none';
+                nightOverlay.style.zIndex = '';
             }
             
             console.log('✅ Phase overlays fully hidden');
@@ -1226,8 +1321,7 @@
                         document.getElementById('room-invite-title').textContent = 
                             `${hostName} has invited you to a room`;
                         
-                        // Hide waiting room overlay
-                        hideWaitingRoomOverlay();
+                        if (invitedRoom !== 'turret') { hideWaitingRoomOverlay(); }
                         
                         // Show invitation modal
                         const modal = document.getElementById('room-invite-modal');
@@ -1240,6 +1334,22 @@
                         }
                     });
                 });
+            });
+
+            // Also watch invitedTo directly — if it gets cleared (e.g. on game reset),
+            // close the invitation modal immediately
+            database.ref('players/' + playerId + '/invitedTo').on('value', (inviteSnap) => {
+                const invitedTo = inviteSnap.val();
+                if (!invitedTo) {
+                    // Invitation was cleared — close modal if it's open
+                    const modal = document.getElementById('room-invite-modal');
+                    if (modal && modal.style.display === 'flex') {
+                        modal.classList.remove('visible');
+                        modal.style.display = 'none';
+                        invitedRoom = null;
+                        console.log('🧹 Invitation modal closed - invitedTo was cleared');
+                    }
+                }
             });
         }
         
@@ -1256,23 +1366,11 @@
         
         waitForCurrentUserThenSetupListener();
 
-        // Listen for role reveal ready state
-        function setupRoleRevealListener() {
-            if (window.currentUser && window.currentUser.id) {
-                database.ref('players/' + window.currentUser.id + '/readyToRevealRole').on('value', (snapshot) => {
-                    if (snapshot.val() === true) {
-                        showRoleRevealButton();
-                    }
-                });
-            } else {
-                setTimeout(setupRoleRevealListener, 100);
-            }
-        }
-        setupRoleRevealListener();
-
         function showRoleRevealButton() {
+            console.log('🎯 showRoleRevealButton called');
             let btn = document.getElementById('role-reveal-btn');
             if (!btn) {
+                console.log('➕ Creating role reveal button');
                 btn = document.createElement('button');
                 btn.id = 'role-reveal-btn';
                 btn.textContent = 'Reveal Role (SPACE)';
@@ -1290,178 +1388,186 @@
                     font-weight: bold;
                     cursor: pointer;
                     z-index: 1000;
+                    box-shadow: 0 5px 20px rgba(0,0,0,0.3);
                 `;
-                btn.onclick = revealPlayerRole;
+                btn.onclick = revealRole;  // ← FIXED: Use global function from game.js
                 document.body.appendChild(btn);
+                console.log('✅ Role reveal button added to page');
             }
-            
-            // Also listen for spacebar
-            document.addEventListener('keydown', handleRoleRevealKeypress);
-        }
-
-        function handleRoleRevealKeypress(e) {
-            if (e.code === 'Space') {
-                e.preventDefault();
-                revealPlayerRole();
-            }
-        }
-
-        function revealPlayerRole() {
-            // Remove button
-            const btn = document.getElementById('role-reveal-btn');
-            if (btn) btn.remove();
-            
-            // Remove listener
-            document.removeEventListener('keydown', handleRoleRevealKeypress);
-            
-            // Trigger the reveal
-            database.ref('game/triggerRoleReveal').set(Date.now());
         }
 
         function acceptRoomInvite() {
             if (invitedRoom) {
                 console.log('🎯 Accepting invitation to room:', invitedRoom);
                 
-                // Set flag to prevent overlay from re-appearing
-                window.justAcceptedInvite = true;
-
-                // Update local state FIRST
-                window.currentUser.room = invitedRoom;
-                window.awaitingNameEntry = false;
-                
-                // Join the invited room
-                database.ref('players/' + window.currentUser.id + '/room').set(invitedRoom);
-                
-                // Clear invitation
-                database.ref('players/' + window.currentUser.id + '/invitedTo').remove();
-                
-                // IMMEDIATELY hide overlays and modal
-                const breakfastOverlay = document.getElementById('breakfast-overlay');
-                const nightOverlay = document.getElementById('night-overlay');
+                // Dismiss modal immediately to prevent repeated firing
                 const modal = document.getElementById('room-invite-modal');
-                
-                if (breakfastOverlay) {
-                    breakfastOverlay.classList.remove('visible');
-                    breakfastOverlay.style.display = 'none';
-                }
-                if (nightOverlay) {
-                    nightOverlay.classList.remove('visible');
-                    nightOverlay.style.display = 'none';
-                }
-                
                 if (modal) {
                     modal.classList.remove('visible');
                     modal.style.display = 'none';
                 }
+                const enterBtn = document.getElementById('room-invite-enter-btn');
+                if (enterBtn) enterBtn.disabled = false;
                 
-                // Force show seats with maximum priority
-                // Hide seats immediately while we regenerate
-                document.querySelectorAll('.video-seat').forEach(seat => {
-                    seat.style.visibility = 'hidden';
-                });
-                
-                // Regenerate seats with delay to get stable browser dimensions
-                setTimeout(() => {
-                    if (typeof generateVideoSeats === 'function') {
-                        generateVideoSeats();
-                    }
-                    
-                    // Show seats after regeneration completes
-                    setTimeout(() => {
-                        console.log('🎯 Showing regenerated seats');
-                        document.querySelectorAll('.video-seat').forEach(seat => {
-                            seat.style.setProperty('display', 'flex', 'important');
-                            seat.style.setProperty('visibility', 'visible', 'important');
-                            seat.style.setProperty('pointer-events', 'auto', 'important');
-                            seat.style.setProperty('opacity', '1', 'important');
-                        });
-                        
-                        // Debug: Check where seats actually are
-                        const firstSeat = document.querySelector('.video-seat:not(.host)');
-                        if (firstSeat) {
-                            const rect = firstSeat.getBoundingClientRect();
-                            console.log('🔍 First seat top:', rect.top);
-                            console.log('🔍 First seat left:', rect.left);
-                            console.log('🔍 First seat width:', rect.width);
-                            console.log('🔍 First seat height:', rect.height);
-                            console.log('🔍 First seat style.top:', firstSeat.style.top);
-                            console.log('🔍 First seat style.left:', firstSeat.style.left);
-                            console.log('🔍 Window height:', window.innerHeight);
-                            console.log('🔍 Window width:', window.innerWidth);
-                            console.log('🔍 Body scrollTop:', document.body.scrollTop);
-                            console.log('🔍 Document scrollTop:', document.documentElement.scrollTop);
-                        }
-                    }, 100); // Small delay to ensure generation completes
-                }, 500);
-                
-                // Show tab container after seats are ready
-                setTimeout(() => {
-                    const tabContainer = document.querySelector('.tab-container');
-                    if (tabContainer) {
-                        tabContainer.style.cssText = 'display: flex !important; visibility: visible !important;';
-                    }
-                    console.log('✅ Tab container shown, overlay hidden');
-                }, 650); // After seats regenerate and appear (500 + 100 + 50)
-
-                // Auto-assign seat after 10 seconds if player hasn't chosen one (Breakfast phase only)
+                // Check current phase to determine behavior
                 database.ref('game/phase').once('value', (phaseSnap) => {
                     const currentPhase = phaseSnap.val();
                     
-                    if (currentPhase === 'breakfast') {
-                        console.log('⏱️ Starting 10-second countdown for auto-seat assignment');
+                    if (currentPhase === 'night' && invitedRoom === 'turret') {
+                        // NIGHT PHASE: Going to Turret
+                        console.log('🌙 Night phase - accepting Turret invitation');
                         
+                        // Update local state
+                        window.currentUser.room = 'turret';
+                        window.awaitingNameEntry = false;
+                        
+                        // Join the turret
+                        database.ref('players/' + window.currentUser.id + '/room').set('turret');
+                        
+                        // Clear invitation
+                        database.ref('players/' + window.currentUser.id + '/invitedTo').remove();
+                        
+                        // Hide the night overlay
+                        const nightOverlay = document.getElementById('night-overlay');
+                        if (nightOverlay) {
+                            nightOverlay.classList.remove('visible');
+                            nightOverlay.style.display = 'none';
+                        }
+                        
+                        // Close the invitation modal
+                        const modal = document.getElementById('room-invite-modal');
+                        if (modal) {
+                            modal.classList.remove('visible');
+                            modal.style.display = 'none';
+                        }
+                        
+                        // Show the turret room overlay and assign a seat
+                        database.ref('game/roomLimits/turret').once('value', (limitSnap) => {
+                            const limit = limitSnap.val() || 5;
+                            showRoomOverlay('turret', limit);
+                            autoAssignRoomSeat('turret', limit);
+                        });
+                        
+                        invitedRoom = null;
+                        
+                    } else if (currentPhase === 'breakfast' && invitedRoom === 'main') {
+                        // BREAKFAST PHASE: Going to Main Room
+                        console.log('🍳 Breakfast phase - accepting Main Room invitation');
+                        
+                        // Set flag to prevent overlay from re-appearing
+                        window.justAcceptedInvite = true;
+
+                        // Update local state FIRST
+                        window.currentUser.room = invitedRoom;
+                        window.awaitingNameEntry = false;
+                        
+                        // Join the invited room
+                        database.ref('players/' + window.currentUser.id + '/room').set(invitedRoom);
+                        
+                        // Clear invitation
+                        database.ref('players/' + window.currentUser.id + '/invitedTo').remove();
+                        
+                        // IMMEDIATELY hide overlays and modal
+                        const breakfastOverlay = document.getElementById('breakfast-overlay');
+                        const modal = document.getElementById('room-invite-modal');
+                        
+                        if (breakfastOverlay) {
+                            breakfastOverlay.classList.remove('visible');
+                            breakfastOverlay.style.display = 'none';
+                        }
+                        
+                        if (modal) {
+                            modal.classList.remove('visible');
+                            modal.style.display = 'none';
+                        }
+                        
+                        // Show seats and regenerate
+                        setTimeout(() => {
+                            if (typeof generateVideoSeats === 'function') {
+                                generateVideoSeats();
+                            }
+                            
+                            setTimeout(() => {
+                                console.log('🎯 Showing regenerated seats');
+                                document.querySelectorAll('.video-seat').forEach(seat => {
+                                    seat.style.setProperty('display', 'flex', 'important');
+                                    seat.style.setProperty('visibility', 'visible', 'important');
+                                    seat.style.setProperty('pointer-events', 'auto', 'important');
+                                    seat.style.setProperty('opacity', '1', 'important');
+                                });
+                            }, 100);
+                        }, 500);
+                        
+                        // Show tab container
+                        setTimeout(() => {
+                            const tabContainer = document.querySelector('.tab-container');
+                            if (tabContainer) {
+                                tabContainer.style.cssText = 'display: flex !important; visibility: visible !important;';
+                            }
+                        }, 650);
+
+                        // Auto-assign seat after 10 seconds (Breakfast only)
                         window.autoSeatTimer = setTimeout(() => {
-                            // Check if player still doesn't have a seat
                             database.ref('players/' + window.currentUser.id + '/seat').once('value', (seatSnap) => {
                                 if (!seatSnap.val()) {
-                                    console.log('⚠️ Player did not choose seat - auto-assigning...');
-                                    
-                                    // Find first available seat (excluding seat 1 - host)
+                                    // Find first available seat
                                     database.ref('game/seats').once('value', (seatsSnap) => {
                                         const seats = seatsSnap.val() || {};
-                                        let assigned = false;
                                         
                                         for (let i = 2; i <= 24; i++) {
                                             if (!seats[i]) {
-                                                // Found empty seat - claim it
-                                                const playerName = window.currentUser.name || 'Player';
-                                                const pronouns = window.currentUser.pronouns || '';
-                                                
                                                 database.ref('game/seats/' + i).set(window.currentUser.id);
                                                 database.ref('players/' + window.currentUser.id + '/seat').set(i);
-                                                
                                                 window.currentUser.seat = i;
                                                 sessionStorage.setItem('playerSeat', i);
                                                 
-                                                console.log('✅ Auto-assigned to seat:', i);
-                                                
-                                                // Update seat label
                                                 const nameLabel = document.getElementById(`name-${i}`);
                                                 const pronounsLabel = document.getElementById(`pronouns-${i}`);
                                                 if (nameLabel && pronounsLabel) {
-                                                    nameLabel.textContent = playerName;
-                                                    pronounsLabel.textContent = pronouns || '';
-                                                    console.log('✅ Updated seat label to show:', playerName);
+                                                    nameLabel.textContent = window.currentUser.name || 'Player';
+                                                    pronounsLabel.textContent = window.currentUser.pronouns || '';
                                                 }
                                                 
-                                                assigned = true;
+                                                console.log('✅ Auto-assigned to seat:', i);
                                                 break;
                                             }
                                         }
-                                        
-                                        if (!assigned) {
-                                            console.error('❌ No available seats found for auto-assignment');
-                                        }
                                     });
-                                } else {
-                                    console.log('✅ Player chose seat manually - no auto-assignment needed');
                                 }
                             });
-                        }, 10000); // 10 seconds
+                        }, 10000);
+
+                        invitedRoom = null;
+                    } else if (currentPhase === 'night' && invitedRoom === 'turret') {
+                        // NIGHT PHASE fallback (same as the handler above — catches timing edge cases)
+                        console.log('🌙 Night phase fallback - accepting Turret invitation');
+                        
+                        window.currentUser.room = 'turret';
+                        window.awaitingNameEntry = false;
+                        database.ref('players/' + window.currentUser.id + '/room').set('turret');
+                        database.ref('players/' + window.currentUser.id + '/invitedTo').remove();
+                        
+                        const nightOverlay = document.getElementById('night-overlay');
+                        if (nightOverlay) {
+                            nightOverlay.classList.remove('visible');
+                            nightOverlay.style.display = 'none';
+                        }
+                        
+                        const modal = document.getElementById('room-invite-modal');
+                        if (modal) {
+                            modal.classList.remove('visible');
+                            modal.style.display = 'none';
+                        }
+                        
+                        database.ref('game/roomLimits/turret').once('value', (limitSnap) => {
+                            const limit = limitSnap.val() || 5;
+                            showRoomOverlay('turret', limit);
+                            autoAssignRoomSeat('turret', limit);
+                        });
+                        
+                        invitedRoom = null;
                     }
                 });
-
-                invitedRoom = null;
             }
         }
 
@@ -1515,11 +1621,285 @@
             document.getElementById('voting-modal').classList.remove('visible');
         }
 
+
+        // ============================================
+        // END GAME - SMOKE VOTE (PLAYER SIDE)
+        // ============================================
+        let smokeVoteLocked = false;
+        let mySmokeVote = null;
+
+        function castSmokeVote(choice) {
+            if (smokeVoteLocked) return;
+            mySmokeVote = choice;
+            const endBtn = document.getElementById('smoke-end-btn');
+            const banishBtn = document.getElementById('smoke-banish-btn');
+            if (endBtn) { endBtn.style.opacity = choice === 'end' ? '1' : '0.4'; endBtn.style.borderWidth = choice === 'end' ? '4px' : '2px'; }
+            if (banishBtn) { banishBtn.style.opacity = choice === 'banish' ? '1' : '0.4'; banishBtn.style.borderWidth = choice === 'banish' ? '4px' : '2px'; }
+            const lockBtn = document.getElementById('smoke-lock-btn');
+            if (lockBtn) lockBtn.style.display = 'inline-block';
+        }
+
+        function lockInSmokeVote() {
+            if (!mySmokeVote || smokeVoteLocked) return;
+            smokeVoteLocked = true;
+            database.ref('game/endGame/smokeVote/votes/' + currentUser.id).set(mySmokeVote);
+            database.ref('game/endGame/smokeVote/locked/' + currentUser.id).set(true);
+            if (currentUser.seat && typeof showVoteOnNameTag === 'function') {
+                const label = mySmokeVote === 'end' ? 'End' : 'Banish';
+                showVoteOnNameTag(currentUser.seat, label, true);
+            }
+            const lockMsg = document.getElementById('smoke-vote-locked-msg');
+            const lockBtn = document.getElementById('smoke-lock-btn');
+            if (lockMsg) lockMsg.style.display = 'block';
+            if (lockBtn) lockBtn.style.display = 'none';
+        }
+
+        database.ref('game/endGame/smokeVote').on('value', (snapshot) => {
+            const data = snapshot.val();
+            const overlay = document.getElementById('smoke-vote-overlay');
+            if (!overlay) return;
+            if (data && data.active && !smokeVoteLocked) { overlay.style.display = 'flex'; }
+            if (data && data.revealActive) { overlay.style.display = 'none'; }
+            if (data && data.revealActive && data.currentRevealerId === currentUser.id) {
+                const btn = document.getElementById('endgame-smoke-reveal-btn');
+                if (btn) btn.style.display = 'block';
+            }
+            if (!data || !data.active) {
+                overlay.style.display = 'none';
+                smokeVoteLocked = false; mySmokeVote = null;
+                const lockMsg = document.getElementById('smoke-vote-locked-msg');
+                const lockBtn = document.getElementById('smoke-lock-btn');
+                if (lockMsg) lockMsg.style.display = 'none';
+                if (lockBtn) lockBtn.style.display = 'none';
+                const btn = document.getElementById('endgame-smoke-reveal-btn');
+                if (btn) btn.style.display = 'none';
+            }
+        });
+
+        function performSmokeReveal() {
+            const btn = document.getElementById('endgame-smoke-reveal-btn');
+            if (!btn || btn.style.display !== 'block') return;
+            btn.style.display = 'none';
+            database.ref('game/endGame/smokeVote/votes/' + currentUser.id).once('value', (snap) => {
+                const choice = snap.val();
+                const color  = choice === 'end' ? '#4169E1' : '#DC143C';
+                database.ref('game/endGame/smokeReveal').set({
+                    playerId:     currentUser.id,
+                    playerSeat:   currentUser.seat,
+                    choice,
+                    label:        choice === 'end' ? 'END THE GAME' : 'BANISH',
+                    nameBoxLabel: choice === 'end' ? 'End' : 'Banish',
+                    color,
+                    timestamp:    Date.now(),
+                });
+                database.ref('players/' + currentUser.id + '/endGameReadyToRevealSmoke').set(false);
+            });
+        }
+
+        // ============================================
+        // END GAME - BANISHMENT VOTE (PLAYER SIDE)
+        // ============================================
+        let banishmentVoteLocked = {};
+        let banishmentVoteTieKey = null;
+        let myBanishmentVote = null;
+
+        function listenEndGameBanishVote(voteKey) {
+            let pillsPopulated = false;
+            database.ref('game/endGame/' + voteKey).on('value', (snap) => {
+                const data    = snap.val();
+                const overlay = document.getElementById('banishment-vote-overlay');
+                if (!overlay) return;
+
+                if (data && data.active && !data.revealed && !banishmentVoteLocked[voteKey]) {
+                    banishmentVoteTieKey   = voteKey;
+                    overlay.style.display  = 'flex';
+                    const msg = document.getElementById('banishment-locked-msg');
+                    if (msg) msg.style.display = 'none';
+                    const display = document.getElementById('banishment-vote-display');
+                    if (display) display.textContent = '';
+                    const lockBtn = document.getElementById('banishment-lock-btn');
+                    if (lockBtn) lockBtn.disabled = true;
+
+                    if (!pillsPopulated) {
+                        pillsPopulated = true;
+                        const pills  = document.getElementById('banishment-player-pills');
+                        const header = document.getElementById('banishment-overlay-header');
+                        if (pills) pills.innerHTML = '';
+
+                        if (voteKey === 'banishmentTie') {
+                            if (header) header.textContent = '🔥 Second Banishment';
+                            database.ref('game/endGame/banishTiedSeats').once('value', (tiedSnap) => {
+                                const tiedSeats = tiedSnap.val() || [];
+                                database.ref('players').once('value', (pSnap) => {
+                                    if (pills) pills.innerHTML = '';
+                                    pSnap.forEach((child) => {
+                                        const player = child.val();
+                                        if (!player.seat || player.isHost || child.key === currentUser.id) return;
+                                        if (!tiedSeats.includes(player.seat)) return;
+                                        _addBanishPill(pills, player, voteKey);
+                                    });
+                                });
+                            });
+                        } else {
+                            if (header) header.textContent = '🔥 Banishment';
+                            database.ref('players').once('value', (pSnap) => {
+                                if (pills) pills.innerHTML = '';
+                                pSnap.forEach((child) => {
+                                    const player = child.val();
+                                    if (!player.seat || player.isHost || child.key === currentUser.id) return;
+                                    _addBanishPill(pills, player, voteKey);
+                                });
+                            });
+                        }
+                    }
+                }
+
+                if (data && data.revealed) { overlay.style.display = 'none'; }
+
+                if (!data || !data.active) {
+                    overlay.style.display             = 'none';
+                    banishmentVoteLocked[voteKey]     = false;
+                    myBanishmentVote                  = null;
+                    pillsPopulated                    = false;
+                    const pills   = document.getElementById('banishment-player-pills');
+                    if (pills)   pills.innerHTML = '';
+                    const display = document.getElementById('banishment-vote-display');
+                    if (display) display.textContent = '';
+                    const lockBtn = document.getElementById('banishment-lock-btn');
+                    if (lockBtn) lockBtn.disabled = true;
+                    const msg     = document.getElementById('banishment-locked-msg');
+                    if (msg)     msg.style.display = 'none';
+                    const revBtn  = document.getElementById('endgame-banish-reveal-btn');
+                    if (revBtn)  revBtn.style.display = 'none';
+                }
+            });
+        }
+
+        function _addBanishPill(pills, player, voteKey) {
+            if (!pills) return;
+            const btn = document.createElement('button');
+            btn.textContent   = player.name;
+            btn.dataset.seat  = player.seat;
+            btn.dataset.name  = player.name;
+            btn.style.cssText = 'padding:12px 20px;background:rgba(220,20,60,0.15);border:2px solid #DC143C;border-radius:50px;color:white;cursor:pointer;font-size:1rem;font-weight:bold;transition:all 0.2s;min-width:100px;';
+            btn.onmouseover = () => { if (!banishmentVoteLocked[voteKey]) btn.style.background = 'rgba(220,20,60,0.4)'; };
+            btn.onmouseout  = () => { if (myBanishmentVote !== btn.dataset.seat) btn.style.background = 'rgba(220,20,60,0.15)'; };
+            btn.onclick = () => {
+                if (banishmentVoteLocked[voteKey]) return;
+                myBanishmentVote = btn.dataset.seat;
+                pills.querySelectorAll('button').forEach((b) => {
+                    b.style.background   = 'rgba(220,20,60,0.15)';
+                    b.style.borderWidth  = '2px';
+                });
+                btn.style.background   = 'rgba(220,20,60,0.5)';
+                btn.style.borderWidth  = '3px';
+                const display = document.getElementById('banishment-vote-display');
+                if (display) display.textContent = 'Voting to banish: ' + btn.dataset.name;
+                const lockBtn = document.getElementById('banishment-lock-btn');
+                if (lockBtn) lockBtn.disabled = false;
+            };
+            pills.appendChild(btn);
+        }
+
+
+        function lockInBanishmentVote() {
+            if (!myBanishmentVote || banishmentVoteLocked[banishmentVoteTieKey] || !banishmentVoteTieKey) return;
+            banishmentVoteLocked[banishmentVoteTieKey] = true;
+            const voteKey = banishmentVoteTieKey;
+            database.ref('game/endGame/' + voteKey + '/votes/' + currentUser.id).set(myBanishmentVote);
+            database.ref('game/endGame/' + voteKey + '/locked/' + currentUser.id).set(true);
+            if (currentUser.seat && typeof showVoteOnNameTag === 'function') {
+                const targetName = document.getElementById('name-' + myBanishmentVote);
+                showVoteOnNameTag(currentUser.seat, targetName ? targetName.textContent : '?', true);
+            }
+            const msg = document.getElementById('banishment-locked-msg');
+            const lockBtn = document.getElementById('banishment-lock-btn');
+            if (msg) msg.style.display = 'block';
+            if (lockBtn) lockBtn.disabled = true;
+        }
+
+        function closeBanishmentOverlay() {
+            const overlay = document.getElementById('banishment-vote-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        function performBanishmentReveal() {
+            const btn = document.getElementById('endgame-banish-reveal-btn');
+            if (!btn || btn.style.display !== 'block') return;
+            btn.style.display = 'none';
+            const voteKey = banishmentVoteTieKey || 'banishment';
+            database.ref('game/endGame/' + voteKey + '/votes/' + currentUser.id).once('value', (snap) => {
+                const targetSeat = snap.val();
+                const targetNameEl = document.getElementById('name-' + targetSeat);
+                const targetName = targetNameEl ? targetNameEl.textContent : ('Seat ' + targetSeat);
+                if (currentUser.seat && typeof showVoteOnNameTag === 'function') showVoteOnNameTag(currentUser.seat, targetName, false);
+                database.ref('game/endGame/' + voteKey + '/revealedVotes/' + currentUser.id).set({ target:targetSeat, targetName, timestamp:Date.now() });
+                database.ref('players/' + currentUser.id + '/endGameReadyToRevealBanish').set(null);
+                database.ref('game/endGame/' + voteKey + '/revealQueue').once('value', (qSnap) => {
+                    const queue = qSnap.val() || [];
+                    database.ref('game/endGame/' + voteKey + '/revealIndex').once('value', (iSnap) => {
+                        const nextIdx = (iSnap.val() || 0) + 1;
+                        database.ref('game/endGame/' + voteKey + '/revealIndex').set(nextIdx);
+                        if (nextIdx < queue.length) database.ref('players/' + queue[nextIdx] + '/endGameReadyToRevealBanish').set(voteKey);
+                    });
+                });
+            });
+        }
+
+        // ============================================
+        // END GAME - FINAL ROLE REVEAL (PLAYER SIDE)
+        // ============================================
+        // ✅ Must use window.currentUser — game.js declares `let currentUser = { id: null }`
+        // which shadows bare `currentUser`. window.currentUser has the real player ID.
+        database.ref('players/' + window.currentUser.id + '/readyToRevealEndGameRole').on('value', (snap) => {
+            const btn = document.getElementById('endgame-role-reveal-btn');
+            if (btn) btn.style.display = snap.val() === true ? 'block' : 'none';
+        });
+
+        function performEndGameRoleReveal() {
+            const btn = document.getElementById('endgame-role-reveal-btn');
+            if (!btn || btn.style.display !== 'block') { return; }
+            btn.style.display = 'none';
+            database.ref('players/' + window.currentUser.id + '/endGameRole').once('value', (snap) => {
+                const roleFromPlayer = snap.val();
+                if (roleFromPlayer) {
+                    _doEndGameRoleReveal(roleFromPlayer);
+                } else {
+                    database.ref('game/endGame/finalReveal/roles/' + window.currentUser.id).once('value', (rSnap) => {
+                        const role = rSnap.val();
+                        if (!role) { btn.style.display = 'block'; return; }
+                        _doEndGameRoleReveal(role);
+                    });
+                }
+            });
+        }
+        function _doEndGameRoleReveal(role) {
+            database.ref('game/endGame/roleReveal').set({
+                playerId:   window.currentUser.id,
+                playerName: window.currentUser.name,
+                seat:       window.currentUser.seat,
+                role,
+                timestamp:  Date.now(),
+            });
+            database.ref('players/' + window.currentUser.id + '/readyToRevealEndGameRole').set(false);
+        }
+
+        // Spacebar handler for all End Game reveal buttons
+        document.addEventListener('keydown', (e) => {
+            if (e.code !== 'Space') return;
+            const sb = document.getElementById('endgame-smoke-reveal-btn');
+            if (sb && sb.style.display === 'block') { e.preventDefault(); performSmokeReveal(); return; }
+            const bb = document.getElementById('endgame-banish-reveal-btn');
+            if (bb && bb.style.display === 'block') { e.preventDefault(); performBanishmentReveal(); return; }
+            const rb = document.getElementById('endgame-role-reveal-btn');
+            if (rb && rb.style.display === 'block') { e.preventDefault(); performEndGameRoleReveal(); return; }
+        });
+
         function lockInVote() {
             if (myVote) {
                 myVoteLocked = true;
-                database.ref('game/voting/votes/' + currentUser.id).set(myVote);
-                database.ref('game/voting/locked/' + currentUser.id).set(true);
+                database.ref('game/firstVote/votes/' + currentUser.id).set(myVote);
+                database.ref('game/firstVote/locked/' + currentUser.id).set(true);
                 
                 // Show vote on own seat
                 showVoteOnSeat(currentUser.seat, myVote, true);
@@ -1546,165 +1926,6 @@
         
         // Listen for voting phase (but don't show on initial load)
         let hasLoadedVoting = false;
-        
-        database.ref('game/voting').on('value', (snapshot) => {
-            const voting = snapshot.val();
-            
-            // Skip first load
-            if (!hasLoadedVoting) {
-                hasLoadedVoting = true;
-                return;
-            }
-            
-            // Only show voting modal if: active, not locked, and not in reveal phase
-            if (voting && voting.active && !voting.votingLocked && !voting.revealed) {
-                // Show voting modal
-                myVoteLocked = false;
-                
-                // Make player names clickable
-                document.querySelectorAll('.player-name').forEach(name => {
-                    if (!name.id.includes('1')) { // Don't allow voting for host
-                        name.classList.add('clickable-name');
-                    }
-                });
-            } else {
-                closeVotingModal();
-                
-                // Remove clickable class
-                document.querySelectorAll('.player-name').forEach(name => {
-                    name.classList.remove('clickable-name');
-                });
-            }
-            
-            // Check if it's reveal phase
-            if (voting && voting.revealed) {
-                // Show revealed votes in vote count tab
-                updateVoteCountDisplay(voting.votes, voting.revealedVotes || []);
-                
-                // Check if it's my turn to reveal
-                if (voting.currentRevealer === currentUser.id) {
-                    const votedSeat = voting.votes[currentUser.id];
-                    if (votedSeat && !voting.alreadyRevealed?.[currentUser.id]) {
-                        // Show reveal button below name tag
-                        showRevealButton();
-                        
-                        // Also listen for spacebar
-                        document.addEventListener('keydown', handleRevealKeypress);
-                    }
-                } else {
-                    hideRevealButton();
-                    document.removeEventListener('keydown', handleRevealKeypress);
-                }
-
-                // Display current revealer name at top
-                // Fresh read of currentRevealer to avoid stale snapshot timing
-                database.ref('game/voting/currentRevealer').once('value', (revealerIdSnap) => {
-                    const revealerId = revealerIdSnap.val();
-                    if (!revealerId) return;
-                    database.ref('players/' + revealerId).once('value', (revealerSnapshot) => {
-                        const revealer = revealerSnapshot.val();
-                        if (revealer) {
-                            const phaseEl = document.getElementById('phase-name');
-                            if (phaseEl) phaseEl.textContent = revealer.name + ' is revealing...';
-                        }
-                    });
-                });
-            }
-        });
-
-        function handleRevealKeypress(e) {
-            if (e.code === 'Space' && document.getElementById('reveal-modal').classList.contains('visible')) {
-                e.preventDefault();
-                // Broadcast the vote reveal to all clients
-                database.ref('game/voting/votes/' + currentUser.id).once('value', (voteSnap) => {
-                    const votedForSeat = voteSnap.val();
-                    if (votedForSeat) {
-                        database.ref('players').once('value', (playersSnap) => {
-                            const targetPlayer = Object.values(playersSnap.val() || {}).find(p => p.seat === votedForSeat);
-                            const targetName = targetPlayer ? targetPlayer.name : `Seat ${votedForSeat}`;
-                            
-                            // Write to revealedVoteDisplay so all clients see it
-                            database.ref('game/revealedVoteDisplay/' + currentUser.id).set({
-                                seat: currentUser.seat,
-                                votedFor: targetName,
-                                timestamp: Date.now()
-                            });
-                        });
-                    }
-                });
-
-                // Still mark as revealed
-                database.ref('game/voting/playerRevealed').set(currentUser.id);
-                document.getElementById('reveal-modal').classList.remove('visible');
-                document.removeEventListener('keydown', handleRevealKeypress);
-            }
-        }
-
-        function showRevealButton() {
-            let revealBtn = document.getElementById('my-reveal-button');
-            
-            if (!revealBtn) {
-                revealBtn = document.createElement('button');
-                revealBtn.id = 'my-reveal-button';
-                revealBtn.className = 'control-button primary';
-                revealBtn.textContent = 'Reveal Vote';
-                revealBtn.style.cssText = `
-                    position: fixed;
-                    bottom: 80px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    padding: 12px 24px;
-                    font-size: 1rem;
-                    z-index: 200;
-                    white-space: nowrap;
-                    background: #4CAF50;
-                    border: 2px solid #45a049;
-                `;
-                revealBtn.onclick = revealMyVote;
-                document.body.appendChild(revealBtn);
-            }
-            
-            revealBtn.style.display = 'block';
-        }
-
-        function hideRevealButton() {
-            const btn = document.getElementById('my-reveal-button');
-            if (btn) btn.remove();
-        }
-
-        function revealMyVote() {
-        // Hide the button immediately
-        const revealBtn = document.getElementById('my-reveal-button'); // Changed ID
-        if (revealBtn) {
-            revealBtn.remove();
-        }
-        
-        // Mark as already revealed
-        database.ref('game/voting/alreadyRevealed/' + currentUser.id).set(true);
-        
-        // Set player revealed
-        database.ref('game/voting/playerRevealed').set(currentUser.id);
-        
-        hideRevealButton(); // This might be redundant now
-        document.removeEventListener('keydown', handleRevealKeypress);
-        
-        // Show vote on name tag for ALL players via Firebase
-        database.ref('game/voting/votes/' + currentUser.id).once('value', (voteSnap) => {
-            const votedForSeat = voteSnap.val();
-            
-            database.ref('players').once('value', (playersSnap) => {
-                const targetPlayer = Object.values(playersSnap.val() || {}).find(p => p.seat === votedForSeat);
-                const targetName = targetPlayer ? targetPlayer.name : `Seat ${votedForSeat}`;
-                
-                // Trigger for all clients via Firebase
-                database.ref('game/revealedVoteDisplay/' + currentUser.id).set({
-                    seat: currentUser.seat,
-                    votedFor: targetName,
-                    timestamp: Date.now()
-                });
-            });
-        });
-    }
 
         // Update vote count display (only show revealed votes)
         function updateVoteCountDisplay(allVotes, revealedVotesList) {
@@ -1802,7 +2023,7 @@
         }
 
         // Listen for animation trigger
-        database.ref('game/votingEndedAnimation').on('value', (snapshot) => {
+        database.ref('game/firstVoteEndedAnimation').on('value', (snapshot) => {
             if (snapshot.val() === true) {
                 console.log('🎉 Animation triggered in player.html');
                 showVotingEndedAnimation();
@@ -1968,46 +2189,6 @@
             document.getElementById('name-pronouns-error').style.display = 'none';
         }
 
-        // Show media controls for player's own seat
-        function showPlayerControls() {
-            if (!currentUser || !currentUser.seat) return;
-            
-            const controls = document.getElementById(`controls-${currentUser.seat}`);
-            if (controls) {
-                controls.style.display = 'flex';
-                console.log('✅ Showing media controls for player seat:', currentUser.seat);
-            }
-        }
-
-        // Wire up player's controls to use global toggle functions
-        function setupPlayerControls(seatNumber) {
-            console.log('🎮 Setting up player controls for seat:', seatNumber);
-            
-            const micBtn = document.getElementById(`mic-${seatNumber}`);
-            const videoBtn = document.getElementById(`video-${seatNumber}-btn`);
-            
-            if (micBtn && videoBtn) {
-                // Clear old onclick handlers and set new ones
-                micBtn.onclick = async () => {
-                    if (window.toggleAudio) {
-                        const isMuted = await window.toggleAudio();
-                        micBtn.innerHTML = isMuted ? '🔇' : '🎤';
-                    }
-                };
-                
-                videoBtn.onclick = async () => {
-                    if (window.toggleVideo) {
-                        const isOff = await window.toggleVideo();
-                        videoBtn.innerHTML = isOff ? '📹❌' : '📹';
-                    }
-                };
-                
-                console.log('✅ Player controls wired up for seat:', seatNumber);
-            } else {
-                console.error('❌ Could not find control buttons for seat:', seatNumber);
-            }
-        }
-
         // Allow clicking on own name to edit
         function enableNameEdit() {
             if (!currentUser || !currentUser.seat) return;
@@ -2124,22 +2305,26 @@
                 
                 // Hide seats when in waiting room
                 if (currentUser.room === 'waiting') {
-                    // Don't call showWaitingRoomOverlay - phase handlers control overlays
-                    
-                    // Hide seats and tabs when in waiting room
+                    const ro2 = document.getElementById('room-overlay');
+                    if (ro2) ro2.style.display = 'none';
+                    if (typeof window.hideRoomOverlay === 'function') window.hideRoomOverlay();
                     document.querySelectorAll('.video-seat').forEach(seat => {
-                        seat.style.display = 'none';
-                        seat.style.visibility = 'hidden';
+                        seat.style.display = 'none'; seat.style.visibility = 'hidden';
                     });
                     const tabContainer = document.querySelector('.tab-container');
-                    if (tabContainer) {
-                        tabContainer.style.display = 'none';
-                        tabContainer.style.visibility = 'hidden';
-                    }
-                } else {
+                    if (tabContainer) { tabContainer.style.display = 'none'; tabContainer.style.visibility = 'hidden'; }
+                    database.ref('game/phase').once('value', (phaseSnap) => {
+                        const ph2 = phaseSnap.val();
+                        if (ph2 === 'night') {
+                            window.justAcceptedInvite = false;
+                            console.log('🌙 [2nd listener] Phase: night — showing night overlay after sent to waiting');
+                            showWaitingRoomOverlay();
+                        }
+                    });
+                } else if (currentUser.room !== 'turret') {
+                    // Leaving waiting room to a normal room (not turret) — show seats
                     hideWaitingRoomOverlay();
                     
-                    // Show seats when leaving waiting room
                     document.querySelectorAll('.video-seat').forEach(seat => {
                         seat.style.display = '';
                         seat.style.visibility = 'visible';
@@ -2150,6 +2335,7 @@
                         tabContainer.style.visibility = 'visible';
                     }
                 }
+                // If room === 'turret', the turret room overlay handles display
             }
         });
 
@@ -2255,6 +2441,177 @@
             }
         });
 
+        // ==================== TIEBREAKER WHEEL (PLAYER SIDE) ====================
+        // Listen for tiebreaker wheel from host (PLAYER VIEW)
+        let playerWheelSegments = [];
+        let playerWheelCanvas = null;
+        let playerInstanceCount = 1; // Track instance count
+        
+        database.ref('game/tiebreakerWheel').on('value', (snapshot) => {
+            const wheelData = snapshot.val();
+            const modal = document.getElementById('player-tiebreaker-wheel-modal');
+            
+            console.log('🎡 PLAYER: Wheel data changed:', wheelData);
+            
+            if (!wheelData || !wheelData.active) {
+                // Hide wheel
+                if (modal) {
+                    modal.style.display = 'none';
+                    modal.classList.remove('visible');
+                    console.log('🎡 PLAYER: Wheel hidden');
+                }
+                return;
+            }
+            
+            console.log('🎡 PLAYER: Wheel activated!', wheelData);
+            
+            // Show wheel
+            if (modal) {
+                // Use expandedSegments if available (includes instances), otherwise base segments
+                playerWheelSegments = wheelData.expandedSegments || wheelData.segments || [];
+                
+                modal.style.display = 'flex';
+                modal.classList.add('visible');
+                
+                // Draw the wheel after modal is visible
+                setTimeout(() => {
+                    playerWheelCanvas = document.getElementById('player-wheel-canvas');
+                    if (playerWheelCanvas && playerWheelSegments.length > 0) {
+                        drawPlayerWheel();
+                    }
+                }, 100);
+            }
+        });
+        
+        // SEPARATE listener for expandedSegments updates (when host changes instances)
+        database.ref('game/tiebreakerWheel/expandedSegments').on('value', (snapshot) => {
+            const segments = snapshot.val();
+            if (segments && segments.length > 0) {
+                playerWheelSegments = segments;
+                console.log('🔄 PLAYER: Segments updated, redrawing wheel with', segments.length, 'total segments');
+                if (playerWheelCanvas) {
+                    drawPlayerWheel();
+                }
+            }
+        });
+        
+        // Draw wheel function for players (matches host version)
+        function drawPlayerWheel() {
+            const canvas = playerWheelCanvas || document.getElementById('player-wheel-canvas');
+            if (!canvas) {
+                console.error('❌ PLAYER: Canvas not found!');
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = 220;
+            
+            // Use playerWheelSegments which should already be expanded
+            const numSegments = playerWheelSegments.length;
+            if (numSegments === 0) {
+                console.error('❌ PLAYER: No segments to draw!');
+                return;
+            }
+            
+            const segmentAngle = (2 * Math.PI) / numSegments;
+            
+            console.log(`🎨 PLAYER: Drawing wheel with ${numSegments} segments`);
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Colors (same as host)
+            const colors = ['#8A2BE2', '#FFD700', '#DC143C', '#4CAF50', '#FF6B6B', '#4ECDC4'];
+            
+            playerWheelSegments.forEach((segment, i) => {
+                const startAngle = i * segmentAngle - Math.PI / 2;
+                const endAngle = startAngle + segmentAngle;
+                
+                // Draw segment
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Draw border
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                // Draw text
+                if (segmentAngle > 0.3) { // Only if segment is wide enough
+                    ctx.save();
+                    ctx.translate(centerX, centerY);
+                    ctx.rotate(startAngle + segmentAngle / 2);
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 18px Arial';
+                    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                    ctx.shadowBlur = 4;
+                    ctx.fillText(segment.name, radius * 0.65, 10);
+                    ctx.restore();
+                }
+            });
+            
+            // Draw center circle
+            ctx.fillStyle = '#1a1a1a';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 30, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            
+            console.log('✅ PLAYER: Wheel drawn');
+        }
+        
+        // Listen for wheel spin animation on player side
+        database.ref('game/tiebreakerWheel/spinning').on('value', (snapshot) => {
+            const spinData = snapshot.val();
+            if (!spinData) return;
+            
+            console.log('🌀 PLAYER: Wheel is spinning!', spinData);
+            
+            const canvas = playerWheelCanvas || document.getElementById('player-wheel-canvas');
+            if (!canvas) {
+                console.error('❌ PLAYER: Cannot animate - canvas not found!');
+                return;
+            }
+            
+            // Animate spin
+            const spinDuration = spinData.duration || 5000;
+            const finalRotation = spinData.finalRotation || 0;
+            const startTime = Date.now();
+            
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / spinDuration, 1);
+                const easeOut = 1 - Math.pow(1 - progress, 3);
+                const currentRotation = easeOut * finalRotation;
+                
+                canvas.style.transform = `rotate(${currentRotation}deg)`;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    // Show result
+                    console.log('🏆 PLAYER: Spin complete!', spinData.winnerName);
+                    if (spinData.winnerName) {
+                        const resultDiv = document.getElementById('player-wheel-result');
+                        if (resultDiv) {
+                            resultDiv.textContent = `${spinData.winnerName} is ELIMINATED!`;
+                        }
+                    }
+                }
+            }
+            
+            animate();
+        });
+
         
     </script>
 
@@ -2266,6 +2623,21 @@
                 <button id="confirmation-confirm-btn" class="control-button primary" style="flex: 1;"></button>
                 <button onclick="closeConfirmationModal()" class="control-button" style="flex: 1;">Cancel</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Tiebreaker Wheel Modal (Player View - Read Only) -->
+    <div class="modal" id="player-tiebreaker-wheel-modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px; text-align: center;">
+            <h2 style="color: #FFD700; margin-bottom: 20px;">🎡 TIEBREAKER WHEEL 🎡</h2>
+            <p style="color: #bbb; margin-bottom: 15px;">The host is determining the final elimination...</p>
+            <div style="position: relative; width: 500px; height: 500px; margin: 0 auto;">
+                <canvas id="player-wheel-canvas" width="500" height="500" style="transition: transform 0.05s;"></canvas>
+                <!-- Pointer at top -->
+                <div style="position: absolute; top: -20px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 30px solid #DC143C; z-index: 10;"></div>
+            </div>
+            <div id="player-wheel-result" style="margin-top: 20px; font-size: 2rem; font-weight: bold; color: #FFD700; min-height: 60px;"></div>
+            <p style="color: #888; margin-top: 15px; font-size: 0.9rem;">The host will close this wheel when ready.</p>
         </div>
     </div>
 
