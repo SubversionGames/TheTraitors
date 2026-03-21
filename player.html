@@ -259,9 +259,6 @@
         </div>
     </div>
 
-    <!-- Agora SDK -->
-   
-    
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -575,18 +572,23 @@
         if (currentUser.role === 'player') {
             database.ref('game/muteAllPlayers').on('value', (snapshot) => {
                 const shouldMute = snapshot.val();
-                if (shouldMute && typeof agoraManager !== 'undefined' && agoraManager.localAudioTrack) {
-                    agoraManager.localAudioTrack.setEnabled(false);
-                    console.log('Host muted all players');
-                    
-                    // Update player's mute status in Firebase
+                if (shouldMute) {
+                    if (window._lkRoom && window._lkRoom.localParticipant) {
+                        const micPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                        if (micPub && !micPub.isMuted) micPub.mute();
+                    }
                     database.ref('players/' + currentUser.id + '/audioMuted').set(true);
-                } else if (!shouldMute && typeof agoraManager !== 'undefined' && agoraManager.localAudioTrack) {
+                    console.log('Host muted all players via LiveKit');
+                } else if (!shouldMute) {
                     // Only unmute if they weren't individually muted
                     database.ref('players/' + currentUser.id + '/audioMuted').once('value', (muteSnapshot) => {
                         if (!muteSnapshot.val()) {
-                            agoraManager.localAudioTrack.setEnabled(true);
-                            console.log('Host unmuted all players');
+                            // Unmute via LiveKit
+                            if (window._lkRoom && window._lkRoom.localParticipant) {
+                                const micPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                                if (micPub && micPub.isMuted) micPub.unmute();
+                            }
+                            console.log('Host unmuted all players via LiveKit');
                         }
                     });
                 }
@@ -595,12 +597,18 @@
             // Listen for host camera command (ONLY if player, not host)
             database.ref('game/camerasOffPlayers').on('value', (snapshot) => {
                 const camerasOff = snapshot.val();
-                if (camerasOff && typeof agoraManager !== 'undefined' && agoraManager.localVideoTrack) {
-                    agoraManager.localVideoTrack.setEnabled(false);
-                    console.log('Host disabled all cameras');
-                } else if (!camerasOff && typeof agoraManager !== 'undefined' && agoraManager.localVideoTrack) {
-                    agoraManager.localVideoTrack.setEnabled(true);
-                    console.log('Host enabled all cameras');
+                if (camerasOff) {
+                    if (window._lkRoom && window._lkRoom.localParticipant) {
+                        const camPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+                        if (camPub && !camPub.isMuted) camPub.mute();
+                    }
+                    console.log('Host disabled all cameras via LiveKit');
+                } else {
+                    if (window._lkRoom && window._lkRoom.localParticipant) {
+                        const camPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+                        if (camPub && camPub.isMuted) camPub.unmute();
+                    }
+                    console.log('Host enabled all cameras via LiveKit');
                 }
             });
         }
@@ -722,10 +730,7 @@
                     currentUser.room = roomId;
                     updatePlayerRoomDisplay();
                     
-                    // Switch Agora audio/video channel
-                    if (typeof window.switchAgoraChannel === 'function') {
-                        window.switchAgoraChannel(roomId);
-                    }
+                    // LiveKit room switching is handled by the room watcher in game.js
                     
                     // Show/hide room overlay based on room
                     if (roomId === 'main') {
@@ -841,7 +846,7 @@
             });
         }
 
-        // Show controls when Agora initializes
+        // Show media controls once LiveKit connects
         window.addEventListener('load', () => {
             setTimeout(() => {
                 const controls = document.getElementById('player-media-controls');
@@ -2257,18 +2262,17 @@
                 e.preventDefault();
                 console.log('🎤 M key pressed');
                 
-                // Check if agoraManager exists in window scope
-                if (typeof window.agoraManager !== 'undefined' && window.agoraManager && window.agoraManager.localAudioTrack) {
-                    console.log('✅ Agora audio ready');
-                    const currentlyEnabled = window.agoraManager.localAudioTrack.enabled;
-                    window.agoraManager.localAudioTrack.setEnabled(!currentlyEnabled);
-                    
-                    // Update Firebase - note the INVERSE logic (muted = NOT enabled)
-                    database.ref('players/' + currentUser.id + '/audioMuted').set(!currentlyEnabled);
-                    
-                    console.log('🎤 Microphone toggled:', currentlyEnabled ? 'muted' : 'unmuted');
+                // Toggle mic via LiveKit
+                if (window._lkRoom && window._lkRoom.localParticipant) {
+                    const micPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                    if (micPub) {
+                        const isMuted = micPub.isMuted;
+                        isMuted ? micPub.unmute() : micPub.mute();
+                        database.ref('players/' + currentUser.id + '/audioMuted').set(!isMuted);
+                        console.log('🎤 Microphone toggled:', isMuted ? 'unmuted' : 'muted');
+                    }
                 } else {
-                    console.log('⚠️ Agora not ready yet');
+                    console.log('⚠️ LiveKit mic not ready');
                 }
             }
             
@@ -2277,15 +2281,15 @@
                 e.preventDefault();
                 console.log('📹 V key pressed');
                 
-                // Check if agoraManager exists in window scope
-                if (typeof window.agoraManager !== 'undefined' && window.agoraManager && window.agoraManager.localVideoTrack) {
-                    console.log('✅ Agora video ready');
-                    const currentlyEnabled = window.agoraManager.localVideoTrack.enabled;
-                    window.agoraManager.localVideoTrack.setEnabled(!currentlyEnabled);
-                    
-                    // Update Firebase - videoMuted = NOT enabled
-                    database.ref('players/' + currentUser.id + '/videoMuted').set(!currentlyEnabled);
-                    
+                // Toggle camera via LiveKit
+                if (window._lkRoom && window._lkRoom.localParticipant) {
+                    const camPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+                    if (camPub) {
+                        const isMuted = camPub.isMuted;
+                        isMuted ? camPub.unmute() : camPub.mute();
+                        database.ref('players/' + currentUser.id + '/videoMuted').set(!isMuted);
+                        console.log('📹 Camera toggled:', isMuted ? 'on' : 'off');
+                    }
                     // Show/hide local video-off indicator
                     const videoOffIndicator = document.getElementById('local-video-off-' + currentUser.seat);
                     if (videoOffIndicator) {
@@ -2300,7 +2304,7 @@
                     
                     console.log('📹 Video toggled:', currentlyEnabled ? 'OFF' : 'ON');
                 } else {
-                    console.log('⚠️ Agora video not ready yet');
+                    console.log('⚠️ LiveKit camera not ready');
                 }
             }
         });

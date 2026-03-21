@@ -2825,7 +2825,7 @@ function generateVideoSeats() {
                 seatElement.classList.add('active');
             }
 
-            // Update global window reference for Agora
+            // Update global window reference
             window.currentUser = currentUser;
 
             sessionStorage.setItem('playerName', playerName);
@@ -2872,14 +2872,7 @@ function generateVideoSeats() {
                 }
             }
 
-            // Enable video/audio when seat is claimed (ready for Agora)
-            if (window.agoraClient) {
-                console.log('📹 Enabling video/audio for seat:', seatNumber);
-                // This will be implemented when Agora is re-enabled
-                // window.agoraClient.publish().then(() => {
-                //     console.log('✅ Video/audio published');
-                // });
-            }
+            // LiveKit handles video/audio automatically via the room watcher
         }).catch((error) => {
             if (error !== 'Seat taken') {
                 console.error('Error claiming seat:', error);
@@ -4121,9 +4114,7 @@ async function _lkIdentityToSeat(identity, isMainRoom) {
                 let seat = null;
                 snap.forEach((child) => {
                     const p = child.val();
-                    seat = isMainRoom
-                        ? (p.seat || null)
-                        : (p.roomSeat || p.seat || null);
+                    seat = isMainRoom ? (p.seat || null) : (p.roomSeat || null);
                 });
                 resolve(seat);
             });
@@ -4291,25 +4282,14 @@ window.joinLiveKitRoom = async function(gameRoom) {
         console.log('✅ Local tracks published');
 
         // 5. Attach own video to own seat
-        // For non-main rooms roomSeat may not be assigned yet — retry until it is
-        const _attachOwnVideo = () => {
-            const u      = _lkCurrentUser();
-            const mySeat = isMainRoom
-                ? (u && u.seat)
-                : (u && (u.roomSeat || u.seat));
-
-            if (!mySeat) {
-                setTimeout(_attachOwnVideo, 500);
-                return;
-            }
-
+        const mySeat = user.seat || (isMainRoom ? null : user.roomSeat);
+        if (mySeat) {
             tracks.forEach((track) => {
                 if (track.kind === LivekitClient.Track.Kind.Video) {
                     _lkAttachVideo(track, mySeat, isMainRoom);
                 }
             });
-        };
-        _attachOwnVideo();
+        }
 
         // 6. Handle already-connected participants
         room.remoteParticipants.forEach(async (participant) => {
@@ -4385,9 +4365,6 @@ window.exitBreakfast = function() {
             return;
         }
 
-        // Skip for host — host has its own watcher
-        if (user && user.role === 'host') return;
-
         database.ref('players/' + uid + '/room').on('value', (snap) => {
             const room  = snap.val();
             const phase = sessionStorage.getItem('currentPhase');
@@ -4415,31 +4392,21 @@ window.exitBreakfast = function() {
     trySetup();
 })();
 
-// ── Host: watch room changes and join LiveKit accordingly ───────
-// Host's currentUser.id is 'host', stored at players/host in Firebase.
-// hostJoinRoom() sets players/host/room — we watch that and join LiveKit.
-(function setupHostLiveKitWatcher() {
-    const trySetup = () => {
-        const user = _lkCurrentUser();
-        if (!user || !user.name || user.role !== 'host') {
-            setTimeout(trySetup, 300);
-            return;
+// ── Host: auto-join main room ─────────────────────────────────
+if (typeof currentUser !== 'undefined' && currentUser.role === 'host') {
+    database.ref('game/phase').once('value', (snap) => {
+        const phase = snap.val();
+        if (phase !== 'night' && phase !== 'breakfast') {
+            // Delay to let the host seat render and currentUser be fully set
+            setTimeout(() => {
+                const user = _lkCurrentUser();
+                if (user && user.name) {
+                    joinLiveKitRoom('main');
+                }
+            }, 1500);
         }
-
-        database.ref('players/host/room').on('value', (snap) => {
-            const room    = snap.val() || 'main';
-            const phase   = sessionStorage.getItem('currentPhase');
-            const blocked = (phase === 'night' || phase === 'breakfast');
-
-            console.log('📹 Host room changed to:', room, '| phase:', phase);
-
-            if (blocked) { disconnectLiveKit(); return; }
-
-            joinLiveKitRoom(room);
-        });
-    };
-    trySetup();
-})()
+    });
+}
 
 // ── Cleanup on page unload ────────────────────────────────────
 window.addEventListener('beforeunload', () => {
