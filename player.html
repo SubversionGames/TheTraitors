@@ -545,6 +545,18 @@
             database.ref('players/' + window.currentUser.id + '/lastActive').set(Date.now());
         }
         
+        // Listen for host-triggered game reset — reload page to start fresh
+        database.ref('game/resetSignal').on('value', (snap) => {
+            const signal = snap.val();
+            if (!signal) return;
+            // Only reload if the signal is recent (within last 10 seconds)
+            if (Date.now() - signal < 10000) {
+                console.log('🔄 Game reset detected — reloading page');
+                // Small random delay so not all players reload simultaneously
+                setTimeout(() => { window.location.reload(); }, Math.random() * 1000);
+            }
+        });
+
         // Then update every 10 seconds
         setInterval(() => {
             if (window.currentUser && window.currentUser.id) {

@@ -4200,6 +4200,7 @@ function cancelTimer() {
                         database.ref('game/endGame').remove();
                         database.ref('game/phaseTitle').remove();
                         database.ref('game/wheel').remove();
+                        database.ref('game/resetSignal').remove();
                         Object.keys(players).forEach((pid) => {
                             updates[`players/${pid}/endGameRole`]                  = null;
                             updates[`players/${pid}/endGameReadyToRevealSmoke`]    = null;
@@ -4211,8 +4212,11 @@ function cancelTimer() {
                         database.ref().update(updates).then(() => {
                             console.log('✅ Game reset complete - reloading page');
                             
-                            // Reload the page to ensure clean state (no alert)
-                            window.location.reload();
+                            // Signal all player pages to reload too
+                            database.ref('game/resetSignal').set(Date.now()).then(() => {
+                                // Small delay so players receive the signal before host reloads
+                                setTimeout(() => { window.location.reload(); }, 500);
+                            });
                         }).catch(err => {
                             console.error('❌ Reset failed:', err);
                             alert('Reset failed: ' + err.message);
