@@ -19,11 +19,19 @@
             <!-- Video Circle -->
             <div class="video-circle-container">
                 <!-- Host Seat - positioned by JavaScript -->
-                <div class="video-seat host" id="seat-1">
-                    <div id="video-1"></div>
-                    <div class="seat-label">
-                        <span class="player-name" id="name-1">Host</span>
-                        <span class="player-pronouns" id="pronouns-1"></span>
+                <div class="video-seat host" id="seat-A">
+                    <div id="video-A"></div>
+                    <div class="seat-label" id="seat-label-A">
+                        <span class="player-name" id="name-A">Host</span>
+                        <span class="player-pronouns" id="pronouns-A"></span>
+                    </div>
+                    <div class="seat-av-controls" id="av-controls-A" style="display:none">
+                        <button class="av-btn mic-btn" id="mic-btn-A" title="Toggle Mic (M)" onclick="event.stopPropagation(); window.toggleMic && window.toggleMic()"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
+                        <button class="av-btn cam-btn" id="cam-btn-A" title="Toggle Camera (V)" onclick="event.stopPropagation(); window.toggleCam && window.toggleCam()"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></button>
+                    </div>
+                    <div class="av-status-icons" id="av-status-A">
+                        <span class="av-icon mic-off-icon" id="mic-off-A" style="display:none"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></span>
+                        <span class="av-icon cam-off-icon" id="cam-off-A" style="display:none"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></span>
                     </div>
                 </div>
             
@@ -259,6 +267,9 @@
         </div>
     </div>
 
+    <!-- Agora SDK -->
+   
+    
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -435,6 +446,10 @@
                                 // Update name and pronouns
                                 seatLabel.textContent = existingPlayer.name;
                                 console.log('✅ Updated seat label for fast restore:', existingPlayer.name);
+                                // Re-attach AV controls after fast restore
+                                if (typeof window.setupAVControls === 'function' && existingPlayer.seat) {
+                                    setTimeout(() => window.setupAVControls(existingPlayer.seat), 500);
+                                }
                                 
                                 if (existingPlayer.pronouns) {
                                     const pronounsLabel = document.getElementById('pronouns-' + existingPlayer.seat);
@@ -542,18 +557,6 @@
             database.ref('players/' + window.currentUser.id + '/lastActive').set(Date.now());
         }
         
-        // Listen for host-triggered game reset — reload page to start fresh
-        database.ref('game/resetSignal').on('value', (snap) => {
-            const signal = snap.val();
-            if (!signal) return;
-            // Only reload if the signal is recent (within last 10 seconds)
-            if (Date.now() - signal < 10000) {
-                console.log('🔄 Game reset detected — reloading page');
-                // Small random delay so not all players reload simultaneously
-                setTimeout(() => { window.location.reload(); }, Math.random() * 1000);
-            }
-        });
-
         // Then update every 10 seconds
         setInterval(() => {
             if (window.currentUser && window.currentUser.id) {
@@ -572,23 +575,18 @@
         if (currentUser.role === 'player') {
             database.ref('game/muteAllPlayers').on('value', (snapshot) => {
                 const shouldMute = snapshot.val();
-                if (shouldMute) {
-                    if (window._lkRoom && window._lkRoom.localParticipant) {
-                        const micPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
-                        if (micPub && !micPub.isMuted) micPub.mute();
-                    }
+                if (shouldMute && typeof agoraManager !== 'undefined' && agoraManager.localAudioTrack) {
+                    agoraManager.localAudioTrack.setEnabled(false);
+                    console.log('Host muted all players');
+                    
+                    // Update player's mute status in Firebase
                     database.ref('players/' + currentUser.id + '/audioMuted').set(true);
-                    console.log('Host muted all players via LiveKit');
-                } else if (!shouldMute) {
+                } else if (!shouldMute && typeof agoraManager !== 'undefined' && agoraManager.localAudioTrack) {
                     // Only unmute if they weren't individually muted
                     database.ref('players/' + currentUser.id + '/audioMuted').once('value', (muteSnapshot) => {
                         if (!muteSnapshot.val()) {
-                            // Unmute via LiveKit
-                            if (window._lkRoom && window._lkRoom.localParticipant) {
-                                const micPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
-                                if (micPub && micPub.isMuted) micPub.unmute();
-                            }
-                            console.log('Host unmuted all players via LiveKit');
+                            agoraManager.localAudioTrack.setEnabled(true);
+                            console.log('Host unmuted all players');
                         }
                     });
                 }
@@ -597,18 +595,12 @@
             // Listen for host camera command (ONLY if player, not host)
             database.ref('game/camerasOffPlayers').on('value', (snapshot) => {
                 const camerasOff = snapshot.val();
-                if (camerasOff) {
-                    if (window._lkRoom && window._lkRoom.localParticipant) {
-                        const camPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
-                        if (camPub && !camPub.isMuted) camPub.mute();
-                    }
-                    console.log('Host disabled all cameras via LiveKit');
-                } else {
-                    if (window._lkRoom && window._lkRoom.localParticipant) {
-                        const camPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
-                        if (camPub && camPub.isMuted) camPub.unmute();
-                    }
-                    console.log('Host enabled all cameras via LiveKit');
+                if (camerasOff && typeof agoraManager !== 'undefined' && agoraManager.localVideoTrack) {
+                    agoraManager.localVideoTrack.setEnabled(false);
+                    console.log('Host disabled all cameras');
+                } else if (!camerasOff && typeof agoraManager !== 'undefined' && agoraManager.localVideoTrack) {
+                    agoraManager.localVideoTrack.setEnabled(true);
+                    console.log('Host enabled all cameras');
                 }
             });
         }
@@ -730,7 +722,10 @@
                     currentUser.room = roomId;
                     updatePlayerRoomDisplay();
                     
-                    // LiveKit room switching is handled by the room watcher in game.js
+                    // Switch Agora audio/video channel
+                    if (typeof window.switchAgoraChannel === 'function') {
+                        window.switchAgoraChannel(roomId);
+                    }
                     
                     // Show/hide room overlay based on room
                     if (roomId === 'main') {
@@ -846,7 +841,7 @@
             });
         }
 
-        // Show media controls once LiveKit connects
+        // Show controls when Agora initializes
         window.addEventListener('load', () => {
             setTimeout(() => {
                 const controls = document.getElementById('player-media-controls');
@@ -2261,18 +2256,10 @@
             if (e.key === 'm' || e.key === 'M') {
                 e.preventDefault();
                 console.log('🎤 M key pressed');
-                
-                // Toggle mic via LiveKit
-                if (window._lkRoom && window._lkRoom.localParticipant) {
-                    const micPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
-                    if (micPub) {
-                        const isMuted = micPub.isMuted;
-                        isMuted ? micPub.unmute() : micPub.mute();
-                        database.ref('players/' + currentUser.id + '/audioMuted').set(!isMuted);
-                        console.log('🎤 Microphone toggled:', isMuted ? 'unmuted' : 'muted');
-                    }
+                if (typeof window.toggleMic === 'function') {
+                    window.toggleMic();
                 } else {
-                    console.log('⚠️ LiveKit mic not ready');
+                    console.log('⚠️ LiveKit not ready yet');
                 }
             }
             
@@ -2280,31 +2267,10 @@
             if (e.key === 'v' || e.key === 'V') {
                 e.preventDefault();
                 console.log('📹 V key pressed');
-                
-                // Toggle camera via LiveKit
-                if (window._lkRoom && window._lkRoom.localParticipant) {
-                    const camPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
-                    if (camPub) {
-                        const isMuted = camPub.isMuted;
-                        isMuted ? camPub.unmute() : camPub.mute();
-                        database.ref('players/' + currentUser.id + '/videoMuted').set(!isMuted);
-                        console.log('📹 Camera toggled:', isMuted ? 'on' : 'off');
-                    }
-                    // Show/hide local video-off indicator
-                    const videoOffIndicator = document.getElementById('local-video-off-' + currentUser.seat);
-                    if (videoOffIndicator) {
-                        if (!currentlyEnabled) {
-                            // Video is now OFF - show indicator
-                            videoOffIndicator.classList.add('visible');
-                        } else {
-                            // Video is now ON - hide indicator
-                            videoOffIndicator.classList.remove('visible');
-                        }
-                    }
-                    
-                    console.log('📹 Video toggled:', currentlyEnabled ? 'OFF' : 'ON');
+                if (typeof window.toggleCam === 'function') {
+                    window.toggleCam();
                 } else {
-                    console.log('⚠️ LiveKit camera not ready');
+                    console.log('⚠️ LiveKit not ready yet');
                 }
             }
         });
