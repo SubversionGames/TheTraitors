@@ -130,6 +130,9 @@ async function initializeGame() {
         currentUser.role = sessionStorage.getItem('userRole');
         currentUser.name = sessionStorage.getItem('playerName');
         currentUser.id = sessionStorage.getItem('userId') || generateUserId();
+        currentUser.seat = sessionStorage.getItem('playerSeat')
+            || sessionStorage.getItem('prodLetter') // prod members store their seat as prodLetter
+            || null;
         sessionStorage.setItem('userId', currentUser.id);
         window.currentUser = currentUser;
     }
@@ -207,6 +210,9 @@ async function initializeGame() {
     });
     
     console.log('Game initialized for:', currentUser.role);
+    if (currentUser.role === 'host') {
+        _setupSeatSwitchListener();
+    }
 }
 
 function generateUserId() {
@@ -247,7 +253,7 @@ function setupFirebaseListeners() {
                     if (players[playerId].isHost) {
                         // Keep host but reset their room to main
                         updates[playerId + '/room'] = 'main';
-                        updates[playerId + '/seat'] = 1;
+                        updates[playerId + '/seat'] = 'A';
                     } else {
                         // Remove all non-host players
                         updates[playerId] = null;
@@ -667,6 +673,12 @@ function setupFirebaseListeners() {
             case 'end-game':
                 // End Game phase — players stay visible, seats remain
                 break;
+            case 'talk':
+            case 'deliberation':
+            case 'roundtable':
+            case 'waiting':
+                // Display-only phases — no special JS logic needed
+                break;
             default:
                 console.log('Unknown phase:', newPhase);
         }
@@ -904,7 +916,7 @@ function setupFirebaseListeners() {
     function enableVotingClicks() {
         console.log('🗳️ Enabling voting clicks on seats');
         
-        for (let i = 2; i <= 25; i++) {
+        for (let i = 1; i <= 24; i++) {
             const seat = document.getElementById(`seat-${i}`);
             if (!seat || seat.classList.contains('empty')) continue;
             
@@ -920,7 +932,7 @@ function setupFirebaseListeners() {
     function disableVotingClicks() {
         console.log('🚫 Disabling voting clicks');
         
-        for (let i = 2; i <= 25; i++) {
+        for (let i = 1; i <= 24; i++) {
             const seat = document.getElementById(`seat-${i}`);
             if (!seat) continue;
             
@@ -2089,7 +2101,7 @@ function playGongSound() {
 
 function generateVideoSeats() {
     // Remove any existing player seats
-    for (let i = 2; i <= 25; i++) {
+    for (let i = 1; i <= 24; i++) {
         const existingSeat = document.getElementById(`seat-${i}`);
         if (existingSeat) existingSeat.remove();
     }
@@ -2288,7 +2300,7 @@ function generateVideoSeats() {
             console.log(`Total seats: ${totalSeats}, Base per row: ${baseSeatsPerRow}, Extra seats: ${extraSeats}`);
             console.log(`Seat distribution per row: [${seatsPerRow.join(', ')}]`);
             
-            let seatNumber = 2; // Start at seat 2 (seat 1 is Host)
+            let seatNumber = 1; // Players start at seat 1 (host is seat A)
             
             // Generate seats row by row with centering
             for (let row = 0; row < rows; row++) {
@@ -2334,9 +2346,25 @@ function generateVideoSeats() {
         
         seatElement.innerHTML = `
             <div id="video-${seat.number}"></div>
-            <div class="seat-label">
+            <div class="seat-label" id="seat-label-${seat.number}">
                 <span class="player-name" id="name-${seat.number}">Empty</span>
                 <span class="player-pronouns" id="pronouns-${seat.number}"></span>
+            </div>
+            <div class="seat-av-controls" id="av-controls-${seat.number}" style="display:none">
+                <button class="av-btn mic-btn" id="mic-btn-${seat.number}" title="Toggle Mic (M)" onclick="event.stopPropagation(); window.toggleMic && window.toggleMic()">
+                    <svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+                </button>
+                <button class="av-btn cam-btn" id="cam-btn-${seat.number}" title="Toggle Camera (V)" onclick="event.stopPropagation(); window.toggleCam && window.toggleCam()">
+                    <svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+                </button>
+            </div>
+            <div class="av-status-icons" id="av-status-${seat.number}">
+                <span class="av-icon mic-off-icon" id="mic-off-${seat.number}" style="display:none">
+                    <svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+                </span>
+                <span class="av-icon cam-off-icon" id="cam-off-${seat.number}" style="display:none">
+                    <svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+                </span>
             </div>
             ${currentUser.role === 'host' ? `
             <button class="seat-remove-btn" id="remove-${seat.number}" onclick="removeSeatVisually(${seat.number})" title="Remove this seat" style="display: none;">
@@ -2440,10 +2468,11 @@ function generateVideoSeats() {
                 const videoDiv = document.createElement('div');
                 videoDiv.id = `room-video-${seatIndex}`;
                 videoDiv.className = 'video-container';
+                videoDiv.style.cssText = 'width:100%;height:100%;position:absolute;top:0;left:0;border-radius:50%;overflow:hidden;';
                 
                 // Name tag
                 const nameTag = document.createElement('div');
-                nameTag.className = 'name-tag';
+                nameTag.className = 'seat-label';
                 nameTag.innerHTML = `
                     <span id="room-name-${seatIndex}" class="player-name">Empty</span>
                     <span id="room-pronouns-${seatIndex}" class="player-pronouns"></span>
@@ -2481,6 +2510,47 @@ function generateVideoSeats() {
             }
             
             generateRoomSeats(roomId, seatLimit);
+
+            // ── Populate room seat names from Firebase ───────────────────
+            if (window._roomNamesListener) {
+                database.ref('players').off('value', window._roomNamesListener);
+            }
+            window._roomNamesListener = database.ref('players').on('value', (pSnap) => {
+                for (let s = 1; s <= seatLimit; s++) {
+                    const nameEl = document.getElementById('room-name-' + s);
+                    const pronEl = document.getElementById('room-pronouns-' + s);
+                    if (nameEl) nameEl.textContent = 'Empty';
+                    if (pronEl) pronEl.textContent = '';
+                }
+                pSnap.forEach((child) => {
+                    const p = child.val();
+                    if (!p || p.room !== roomId || !p.roomSeat) return;
+                    const nameEl = document.getElementById('room-name-' + p.roomSeat);
+                    const pronEl = document.getElementById('room-pronouns-' + p.roomSeat);
+                    if (nameEl) nameEl.textContent = p.name || 'Player';
+                    if (pronEl) pronEl.textContent = p.pronouns || '';
+                });
+            });
+
+            // ── Re-attach already-subscribed video tracks ─────────────────
+            // Run at 500ms and again at 2s to handle LiveKit connecting after overlay opens
+            const _reattachRoomVideo = () => {
+                const lkRoom = window._lkRoom;
+                if (!lkRoom) return;
+                lkRoom.remoteParticipants.forEach(async (participant) => {
+                    const seat = await _lkIdentityToSeat(participant.identity, false);
+                    if (!seat) return;
+                    participant.trackPublications.forEach((pub) => {
+                        if (pub.kind === LivekitClient.Track.Kind.Video && pub.track && pub.isSubscribed) {
+                            _lkAttachVideo(pub.track, seat, false, 0);
+                            console.log('📹 Re-attached room video for', participant.identity, '→ room-video-' + seat);
+                        }
+                    });
+                });
+            };
+            setTimeout(_reattachRoomVideo, 500);
+            setTimeout(_reattachRoomVideo, 2000);
+            setTimeout(_reattachRoomVideo, 4000);
         }
     }
 
@@ -2489,6 +2559,11 @@ function generateVideoSeats() {
         const overlay = document.getElementById('room-overlay');
         if (overlay) {
             overlay.style.display = 'none';
+        }
+        // Clean up room names listener
+        if (window._roomNamesListener) {
+            database.ref('players').off('value', window._roomNamesListener);
+            window._roomNamesListener = null;
         }
     }
 
@@ -2505,7 +2580,7 @@ function generateVideoSeats() {
     // POSITION HOST SEAT IN LEFT SECTION
     // ============================================
     
-    const hostSeat = document.getElementById('seat-1');
+    const hostSeat = document.getElementById('seat-A');
     if (hostSeat) {
         // Center host in left section, matching left margin distance from top
         const hostX = leftSectionWidth / 2;
@@ -2523,6 +2598,21 @@ function generateVideoSeats() {
         hostSeat.style.transform = 'translate(-50%, -50%)';
         
         console.log(`Host positioned in left section: (${hostX.toFixed(0)}, ${hostY}) with size ${actualHostSize.toFixed(0)}px`);
+
+        // Make seat-A clickable for prod members to request switch with main host
+        if (hostSeat && !hostSeat._switchHandlerAdded) {
+            hostSeat._switchHandlerAdded = true;
+            hostSeat.addEventListener('click', (e) => {
+                if (!window.currentUser || !window.currentUser.seat) return;
+                const mySeat = window.currentUser.seat;
+                if (mySeat === 'A') return; // already main host
+                if (!['B','C','D','E','F','G','H','I','J'].includes(String(mySeat))) return;
+                _showSeatSwitchMenu('A', e.clientX, e.clientY);
+            });
+        }
+
+        // Position production member seats below the main host
+        _positionProdSeats(hostX, hostY, actualHostSize, finalPlayerSize, leftSectionWidth);
         
         console.log(`Host positioned at top-left: (${hostX}, ${hostY}) with size ${finalHostSize}px`);
     }
@@ -2579,11 +2669,14 @@ function generateVideoSeats() {
         
         // Step 1: Check if any players are in seats that will be removed
         const seatsToRemove = [];
-        const currentTotalSeats = document.querySelectorAll('.video-seat').length - 1; // -1 for host
+        const currentTotalSeats = document.querySelectorAll('.video-seat').length; // host is seat-A, not counted here
         
-        if (newCount < currentTotalSeats) {
-            // We're removing seats
-            for (let i = newCount + 2; i <= currentTotalSeats + 1; i++) { // +1 because seat 1 is host
+        // Count only numeric player seats (not seat-A or prod letter seats)
+        const playerSeatCount = Array.from(document.querySelectorAll('.video-seat'))
+            .filter(el => /^seat-\d+$/.test(el.id)).length;
+        if (newCount < playerSeatCount) {
+            // We're removing player seats (numbered 1..current)
+            for (let i = newCount + 1; i <= playerSeatCount; i++) {
                 seatsToRemove.push(i);
             }
             
@@ -2856,6 +2949,10 @@ function generateVideoSeats() {
                 if (typeof showPlayerControls === 'function') {
                     showPlayerControls();
                 }
+                // Show AV controls on this player's seat
+                if (typeof window.setupAVControls === 'function') {
+                    window.setupAVControls(seatNumber);
+                }
             }
 
             // Move video element to new seat if it exists
@@ -2885,7 +2982,34 @@ function generateVideoSeats() {
 // ============================================
 
     function updatePlayerDisplay() {
-        for (let i = 1; i <= 25; i++) {
+        // Update main host seat (seat-A)
+        const _hostPlayer = Object.values(gameState.players || {}).find(
+            p => p.seat === 'A' || (p.isHost && !p.isProdMember)
+        );
+        if (_hostPlayer) {
+            const _nameA = document.getElementById('name-A');
+            const _pronA = document.getElementById('pronouns-A');
+            if (_nameA && _nameA.textContent !== _hostPlayer.name) {
+                _nameA.textContent = _getDisplayName('A', _hostPlayer.name || 'Host');
+            }
+            if (_pronA) _pronA.textContent = _hostPlayer.pronouns || '';
+        }
+
+        // Also update prod member seats (letter seats B-J)
+        ['B','C','D','E','F','G','H','I','J'].forEach(letter => {
+            const nameEl = document.getElementById('name-' + letter);
+            if (!nameEl) return;
+            // Find prod member in Firebase data
+            const prodPlayer = Object.values(gameState.players || {}).find(
+                p => p.seat === letter && p.isProdMember
+            );
+            if (prodPlayer) {
+                nameEl.textContent = _getDisplayName(letter, prodPlayer.name || letter);
+                const pronEl = document.getElementById('pronouns-' + letter);
+                if (pronEl) pronEl.textContent = prodPlayer.pronouns || '';
+            }
+        });
+        for (let i = 1; i <= 24; i++) {
             const seatElement = document.getElementById(`seat-${i}`);
             const nameElement = document.getElementById(`name-${i}`);
             const pronounsElement = document.getElementById(`pronouns-${i}`); // ← MOVED TO TOP
@@ -2996,7 +3120,7 @@ function generateVideoSeats() {
             } else {
                 seatElement.classList.add('empty');
                 seatElement.classList.remove('active');
-                nameElement.textContent = i === 1 ? 'Host' : 'Empty';
+                nameElement.textContent = 'Empty';
                 nameElement.onclick = null;
 
                 // Clear pronouns for empty seats
@@ -3527,12 +3651,14 @@ window.addEventListener('resize', () => {
             lastHeight = currentHeight;
 
             // PRESERVE VIDEO ELEMENTS before regenerating
-            const videoElements = {};
+            // Must move live DOM nodes — innerHTML loses the MediaStream srcObject
+            const videoNodes = {};
             for (let i = 1; i <= 25; i++) {
                 const videoDiv = document.getElementById(`video-${i}`);
                 if (videoDiv && videoDiv.children.length > 0) {
-                    // Store the entire video container HTML
-                    videoElements[i] = videoDiv.innerHTML;
+                    const frag = document.createDocumentFragment();
+                    while (videoDiv.firstChild) frag.appendChild(videoDiv.firstChild);
+                    videoNodes[i] = frag;
                 }
             }
             
@@ -3540,13 +3666,20 @@ window.addEventListener('resize', () => {
             
             // RESTORE VIDEO ELEMENTS after regenerating
             setTimeout(() => {
-                for (let seat in videoElements) {
+                for (let seat in videoNodes) {
                     const videoDiv = document.getElementById(`video-${seat}`);
                     if (videoDiv) {
-                        videoDiv.innerHTML = videoElements[seat];
+                        videoDiv.innerHTML = '';
+                        videoDiv.appendChild(videoNodes[seat]);
+                        // Re-trigger autoplay since video element moved to new DOM position
+                        const vid = videoDiv.querySelector('video');
+                        if (vid && vid.paused && vid.srcObject) {
+                            vid.play().catch(() => {});
+                        }
                     }
                 }
                 console.log('✅ Video elements preserved through resize');
+                _repositionAllAVControls();
             }, 10);
             
             // Re-setup player controls after resize regenerates seats
@@ -3563,10 +3696,49 @@ window.addEventListener('resize', () => {
 
             // Also regenerate room overlay if active
             const overlay = document.getElementById('room-overlay');
-            if (overlay && overlay.style.display === 'block' && window.currentUser && window.currentUser.room !== 'main') {
+            if (overlay && overlay.style.display === 'block' && window.currentUser && window.currentUser.room && window.currentUser.room !== 'main') {
+                // Preserve live video nodes before regenerating room seats
+                const roomVideoNodes = {};
+                for (let s = 1; s <= 10; s++) {
+                    const vd = document.getElementById('room-video-' + s);
+                    if (vd && vd.children.length > 0) {
+                        const frag = document.createDocumentFragment();
+                        while (vd.firstChild) frag.appendChild(vd.firstChild);
+                        roomVideoNodes[s] = frag;
+                    }
+                }
                 database.ref('game/roomLimits/' + window.currentUser.room).once('value', (snap) => {
                     const limit = snap.val() || 5;
                     generateRoomSeats(window.currentUser.room, limit);
+                    // Restore video nodes after regeneration
+                    setTimeout(() => {
+                        for (const s in roomVideoNodes) {
+                            const vd = document.getElementById('room-video-' + s);
+                            if (vd) {
+                                vd.innerHTML = '';
+                                vd.appendChild(roomVideoNodes[s]);
+                                const vid = vd.querySelector('video');
+                                if (vid && vid.paused && vid.srcObject) vid.play().catch(() => {});
+                            }
+                        }
+                        console.log('✅ Room video nodes preserved through resize');
+                        // Re-attach any tracks that didn't survive
+                        const lkRoom = window._lkRoom;
+                        if (lkRoom) {
+                            lkRoom.remoteParticipants.forEach(async (participant) => {
+                                const seat = await _lkIdentityToSeat(participant.identity, false);
+                                if (!seat) return;
+                                participant.trackPublications.forEach((pub) => {
+                                    if (pub.kind === LivekitClient.Track.Kind.Video && pub.track && pub.isSubscribed) {
+                                        const vd2 = document.getElementById('room-video-' + seat);
+                                        if (!vd2 || vd2.children.length === 0) {
+                                            _lkAttachVideo(pub.track, seat, false, 0);
+                                        }
+                                    }
+                                });
+                            });
+                        }
+                    }, 50);
                 });
             }
         }, 50); // Debounce for 250ms
@@ -4071,6 +4243,365 @@ database.ref('game/endGame/winners').on('value', (snapshot) => {
     if (playerNamesEl) { playerNamesEl.textContent = data.winnerText || ''; playerNamesEl.style.color = data.teamColor || '#FFD700'; }
     overlay.style.display = 'flex';
 });
+// ── Production Member Seats ──────────────────────────────────────────────────
+// Prod members get letter seats (B, C, D...) positioned in the left column
+// below the main host seat. Each gets a video circle the same size as player seats.
+
+function _positionProdSeats(hostX, hostY, hostSize, playerSize, leftSectionWidth) {
+    const letters = ['B','C','D','E','F','G','H','I','J'];
+    const margin = 8; // gap between seats
+
+    // Watch Firebase for prod members and create/update their seats
+    database.ref('players').orderByChild('isProdMember').equalTo(true).on('value', (snap) => {
+        // Collect active prod members sorted by seat letter
+        const prodMembers = [];
+        snap.forEach(child => {
+            const p = child.val();
+            if (p && p.seat && p.status !== 'removed') prodMembers.push(p);
+        });
+        prodMembers.sort((a, b) => a.seat.localeCompare(b.seat));
+
+        // Remove prod seats that are no longer active
+        const _activeLetters = prodMembers.map(p => p.seat);
+        document.querySelectorAll('.prod-seat').forEach(el => {
+            const letter = el.id.replace('seat-', '');
+            if (!_activeLetters.includes(letter)) el.remove();
+        });
+
+        // Create and position a seat for each prod member
+        // --- Dynamic scaling: shrink seats/spacing if they'd go off-screen ---
+        const _n = prodMembers.length;
+        const _gap0 = hostSize / 2 + 110 + playerSize / 2; // host→first seat
+        const _spacing0 = playerSize + 90; // center-to-center between seats
+        const _bottomMargin = 80; // px from bottom of window
+        const _availableHeight = window.innerHeight - (hostY + _gap0) - _bottomMargin;
+        // Height needed from first seat center to last seat center
+        const _neededHeight = (_n - 1) * _spacing0;
+        // Scale factor: shrink if needed, never enlarge
+        const _scale = (_n > 1 && _neededHeight > _availableHeight)
+            ? Math.max(0.45, _availableHeight / _neededHeight)
+            : 1.0;
+        const _scaledSpacing = _spacing0 * _scale;
+        const _scaledSize = playerSize * _scale;
+        // Also scale the initial gap slightly when squishing
+        const _scaledGap = _scale < 1
+            ? (hostSize / 2 + Math.max(50, 110 * _scale) + _scaledSize / 2)
+            : _gap0;
+
+        prodMembers.forEach((p, idx) => {
+            const letter = p.seat; // 'B', 'C', etc.
+            const seatId = 'seat-' + letter;
+
+            // Use scaled gap and spacing
+            const gap = _scaledGap;
+            const y = hostY + gap + idx * _scaledSpacing;
+            const x = hostX; // same X as host (centered in left column)
+
+            // Constrain to left section; use scaled size
+            const maxSize = leftSectionWidth - 20;
+            const size = Math.min(_scaledSize, maxSize);
+
+            let seatEl = document.getElementById(seatId);
+            if (!seatEl) {
+                seatEl = document.createElement('div');
+                seatEl.id = seatId;
+                seatEl.className = 'video-seat prod-seat';
+                seatEl.innerHTML = `
+                    <div id="video-${letter}"></div>
+                    <div class="seat-label" id="seat-label-${letter}">
+                        <span class="player-name" id="name-${letter}">${p.name || letter}</span>
+                        <span class="player-pronouns" id="pronouns-${letter}">${p.pronouns || ''}</span>
+                    </div>
+                    <div class="seat-av-controls" id="av-controls-${letter}" style="display:none">
+                        <button class="av-btn mic-btn" id="mic-btn-${letter}" title="Toggle Mic (M)" onclick="event.stopPropagation(); window.toggleMic && window.toggleMic()"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
+                        <button class="av-btn cam-btn" id="cam-btn-${letter}" title="Toggle Camera (V)" onclick="event.stopPropagation(); window.toggleCam && window.toggleCam()"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></button>
+                    </div>
+                    <div class="av-status-icons" id="av-status-${letter}">
+                        <span class="av-icon mic-off-icon" id="mic-off-${letter}" style="display:none"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></span>
+                        <span class="av-icon cam-off-icon" id="cam-off-${letter}" style="display:none"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></span>
+                    </div>
+                `;
+                // Click to offer seat switch (only visible to prod/host members)
+                seatEl.addEventListener('click', (e) => {
+                    if (!window.currentUser || !window.currentUser.seat) return;
+                    const mySeat = window.currentUser.seat;
+                    if (mySeat === letter) return; // can't switch with yourself
+                    // Only show switch option between prod/host seats
+                    if (!['A','B','C','D','E','F','G','H','I','J'].includes(String(mySeat))) return;
+                    _showSeatSwitchMenu(letter, e.clientX, e.clientY);
+                });
+                document.body.appendChild(seatEl);
+                // AV controls for our own new seat
+                if (window.currentUser && window.currentUser.seat === letter) {
+                    setTimeout(() => {
+                        if (typeof window.setupAVControls === 'function') window.setupAVControls(letter);
+                    }, 200);
+                }
+            } else {
+                // Update name in existing seat
+                const nameEl = document.getElementById('name-' + letter);
+                if (nameEl) nameEl.textContent = _getDisplayName(letter, p.name || letter);
+            }
+
+            // Position the seat
+            seatEl.style.position  = 'fixed';
+            seatEl.style.left      = x + 'px';
+            seatEl.style.top       = y + 'px';
+            seatEl.style.width     = size + 'px';
+            seatEl.style.height    = size + 'px';
+            seatEl.style.transform = 'translate(-50%, -50%)';
+
+            // Scale name label font size with seat size
+            const _nameFontSize  = Math.max(0.7,  1.5 * _scale).toFixed(2);
+            const _pronFontSize  = Math.max(0.6,  0.8 * _scale).toFixed(2);
+            const _nameEl2 = seatEl.querySelector('.player-name');
+            const _pronEl2 = seatEl.querySelector('.player-pronouns');
+            if (_nameEl2) _nameEl2.style.fontSize = _nameFontSize + 'rem';
+            if (_pronEl2) _pronEl2.style.fontSize = _pronFontSize + 'rem';
+
+        });
+
+        // Trigger AV icon update
+        if (window._avIconsListener) {
+            // Force re-evaluation by the existing listener
+        }
+    });
+}
+
+
+// ── Seat Switch System ─────────────────────────────────────────────────────
+// Production members can swap seats with each other. A switch menu appears
+// when clicking another prod/host seat. Target gets a confirmation modal.
+
+function _showSeatSwitchMenu(targetSeat, mouseX, mouseY) {
+    // Remove any existing switch menu
+    const existing = document.getElementById('seat-switch-menu');
+    if (existing) existing.remove();
+
+    const myName = (window.currentUser && window.currentUser.name) || 'You';
+    const targetEl = document.getElementById('name-' + targetSeat);
+    const targetName = targetEl ? targetEl.textContent : ('Seat ' + targetSeat);
+
+    const menu = document.createElement('div');
+    menu.id = 'seat-switch-menu';
+    menu.style.cssText = [
+        'position:fixed',
+        'background:rgba(20,20,30,0.96)',
+        'border:1px solid rgba(255,215,0,0.5)',
+        'border-radius:8px',
+        'padding:10px 14px',
+        'z-index:9998',
+        'display:flex',
+        'flex-direction:column',
+        'gap:8px',
+        'min-width:160px',
+        'box-shadow:0 4px 20px rgba(0,0,0,0.6)',
+        'left:' + Math.min(mouseX + 10, window.innerWidth - 180) + 'px',
+        'top:' + Math.min(mouseY - 10, window.innerHeight - 100) + 'px',
+    ].join(';');
+
+    menu.innerHTML = '<div style="color:#FFD700;font-size:12px;font-weight:bold;margin-bottom:4px">Seat ' + targetSeat + ' — ' + targetName + '</div>' +
+        '<button id="seat-switch-btn" style="background:linear-gradient(135deg,#1a4a1a,#2d7a2d);color:white;border:none;padding:8px 12px;border-radius:5px;cursor:pointer;font-size:13px;">🔄 Switch Seats</button>' +
+        '<button id="seat-switch-cancel" style="background:rgba(255,255,255,0.1);color:#bbb;border:none;padding:6px 12px;border-radius:5px;cursor:pointer;font-size:12px;">Cancel</button>';
+
+    document.body.appendChild(menu);
+
+    document.getElementById('seat-switch-btn').onclick = () => {
+        menu.remove();
+        const mySeat = window.currentUser && window.currentUser.seat;
+        // Write switch request to Firebase — target will see it
+        database.ref('game/seatSwitch').set({
+            from: mySeat,
+            to: targetSeat,
+            fromName: myName,
+            requestedAt: Date.now()
+        });
+        console.log('🔄 Seat switch requested:', mySeat, '↔', targetSeat);
+    };
+    document.getElementById('seat-switch-cancel').onclick = () => menu.remove();
+
+    // Auto-dismiss if clicking elsewhere
+    const dismiss = (e) => {
+        if (!menu.contains(e.target)) {
+            menu.remove();
+            document.removeEventListener('click', dismiss, true);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', dismiss, true), 50);
+}
+
+// Watch for incoming seat switch requests
+function _setupSeatSwitchListener() {
+    // Watch for completed display swaps — applies to ALL tabs
+    database.ref('game/displaySwap').on('value', (snap) => {
+        const sw = snap.val();
+        if (!sw) return;
+        console.log('🔄 Display swap received:', sw.seatA, '↔', sw.seatB);
+        _applyDisplaySwap(sw.seatA, sw.seatB, sw.nameA, sw.nameB, sw.identityA, sw.identityB);
+        // Store swap state globally — persists until a new swap or game reset
+        window._activeDisplaySwap = { seatA: sw.seatA, seatB: sw.seatB,
+            nameA: sw.nameA, nameB: sw.nameB };
+    });
+
+    database.ref('game/seatSwitch').on('value', (snap) => {
+        const req = snap.val();
+        if (!req) return;
+
+        const myS = window.currentUser && window.currentUser.seat;
+        if (!myS) return;
+
+        // Only respond if this request targets me
+        if (String(req.to) !== String(myS)) return;
+
+        // Don't show if I was the one who sent it
+        if (String(req.from) === String(myS)) return;
+
+        // Show confirmation modal
+        const existing = document.getElementById('seat-switch-confirm');
+        if (existing) return; // already showing
+
+        const overlay = document.createElement('div');
+        overlay.id = 'seat-switch-confirm';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
+        overlay.innerHTML = '<div style="background:rgba(20,20,30,0.98);border:1px solid rgba(255,215,0,0.5);border-radius:12px;padding:28px 32px;text-align:center;max-width:340px;color:white;">' +
+            '<h3 style="color:#FFD700;margin-bottom:12px;">🔄 Seat Switch Request</h3>' +
+            '<p style="color:#bbb;margin-bottom:20px;line-height:1.5;"><strong style="color:white;">' + req.fromName + '</strong> (Seat ' + req.from + ') wants to switch seats with you.</p>' +
+            '<div style="display:flex;gap:12px;justify-content:center;">' +
+            '<button id="switch-yes" style="background:linear-gradient(135deg,#1a5c1a,#2d8a2d);color:white;border:none;padding:10px 24px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:bold;">✅ Yes, Switch</button>' +
+            '<button id="switch-no" style="background:rgba(255,255,255,0.15);color:white;border:none;padding:10px 24px;border-radius:6px;cursor:pointer;font-size:14px;">❌ No Thanks</button>' +
+            '</div></div>';
+
+        document.body.appendChild(overlay);
+
+        document.getElementById('switch-yes').onclick = () => {
+            overlay.remove();
+            _executeSeatSwap(req.from, req.to);
+            database.ref('game/seatSwitch').remove();
+        };
+        document.getElementById('switch-no').onclick = () => {
+            overlay.remove();
+            database.ref('game/seatSwitch').remove();
+        };
+
+        // Auto-dismiss after 30s
+        setTimeout(() => {
+            if (document.getElementById('seat-switch-confirm')) {
+                document.getElementById('seat-switch-confirm').remove();
+                database.ref('game/seatSwitch').remove();
+            }
+        }, 30000);
+    });
+}
+
+function _executeSeatSwap(seatA, seatB) {
+    // Visual-only swap: names and video feeds swap between two circles.
+    // Firebase player records (seat field, isProdMember, role) are NOT changed.
+    // This avoids conflicts between the host system and prod seat system.
+    console.log('🔄 Executing visual seat swap:', seatA, '↔', seatB);
+
+    // Read both players' info from Firebase to get names and identities
+    database.ref('players').once('value', (snap) => {
+        let playerA = null, playerB = null, keyA = null, keyB = null;
+        snap.forEach((child) => {
+            const p = child.val();
+            if (!p) return;
+            if (String(p.seat) === String(seatA)) { playerA = p; keyA = child.key; }
+            if (String(p.seat) === String(seatB)) { playerB = p; keyB = child.key; }
+        });
+        if (!playerA || !playerB) {
+            console.warn('🔄 Swap: could not find both players', {seatA, seatB, playerA, playerB});
+            return;
+        }
+
+        // Write a display-only swap record — all tabs will read this and swap their DOM
+        database.ref('game/displaySwap').set({
+            seatA: seatA,
+            seatB: seatB,
+            nameA: playerA.name || seatA,
+            nameB: playerB.name || seatB,
+            identityA: playerA.name, // LiveKit identity = player name
+            identityB: playerB.name,
+            swappedAt: Date.now()
+        });
+        console.log('🔄 Display swap written to Firebase');
+    });
+}
+
+// Helper: get the display name for a seat, respecting any active visual swap
+function _getDisplayName(seat, originalName) {
+    const sw = window._activeDisplaySwap;
+    if (!sw) return originalName;
+    if (String(seat) === String(sw.seatA)) return sw.nameB; // seatA now shows nameB
+    if (String(seat) === String(sw.seatB)) return sw.nameA; // seatB now shows nameA
+    return originalName;
+}
+
+
+// Apply a visual seat swap on this page — swaps names and video feeds
+function _applyDisplaySwap(seatA, seatB, nameA, nameB, identityA, identityB) {
+    console.log('🔄 Applying visual swap:', seatA, '↔', seatB);
+
+    // Swap name labels
+    const nameElA = document.getElementById('name-' + seatA);
+    const nameElB = document.getElementById('name-' + seatB);
+    if (nameElA) nameElA.textContent = nameB; // seat A now shows name B
+    if (nameElB) nameElB.textContent = nameA; // seat B now shows name A
+
+    // Swap video feeds: remove existing videos and re-attach to swapped positions
+    const room = window._lkRoom;
+    if (room) {
+        // Handle local participant
+        const localIdentity = room.localParticipant && room.localParticipant.identity;
+        const myNewSeat = (localIdentity === identityA) ? seatB
+                        : (localIdentity === identityB) ? seatA
+                        : null;
+
+        // Re-attach all prod/host seat videos to swapped positions
+        const allParticipants = [...(room.remoteParticipants ? room.remoteParticipants.values() : [])];
+        if (room.localParticipant) allParticipants.push(room.localParticipant);
+
+        allParticipants.forEach((participant) => {
+            const identity = participant.identity;
+            let targetSeat = null;
+            if (identity === identityA) targetSeat = seatB; // was in A, now shows in B
+            else if (identity === identityB) targetSeat = seatA; // was in B, now shows in A
+            if (!targetSeat) return;
+
+            // Find and move existing video element
+            const oldVideoA = document.getElementById('video-' + seatA);
+            const oldVideoB = document.getElementById('video-' + seatB);
+            const vidA = oldVideoA && oldVideoA.querySelector('.lk-video');
+            const vidB = oldVideoB && oldVideoB.querySelector('.lk-video');
+
+            // Detach both first, then re-attach to swapped positions
+            if (vidA) { vidA.remove(); }
+            if (vidB) { vidB.remove(); }
+
+            // Re-attach using tracks
+            participant.trackPublications.forEach((pub) => {
+                if (pub.kind === LivekitClient.Track.Kind.Video && pub.track && pub.isSubscribed) {
+                    setTimeout(() => _lkAttachVideo(pub.track, targetSeat, true, 0, participant === room.localParticipant), 100);
+                }
+                // For local participant, use localParticipant.videoTrack
+                if (participant === room.localParticipant && pub.kind === 'video' && pub.track) {
+                    setTimeout(() => _lkAttachVideo(pub.track, targetSeat, true, 0, true), 100);
+                }
+            });
+        });
+
+        // Update our own seat tracking if we're one of the swapped people
+        const myS = window.currentUser && window.currentUser.seat;
+        if (String(myS) === String(seatA)) {
+            window.currentUser.seat = seatB;
+            sessionStorage.setItem('playerSeat', String(seatB));
+        } else if (String(myS) === String(seatB)) {
+            window.currentUser.seat = seatA;
+            sessionStorage.setItem('playerSeat', String(seatA));
+        }
+    }
+}
+
+
 // ============================================================
 // LIVEKIT VIDEO INTEGRATION
 // ============================================================
@@ -4105,7 +4636,8 @@ function _lkCurrentUser() {
 
 // Map a LiveKit participant identity to their seat number
 // Identity is the player's display name; we look it up in Firebase
-async function _lkIdentityToSeat(identity, isMainRoom) {
+async function _lkIdentityToSeat(identity, isMainRoom, attempt) {
+    attempt = attempt || 0;
     return new Promise((resolve) => {
         database.ref('players')
             .orderByChild('name')
@@ -4114,19 +4646,37 @@ async function _lkIdentityToSeat(identity, isMainRoom) {
                 let seat = null;
                 snap.forEach((child) => {
                     const p = child.val();
+                    // For main room: use main seat number
+                    // For other rooms: use roomSeat ONLY — never fall back to
+                    // main seat number since room-video-N uses room seat numbers (1-5)
                     seat = isMainRoom ? (p.seat || null) : (p.roomSeat || null);
                 });
-                resolve(seat);
+                if (!seat && attempt < 8) {
+                    // Seat not assigned yet (player hasn't claimed one) — retry
+                    // Up to 8 times × 500ms = 4 seconds
+                    setTimeout(() => {
+                        _lkIdentityToSeat(identity, isMainRoom, attempt + 1).then(resolve);
+                    }, 500);
+                } else {
+                    resolve(seat);
+                }
             });
     });
 }
 
 // Attach a video track to a seat's video-N div
-function _lkAttachVideo(track, seatNumber, isMainRoom) {
+function _lkAttachVideo(track, seatNumber, isMainRoom, attempt, isLocal) {
+    attempt = attempt || 0; isLocal = !!isLocal;
     const divId = isMainRoom ? `video-${seatNumber}` : `room-video-${seatNumber}`;
     const container = document.getElementById(divId);
     if (!container) {
-        console.warn('📹 No container found for seat:', seatNumber, divId);
+        if (!isMainRoom && attempt < 20) {
+            // room-video-N not ready yet (overlay not open / seats not generated)
+            // retry up to 20 times × 300ms = 6 seconds
+            setTimeout(() => _lkAttachVideo(track, seatNumber, isMainRoom, attempt + 1), 300);
+        } else {
+            console.warn('📹 No container found for seat:', seatNumber, divId);
+        }
         return;
     }
 
@@ -4137,6 +4687,8 @@ function _lkAttachVideo(track, seatNumber, isMainRoom) {
     // Create and style the video element
     const videoEl = track.attach();
     videoEl.className = 'lk-video';
+    // Mirror ALL video — webcams send naturally mirrored (selfie) view
+    // scaleX(-1) corrects this for all participants
     videoEl.style.cssText = [
         'width: 100%',
         'height: 100%',
@@ -4146,6 +4698,7 @@ function _lkAttachVideo(track, seatNumber, isMainRoom) {
         'top: 0',
         'left: 0',
         'pointer-events: none',
+        'transform: scaleX(-1)',
     ].join('; ');
 
     // Make container relative so video fills it
@@ -4171,9 +4724,17 @@ function _lkDetachSeat(seatNumber, isMainRoom) {
 
 // ── Core: join a LiveKit room ─────────────────────────────────
 window.joinLiveKitRoom = async function(gameRoom) {
-    // Don't rejoin if already in the same room
-    if (window._lkGameRoom === gameRoom && window._lkRoom) {
-        console.log('📹 Already in LiveKit room:', gameRoom);
+    // Check user and name FIRST before touching any state flags
+    const user = _lkCurrentUser();
+    if (!user || !user.name || ['New Host', 'New Player'].includes(user.name)) {
+        console.log('📹 Waiting for real name before joining LiveKit:', user && user.name);
+        return; // Watcher will re-fire when name updates
+    }
+
+    // Don't rejoin if already in the same room and connected
+    if (window._lkGameRoom === gameRoom && window._lkRoom &&
+        window._lkRoom.state === 'connected') {
+        console.log('📹 Already connected to LiveKit room:', gameRoom);
         return;
     }
 
@@ -4186,12 +4747,6 @@ window.joinLiveKitRoom = async function(gameRoom) {
     // Disconnect any existing room first
     await disconnectLiveKit();
 
-    const user = _lkCurrentUser();
-    if (!user || !user.name) {
-        console.warn('📹 joinLiveKitRoom: currentUser not ready yet');
-        return;
-    }
-
     window._lkConnecting = true;
     window._lkGameRoom = gameRoom;
     const isMainRoom = (gameRoom === 'main');
@@ -4201,9 +4756,15 @@ window.joinLiveKitRoom = async function(gameRoom) {
     try {
         // 1. Fetch a signed token from the Cloud Function
         const tokenUrl = `${LIVEKIT_TOKEN_URL}?room=${encodeURIComponent(gameRoom)}&identity=${encodeURIComponent(user.name)}`;
+        console.log('📹 Fetching token from:', tokenUrl);
         const resp = await fetch(tokenUrl);
-        if (!resp.ok) throw new Error(`Token fetch failed: ${resp.status}`);
-        const { token } = await resp.json();
+        if (!resp.ok) {
+            const errText = await resp.text().catch(() => 'no body');
+            throw new Error(`Token fetch failed: ${resp.status} — ${errText}`);
+        }
+        const data = await resp.json();
+        console.log('📹 Token received for room:', data.room);
+        const token = data.token;
 
         // 2. Create Room and set up event listeners BEFORE connecting
         const room = new LivekitClient.Room({
@@ -4224,6 +4785,14 @@ window.joinLiveKitRoom = async function(gameRoom) {
 
             // Subscribe to their tracks
             participant.on(LivekitClient.ParticipantEvent.TrackSubscribed, (track) => {
+                if (track.kind === LivekitClient.Track.Kind.Audio) {
+                    const audioEl = track.attach();
+                    audioEl.style.display = 'none';
+                    audioEl.setAttribute('data-lk', '1');
+                    document.body.appendChild(audioEl);
+                    console.log('🔊 Audio attached for:', participant.identity);
+                    return;
+                }
                 if (track.kind === LivekitClient.Track.Kind.Video) {
                     _lkAttachVideo(track, seat, isMainRoom);
                 }
@@ -4246,6 +4815,14 @@ window.joinLiveKitRoom = async function(gameRoom) {
 
         // ── Track subscribed (covers participants already in room) ──
         room.on(LivekitClient.RoomEvent.TrackSubscribed, async (track, _pub, participant) => {
+            if (track.kind === LivekitClient.Track.Kind.Audio) {
+                // Attach audio — creates an <audio> element and plays it
+                const audioEl = track.attach();
+                audioEl.style.display = 'none';
+                document.body.appendChild(audioEl);
+                console.log('🔊 Audio attached for:', participant.identity);
+                return;
+            }
             if (track.kind !== LivekitClient.Track.Kind.Video) return;
             const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
             if (seat) _lkAttachVideo(track, seat, isMainRoom);
@@ -4262,11 +4839,41 @@ window.joinLiveKitRoom = async function(gameRoom) {
             console.log('📹 LiveKit room disconnected');
             window._lkRoom = null;
             window._lkGameRoom = null;
+            window._lkConnecting = false;
+            // Note: LiveKit has its own built-in reconnect for transient drops.
+            // We do NOT auto-rejoin here — that caused infinite reconnect loops
+            // when two tabs had the same identity and kept kicking each other.
         });
 
         // 3. Connect to LiveKit
         await room.connect(LIVEKIT_WS_URL, token);
         console.log('✅ LiveKit connected:', room.name);
+
+        // Ensure AV controls are active after LiveKit connects
+        const _user = _lkCurrentUser();
+        if (_user && _user.seat && typeof window.setupAVControls === 'function') {
+            window.setupAVControls(_user.seat);
+        }
+
+        // ── Unlock AudioContext (browser autoplay policy) ──────────────
+        // Browsers block audio until a user gesture. room.startAudio() resumes it.
+        const _tryStartAudio = () => {
+            room.startAudio().then(() => {
+                console.log('🔊 AudioContext started OK');
+            }).catch(() => {
+                console.warn('🔊 AudioContext blocked — will unlock on next interaction');
+                const _unlock = () => {
+                    room.startAudio()
+                        .then(() => console.log('🔊 AudioContext unlocked via gesture'))
+                        .catch(e => console.warn('🔊 Audio unlock error:', e));
+                    document.removeEventListener('click',   _unlock);
+                    document.removeEventListener('keydown', _unlock);
+                };
+                document.addEventListener('click',   _unlock, { once: true });
+                document.addEventListener('keydown', _unlock, { once: true });
+            });
+        };
+        _tryStartAudio();
 
         // 4. Publish own camera + mic
         const tracks = await LivekitClient.createLocalTracks({
@@ -4278,32 +4885,158 @@ window.joinLiveKitRoom = async function(gameRoom) {
         });
 
         window._lkLocalTracks = tracks;
-        await room.localParticipant.publishTracks(tracks);
-        console.log('✅ Local tracks published');
+        // LiveKit JS SDK uses publishTrack (singular) per track
+        for (const track of tracks) {
+            await room.localParticipant.publishTrack(track);
+        }
+        console.log('✅ Local tracks published:', tracks.length, 'tracks');
 
-        // 5. Attach own video to own seat
-        const mySeat = user.seat || (isMainRoom ? null : user.roomSeat);
-        if (mySeat) {
-            tracks.forEach((track) => {
-                if (track.kind === LivekitClient.Track.Kind.Video) {
-                    _lkAttachVideo(track, mySeat, isMainRoom);
+        // 7. Watch for participants claiming seats AFTER we're already connected
+        // This fires when a remote player's seat field is written to Firebase
+        // (they were already in LiveKit but had no seat when step 6 ran)
+        if (window._lkSeatWatcher) {
+            database.ref('players').off('value', window._lkSeatWatcher);
+        }
+        // Debounce the seat watcher — rapid Firebase fires are batched into one scan
+        let _seatWatcherTimer = null;
+        window._lkSeatWatcher = database.ref('players').on('value', () => {
+            if (_seatWatcherTimer) return; // already queued
+            _seatWatcherTimer = setTimeout(() => {
+                _seatWatcherTimer = null;
+                // Re-scan all remote participants to find any who now have a seat
+                // but haven't had their video attached yet
+                room.remoteParticipants.forEach(async (participant) => {
+                    const seat = await _lkIdentityToSeat(participant.identity, isMainRoom, 0);
+                    if (!seat) return;
+                    const divId = isMainRoom ? ('video-' + seat) : ('room-video-' + seat);
+                    const container = document.getElementById(divId);
+                    if (!container || container.querySelector('.lk-video')) return; // already attached
+                    participant.trackPublications.forEach((pub) => {
+                        if (pub.kind === LivekitClient.Track.Kind.Video && pub.track && pub.isSubscribed) {
+                            _lkAttachVideo(pub.track, seat, isMainRoom, 0);
+                            console.log('📹 Seat-watcher attached video for', participant.identity, '→', divId);
+                        }
+                    });
+                });
+            }, 2000); // 2s debounce — batch rapid Firebase changes
+        });
+
+        // For breakout rooms: scan already-connected participants and attach video
+        // (they may have connected before us so their TrackSubscribed already fired)
+        if (!isMainRoom) {
+            setTimeout(() => {
+                room.remoteParticipants.forEach(async (participant) => {
+                    const seat = await _lkIdentityToSeat(participant.identity, false);
+                    if (!seat) return;
+                    participant.trackPublications.forEach((pub) => {
+                        if (pub.kind === LivekitClient.Track.Kind.Video && pub.track && pub.isSubscribed) {
+                            _lkAttachVideo(pub.track, seat, false, 0);
+                            console.log('📹 Late-attach room video:', participant.identity, '→ room-video-' + seat);
+                        }
+                    });
+                });
+            }, 500);
+        }
+
+        // Restore mute state from Firebase so it carries across rooms
+        if (user.id) {
+            database.ref('players/' + user.id).once('value', (snap) => {
+                const pData = snap.val() || {};
+                if (pData.audioMuted) {
+                    const micPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                    if (micPub && !micPub.isMuted) {
+                        micPub.mute();
+                        console.log('🎤 Restored muted state from Firebase');
+                    }
+                }
+                if (pData.videoMuted) {
+                    const camPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+                    if (camPub && !camPub.isMuted) {
+                        camPub.mute();
+                        console.log('📹 Restored video-off state from Firebase');
+                    }
                 }
             });
         }
+
+        // 5. Attach own video to own seat
+        // For non-main rooms roomSeat may not be assigned yet — retry until it is
+        const _attachOwnVideo = (attempt) => {
+            attempt = attempt || 0;
+            const u      = _lkCurrentUser();
+            const mySeat = isMainRoom
+                ? (u && u.seat)
+                : (u && u.roomSeat);  // roomSeat only — main seat ≠ room seat
+            console.log('🪑 _attachOwnVideo attempt — isMainRoom:', isMainRoom, '| seat:', u && u.seat, '| roomSeat:', u && u.roomSeat, '| mySeat:', mySeat);
+
+            if (!mySeat) {
+                // Also check Firebase directly in case currentUser.roomSeat not updated yet
+                if (!isMainRoom && u && u.id) {
+                    // Host/prod members don't get roomSeat assigned — skip gracefully
+                    if (u.role === 'host' || u.id === 'host' || (u.id && u.id.startsWith('prod-'))) {
+                        console.log('🪑 Host/prod in breakout room — no roomSeat assigned, skipping own video attach');
+                        return;
+                    }
+                    database.ref('players/' + u.id + '/roomSeat').once('value', (s) => {
+                        const dbRoomSeat = s.val();
+                        if (dbRoomSeat) {
+                            u.roomSeat = dbRoomSeat;
+                            if (window.currentUser) window.currentUser.roomSeat = dbRoomSeat;
+                            console.log('🪑 Got roomSeat from Firebase:', dbRoomSeat);
+                            _attachOwnVideo();
+                        } else {
+                            setTimeout(_attachOwnVideo, 500);
+                        }
+                    });
+                } else {
+                    if (attempt < 80) { // max 40s wait
+                        setTimeout(() => _attachOwnVideo(attempt + 1), 500);
+                    } else {
+                        console.log('🪑 _attachOwnVideo: gave up waiting for seat after 40s');
+                    }
+                }
+                return;
+            }
+
+            tracks.forEach((track) => {
+                if (track.kind === LivekitClient.Track.Kind.Video) {
+                    _lkAttachVideo(track, mySeat, isMainRoom, 0, true); // isLocal=true
+                }
+            });
+        };
+        _attachOwnVideo();
 
         // 6. Handle already-connected participants
         room.remoteParticipants.forEach(async (participant) => {
             const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
             if (!seat) return;
             participant.trackPublications.forEach((pub) => {
-                if (pub.track && pub.kind === LivekitClient.Track.Kind.Video) {
-                    _lkAttachVideo(pub.track, seat, isMainRoom);
+                if (pub.kind === LivekitClient.Track.Kind.Audio) {
+                    if (pub.track && pub.isSubscribed) {
+                        const audioEl = pub.track.attach();
+                        audioEl.style.display = 'none';
+                        audioEl.setAttribute('data-lk', '1');
+                        document.body.appendChild(audioEl);
+                        console.log('🔊 Audio attached (already connected):', participant.identity);
+                    }
+                    // else will arrive via TrackSubscribed
+                    return;
+                }
+                if (pub.kind === LivekitClient.Track.Kind.Video) {
+                    if (pub.track && pub.isSubscribed) {
+                        // Already subscribed — attach immediately
+                        _lkAttachVideo(pub.track, seat, isMainRoom);
+                    } else {
+                        // Not yet subscribed — will arrive via TrackSubscribed event
+                        console.log('📹 Waiting for subscription:', participant.identity);
+                    }
                 }
             });
         });
 
     } catch (err) {
-        console.error('❌ LiveKit connection failed:', err);
+        console.error('❌ LiveKit connection failed:', err.message || err);
+        console.error('❌ Stack:', err.stack || 'no stack');
         window._lkRoom = null;
         window._lkGameRoom = null;
     } finally {
@@ -4317,6 +5050,16 @@ window.disconnectLiveKit = async function() {
         window._lkLocalTracks.forEach((track) => track.stop());
         window._lkLocalTracks = [];
     }
+    // Remove any injected audio elements
+    document.querySelectorAll('audio[data-lk]').forEach(el => el.remove());
+    // Clean up the seat watcher
+    if (window._lkSeatWatcher) {
+        database.ref('players').off('value', window._lkSeatWatcher);
+        window._lkSeatWatcher = null;
+    }
+    // Set _lkGameRoom null BEFORE disconnect so auto-rejoin doesn't fire
+    window._lkGameRoom  = null;
+    window._lkConnecting = false;
     if (window._lkRoom) {
         try {
             await window._lkRoom.disconnect();
@@ -4325,8 +5068,6 @@ window.disconnectLiveKit = async function() {
         }
         window._lkRoom = null;
     }
-    window._lkGameRoom  = null;
-    window._lkConnecting = false;
     console.log('📹 LiveKit disconnected');
 };
 
@@ -4365,6 +5106,9 @@ window.exitBreakfast = function() {
             return;
         }
 
+        // Skip for host — host has its own watcher above
+        if (user && user.role === 'host') return;
+
         database.ref('players/' + uid + '/room').on('value', (snap) => {
             const room  = snap.val();
             const phase = sessionStorage.getItem('currentPhase');
@@ -4379,7 +5123,8 @@ window.exitBreakfast = function() {
 
             // Only join if user has a name (fully registered)
             const u = _lkCurrentUser();
-            if (!u || !u.name) {
+            const placeholderName = !u || !u.name || ['New Host', 'New Player'].includes(u.name);
+            if (placeholderName) {
                 // Name not set yet — wait a moment and retry
                 setTimeout(() => joinLiveKitRoom(room), 1000);
                 return;
@@ -4392,21 +5137,231 @@ window.exitBreakfast = function() {
     trySetup();
 })();
 
-// ── Host: auto-join main room ─────────────────────────────────
-if (typeof currentUser !== 'undefined' && currentUser.role === 'host') {
-    database.ref('game/phase').once('value', (snap) => {
-        const phase = snap.val();
-        if (phase !== 'night' && phase !== 'breakfast') {
-            // Delay to let the host seat render and currentUser be fully set
-            setTimeout(() => {
-                const user = _lkCurrentUser();
-                if (user && user.name) {
-                    joinLiveKitRoom('main');
-                }
-            }, 1500);
+// ── Host: watch room changes and join LiveKit accordingly ───────
+// Host's currentUser.id is 'host', stored at players/host in Firebase.
+// hostJoinRoom() sets players/host/room — we watch that and join LiveKit.
+(function setupHostLiveKitWatcher() {
+    const trySetup = () => {
+        const user = _lkCurrentUser();
+        const isPlaceholder = !user || !user.name || user.role !== 'host'
+            || ['New Host', 'New Player', 'Host'].includes(user.name);
+        if (isPlaceholder) {
+            setTimeout(trySetup, 300);
+            return;
+        }
+
+        // Use correct Firebase path: prod members use their own ID, main host uses 'host'
+        const _hostRoomPath = (user.id && user.id.startsWith('prod-')) 
+            ? ('players/' + user.id + '/room')
+            : 'players/host/room';
+        let _lastJoinedLKRoom = null;
+        database.ref(_hostRoomPath).on('value', (snap) => {
+            const room    = snap.val() || 'main';
+            const phase   = sessionStorage.getItem('currentPhase');
+            const blocked = (phase === 'night' || phase === 'breakfast');
+
+            console.log('📹 Host room changed to:', room, '| phase:', phase);
+
+            if (blocked) { disconnectLiveKit(); _lastJoinedLKRoom = null; return; }
+
+            // Skip if already connected/connecting to this same room
+            if (room === _lastJoinedLKRoom && (window._lkRoom || window._lkConnecting)) {
+                console.log('📹 Already connected to', room, '— skipping duplicate join');
+                return;
+            }
+            _lastJoinedLKRoom = room;
+            joinLiveKitRoom(room);
+        });
+    };
+    trySetup();
+})()
+
+
+// Position AV controls just below the seat label, attached visually but not inside it
+function _positionAVControls(seatNumber) {
+    const seat = document.getElementById('seat-' + seatNumber);
+    const label = document.getElementById('seat-label-' + seatNumber);
+    const controls = document.getElementById('av-controls-' + seatNumber);
+    if (!seat || !label || !controls || controls.style.display === 'none') return;
+
+    // Use getBoundingClientRect to find label bottom relative to seat top
+    const seatRect  = seat.getBoundingClientRect();
+    const labelRect = label.getBoundingClientRect();
+    const labelBottomRelative = (labelRect.bottom - seatRect.top);
+    controls.style.top = (labelBottomRelative + 3) + 'px';
+}
+
+// Re-position all visible AV controls (called after resize)
+function _repositionAllAVControls() {
+    document.querySelectorAll('.seat-av-controls').forEach(el => {
+        if (el.style.display !== 'none') {
+            const id = el.id.replace('av-controls-', '');
+            _positionAVControls(parseInt(id));
         }
     });
 }
+
+// ── AV Controls: show buttons on own seat, icons on all seats ─────────────────
+window.setupAVControls = function(seatNumber) {
+    console.log('🎛️ setupAVControls called for seat:', seatNumber, '| currentUser:', window.currentUser && window.currentUser.id);
+    // Show control buttons only on our own seat
+    const controls = document.getElementById('av-controls-' + seatNumber);
+    if (controls) {
+        controls.style.display = 'flex';
+        setTimeout(() => _positionAVControls(seatNumber), 50);
+    }
+
+    // Only one global AV listener at a time — detach previous before adding
+    if (window._avIconsListener) {
+        database.ref('players').off('value', window._avIconsListener);
+        window._avIconsListener = null;
+    }
+
+    window._avIconsListener = database.ref('players').on('value', (snap) => {
+        // Incremental update — build desired state first, then apply atomically.
+        // Avoids the reset-all → Firebase-read → redraw race condition.
+        const myId     = window.currentUser && window.currentUser.id;
+        const micState = {};   // seat → bool (muted)
+        const camState = {};   // seat → bool (muted)
+        const mySeats  = {};   // seat → bool (belongs to me)
+
+        snap.forEach((child) => {
+            const p = child.val();
+            if (!p || !p.seat) return;
+            const s = p.seat;
+            micState[s] = !!p.audioMuted;
+            camState[s] = !!p.videoMuted;
+            // Main host: child.key='host'; prod members: child.key='prod-B' etc.
+            const _isMainHost = window.currentUser && window.currentUser.role === 'host' && window.currentUser.id === 'host';
+            const _meKey = _isMainHost ? 'host' : myId;
+            if (child.key === _meKey || child.key === myId || p.id === myId) mySeats[s] = true;
+            if (p.audioMuted || p.videoMuted) {
+                console.log('🔔 AV icon — key:', child.key, 'seat:', s,
+                    'audio:', !!p.audioMuted, 'video:', !!p.videoMuted,
+                    'isMe:', !!(child.key === myId || p.id === myId));
+            }
+        });
+
+        // Apply state to every seat that has DOM elements
+        // Numeric seats (1-25) plus prod letter seats (B-J)
+        const _allSeats = [];
+        for (let s = 1; s <= 25; s++) _allSeats.push(s);
+        ['B','C','D','E','F','G','H','I','J'].forEach(l => _allSeats.push(l));
+        for (const s of _allSeats) {
+            const micIcon = document.getElementById('mic-off-' + s);
+            const camIcon = document.getElementById('cam-off-' + s);
+            const micBtn  = document.getElementById('mic-btn-' + s);
+            const camBtn  = document.getElementById('cam-btn-'  + s);
+            if (micIcon) micIcon.style.display = micState[s] ? 'flex' : 'none';
+            if (camIcon) camIcon.style.display = camState[s] ? 'flex' : 'none';
+            if (micBtn)  micBtn.classList.toggle('av-muted',  !!(micState[s] && mySeats[s]));
+            if (camBtn)  camBtn.classList.toggle('av-muted',  !!(camState[s] && mySeats[s]));
+        }
+    });
+};
+
+window.toggleMic = function() {
+    const user = window.currentUser;
+    if (!user) return;
+    const room = window._lkRoom;
+    if (!room) return;
+    const micPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+    if (!micPub) return;
+    const nowMuted = micPub.isMuted;
+    if (nowMuted) {
+        micPub.unmute();
+    } else {
+        micPub.mute();
+    }
+    const newMuted = !nowMuted;
+    // Host record is always at players/host regardless of currentUser.id
+    // Main host uses 'host' path; prod members use their own id (prod-B etc)
+    const _avPlayerId = (user.role === 'host' && user.id === 'host') ? 'host' : user.id;
+    database.ref('players/' + _avPlayerId + '/audioMuted').set(newMuted);
+    const seat = user.seat;
+    const btn = document.getElementById('mic-btn-' + seat);
+    if (btn) btn.classList.toggle('av-muted', newMuted);
+    const icon = document.getElementById('mic-off-' + seat);
+    if (icon) icon.style.display = newMuted ? 'flex' : 'none';
+    console.log('🎤 Mic toggled:', newMuted ? 'muted' : 'unmuted');
+};
+
+window.toggleCam = function() {
+    const user = window.currentUser;
+    if (!user) return;
+    const room = window._lkRoom;
+    if (!room) return;
+    const camPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+    if (!camPub) return;
+    const nowMuted = camPub.isMuted;
+    if (nowMuted) {
+        camPub.unmute();
+    } else {
+        camPub.mute();
+    }
+    const newMuted = !nowMuted;
+    const _avPlayerIdCam = (user.role === 'host' && user.id === 'host') ? 'host' : user.id;
+    database.ref('players/' + _avPlayerIdCam + '/videoMuted').set(newMuted);
+    const seat = user.seat;
+    const btn = document.getElementById('cam-btn-' + seat);
+    if (btn) btn.classList.toggle('av-muted', newMuted);
+    const icon = document.getElementById('cam-off-' + seat);
+    if (icon) icon.style.display = newMuted ? 'flex' : 'none';
+    // Hide/show the local video element
+    const videoDiv = document.getElementById('video-' + seat);
+    if (videoDiv) videoDiv.style.opacity = newMuted ? '0' : '1';
+    console.log('📹 Camera toggled:', newMuted ? 'off' : 'on');
+};
+
+
+// ── Audio Diagnostics ─────────────────────────────────────────────────────────
+// Call window.diagAudio() from the browser console to inspect audio state
+window.diagAudio = function() {
+    const room = window._lkRoom;
+    if (!room) { console.warn('🔇 No LiveKit room connected'); return; }
+
+    console.group('🔊 LiveKit Audio Diagnostics');
+
+    // AudioContext state
+    console.log('Room state:', room.state);
+    console.log('CanPlaybackAudio:', room.canPlaybackAudio);
+
+    // Local participant
+    const lp = room.localParticipant;
+    console.group('👤 Local:', lp.identity);
+    lp.trackPublications.forEach((pub) => {
+        if (pub.kind === 'audio') {
+            console.log('  Mic pub — muted:', pub.isMuted, '| enabled:', pub.track && pub.track.enabled, '| mediaStreamTrack readyState:', pub.track && pub.track.mediaStreamTrack && pub.track.mediaStreamTrack.readyState);
+        }
+    });
+    console.groupEnd();
+
+    // Remote participants
+    room.remoteParticipants.forEach((p) => {
+        console.group('👥 Remote:', p.identity);
+        p.trackPublications.forEach((pub) => {
+            if (pub.kind === 'audio') {
+                console.log('  Audio pub — subscribed:', pub.isSubscribed, '| muted:', pub.isMuted, '| track:', !!pub.track);
+                if (pub.track) {
+                    const mst = pub.track.mediaStreamTrack;
+                    console.log('  MediaStreamTrack — enabled:', mst && mst.enabled, '| readyState:', mst && mst.readyState, '| muted:', mst && mst.muted);
+                }
+            }
+        });
+        console.groupEnd();
+    });
+
+    // Injected <audio> elements
+    const audioEls = document.querySelectorAll('audio[data-lk]');
+    console.group('🎵 Injected <audio> elements:', audioEls.length);
+    audioEls.forEach((el, i) => {
+        console.log(`  [${i}] paused:${el.paused} muted:${el.muted} volume:${el.volume} readyState:${el.readyState} srcObject:${!!el.srcObject}`);
+    });
+    console.groupEnd();
+
+    console.groupEnd();
+};
+console.log('💡 Run window.diagAudio() in console to diagnose audio issues');
 
 // ── Cleanup on page unload ────────────────────────────────────
 window.addEventListener('beforeunload', () => {
