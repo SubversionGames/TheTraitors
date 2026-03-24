@@ -356,7 +356,7 @@ body.no-transition::after {
 }
 
 /* Host video container - perfectly centered */
-.video-seat.host #video-1 {
+.video-seat.host #video-A {
     width: 100% !important;
     height: 100% !important;
     border-radius: 50% !important;
@@ -370,7 +370,7 @@ body.no-transition::after {
 }
 
 /* Host video element - perfectly fitted */
-.video-seat.host #video-1 video {
+.video-seat.host #video-A video {
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
@@ -1305,4 +1305,66 @@ body.player-ready #timer-display {
 .media-control-btn.muted {
     background: rgba(220, 53, 69, 0.8);
     border-color: #dc3545;
+}
+/* ── AV Controls & Status Icons ─────────────────────── */
+
+/* Buttons: sit directly below the seat-label, attached to it visually */
+.seat-av-controls {
+    position: absolute;
+    /* Positioned by JS after label renders — initially below label */
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+    z-index: 20;
+    /* top is set dynamically via JS based on label height */
+    top: calc(100% + 30px); /* default fallback: circle bottom + label gap */
+}
+.av-btn {
+    background: rgba(20, 20, 20, 0.82);
+    border: 1px solid rgba(255,255,255,0.22);
+    border-radius: 6px;
+    color: white;
+    width: 28px;
+    height: 22px;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+.av-btn:hover {
+    background: rgba(255,255,255,0.18);
+}
+.av-btn.av-muted {
+    background: rgba(190, 20, 20, 0.88);
+    border-color: rgba(255,80,80,0.4);
+}
+
+/* Status icons: appear at the bottom edge of the seat circle */
+.av-status-icons {
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 4px;
+    z-index: 15;
+    pointer-events: none;
+}
+.av-icon {
+    background: rgba(190, 20, 20, 0.9);
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.av-icon svg {
+    display: block;
 }
