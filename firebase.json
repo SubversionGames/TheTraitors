@@ -8,12 +8,41 @@
       "README.md",
       ".git",
       ".gitignore"
+    ],
+    "headers": [
+      {
+        "source": "**/*.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "**/*.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "**/*.css",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
     ]
-  },
-  "database": {
-    "rules": "database.rules.json"
   },
   "functions": {
     "source": "functions"
+  },
+  "database": {
+    "rules": "database.rules.json"
   }
 }
