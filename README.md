@@ -20,3 +20,4 @@ A web-based game platform inspired by The Traitors, featuring real-time video ch
 - **Player**: Participate in the game
 - **Viewer**: Watch-only access
 - **Ghost**: Former players who can still watch
+ 
