@@ -140,10 +140,13 @@ async function initializeGame() {
     // Listen to game state changes
     setupFirebaseListeners();
     
-    // Initialize video seats after page is fully stable
-    setTimeout(() => {
+    // Initialize video seats after browser layout is complete.
+    // Double-requestAnimationFrame waits for the browser to finish layout AND paint
+    // before measuring viewport dimensions, so seats appear immediately in the
+    // correct position with no flash or snap-to-correct-position delay.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
         generateVideoSeats();
-    }, 500);
+    }));
     
     // Listen for changes to main room seat count
     database.ref('game/roomLimits/main').on('value', (snapshot) => {
@@ -156,10 +159,13 @@ async function initializeGame() {
             database.ref('players').once('value', (playersSnapshot) => {
                 const players = playersSnapshot.val() || {};
                 for (let playerId in players) {
-                    if (players[playerId].seat) {
+                    const _p = players[playerId];
+                    // Skip host and prod members — their letter seats are managed separately
+                    if (_p.isHost || _p.isProdMember) continue;
+                    if (_p.seat && typeof _p.seat === 'number') {
                         currentAssignments[playerId] = {
-                            seat: players[playerId].seat,
-                            name: players[playerId].name
+                            seat: _p.seat,
+                            name: _p.name
                         };
                     }
                 }
@@ -169,39 +175,60 @@ async function initializeGame() {
                 
                 // Only regenerate if we've already generated seats once
                 if (window.seatsGenerated) {
+                    // Write seat restorations to Firebase BEFORE regenerating seats.
+                    // This way when generateVideoSeats() triggers the players listener,
+                    // the correct player→seat mappings are already in Firebase and
+                    // seats show names immediately — no flicker to 'Empty'.
+                    const restorationUpdates = {};
+                    const displacedPlayers = {}; // players whose seat no longer exists
+
+                    for (const playerId in currentAssignments) {
+                        const assignment = currentAssignments[playerId];
+                        if (assignment.seat <= newSeatCount) {
+                            // Seat still exists — re-affirm game/seats entry
+                            restorationUpdates['game/seats/' + assignment.seat] = playerId;
+                        } else {
+                            // Seat removed — will need to find new seat
+                            displacedPlayers[playerId] = assignment;
+                        }
+                    }
+
+                    // Write valid restorations immediately (no delay)
+                    if (Object.keys(restorationUpdates).length) {
+                        database.ref().update(restorationUpdates);
+                    }
+
+                    // Now regenerate seat DOM — players listener will fire with
+                    // correct data already in Firebase
                     regenerateSeatsWithNewCount(newSeatCount);
-                    
-                    // Restore player assignments after a brief delay
-                    setTimeout(() => {
-                        for (let playerId in currentAssignments) {
-                            const assignment = currentAssignments[playerId];
-                            
-                            // If player's seat still exists, restore to same seat
-                            if (assignment.seat <= newSeatCount) {
-                                database.ref('game/seats/' + assignment.seat).once('value', (seatSnap) => {
-                                    if (!seatSnap.val()) {
-                                        database.ref('game/seats/' + assignment.seat).set(playerId);
-                                        console.log(`✅ Restored ${assignment.name} to seat ${assignment.seat}`);
-                                    }
-                                });
-                            } else {
-                                // Player's seat was removed - find first available seat
-                                console.log(`⚠️ Seat ${assignment.seat} removed - finding new seat for ${assignment.name}`);
-                                database.ref('game/seats').once('value', (seatsSnap) => {
-                                    const seats = seatsSnap.val() || {};
-                                    // Find first empty seat
+
+                    // Handle displaced players (their seat was removed) after a short delay
+                    if (Object.keys(displacedPlayers).length) {
+                        setTimeout(() => {
+                            database.ref('game/seats').once('value', (seatsSnap) => {
+                                const seats = seatsSnap.val() || {};
+                                const displacedUpdates = {};
+                                for (const playerId in displacedPlayers) {
+                                    const assignment = displacedPlayers[playerId];
                                     for (let i = 2; i <= newSeatCount; i++) {
-                                        if (!seats[i]) {
-                                            database.ref('game/seats/' + i).set(playerId);
-                                            database.ref('players/' + playerId + '/seat').set(i);
+                                        if (!seats[i] && !displacedUpdates['game/seats/' + i]) {
+                                            displacedUpdates['game/seats/' + i] = playerId;
+                                            displacedUpdates['players/' + playerId + '/seat'] = i;
                                             console.log(`✅ Moved ${assignment.name} to seat ${i}`);
                                             break;
                                         }
                                     }
-                                });
-                            }
-                        }
-                    }, 500);
+                                }
+                                if (Object.keys(displacedUpdates).length) {
+                                    database.ref().update(displacedUpdates);
+                                }
+                                window._regeneratingSeats = false;
+                            });
+                        }, 200);
+                    } else {
+                        // No displaced players — clear flag after DOM settles
+                        setTimeout(() => { window._regeneratingSeats = false; }, 200);
+                    }
                 } else {
                     generateVideoSeats();
                 }
@@ -224,6 +251,20 @@ function generateUserId() {
 // ============================================
 
 function setupFirebaseListeners() {
+    // ============================================================
+    // SAFETY GUARD: Prevent duplicate listener registration
+    // If this function is ever called a second time (e.g. due to
+    // a navigation event or accidental double-call), bail out
+    // immediately. All .on() listeners registered here would
+    // otherwise fire TWICE for every Firebase update.
+    // ============================================================
+    if (window._firebaseListenersRegistered) {
+        console.warn('⚠️ setupFirebaseListeners() called a second time — skipping to prevent duplicate listeners.');
+        return;
+    }
+    window._firebaseListenersRegistered = true;
+    console.log('✅ setupFirebaseListeners() registering listeners for the first (and only) time.');
+
     // Check for game timeout (1 hour of complete inactivity)
     const ONE_HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
     
@@ -293,7 +334,6 @@ function setupFirebaseListeners() {
         const phaseElement = document.getElementById('phase-name');
         if (phaseElement && phase) {
             const phaseNames = {
-                'waiting': 'Waiting to Start',
                 'lobby': 'Lobby - Select Your Seat',
                 'breakfast': 'Breakfast',
                 'talk': 'Talk Time',
@@ -310,29 +350,9 @@ function setupFirebaseListeners() {
             }
         }
         
-        // Force seats visible during lobby phase - with polling to ensure seats exist
-        if (phase === 'lobby' && currentUser.role === 'player' && currentUser.room === 'main') {
-            let attempts = 0;
-            const checkSeats = setInterval(() => {
-                const firstSeat = document.getElementById('seat-2');
-                attempts++;
-                
-                if (firstSeat || attempts > 20) { // Try for max 1 second
-                    clearInterval(checkSeats);
-                    
-                    if (firstSeat) {
-                        document.querySelectorAll('.video-seat').forEach(seat => {
-                            seat.style.display = 'flex';
-                            seat.style.visibility = 'visible';
-                            seat.style.opacity = '1';
-                        });
-                        console.log('✅ Seats forced visible in lobby phase');
-                    } else {
-                        console.error('❌ Seats never appeared after', attempts, 'attempts');
-                    }
-                }
-            }, 50);
-        }
+        // Seat visibility is handled by generateVideoSeats() hide-then-reveal pattern.
+        // The old polling loop that forced seats visible is removed — it was firing
+        // while seats were still being positioned, causing the wrong-position flash.
 
         // Clean up role reveal text when leaving circle-of-truth
         if (phase !== 'circle-of-truth') {
@@ -364,8 +384,12 @@ function setupFirebaseListeners() {
             const overlayMessage = overlay ? overlay.querySelector('.overlay-message') : null;
             
             if (phase === 'breakfast') {
-                // Show breakfast overlay IMMEDIATELY
-                if (overlay && overlayMessage) {
+                // Show breakfast overlay IMMEDIATELY — but only if not already visible
+                // (player.html has its own #breakfast-overlay; don't double-show)
+                const _bfOverlay = document.getElementById('breakfast-overlay');
+                const _bfAlreadyVisible = _bfOverlay && _bfOverlay.classList.contains('visible');
+                const _nightAlreadyVisible = overlay && overlay.classList.contains('visible');
+                if (!_bfAlreadyVisible && !_nightAlreadyVisible && overlay && overlayMessage) {
                     overlayMessage.textContent = 'Breakfast Has Begun...';
                     overlay.style.display = 'flex';
                     overlay.classList.add('visible');
@@ -423,7 +447,6 @@ function setupFirebaseListeners() {
     
     // Timer listener - delayed initialization with debounce
     let timerListenerActive = false;
-    let lastTimerValue = null;
     
     setTimeout(() => {
         timerListenerActive = true;
@@ -441,18 +464,8 @@ function setupFirebaseListeners() {
             const timer = snapshot.val();
             console.log('📊 Timer data:', timer);
             
-            // Debounce: Only run if timer value actually changed
-            const timerString = JSON.stringify(timer);
-            console.log('🔍 Current timer string:', timerString);
-            console.log('🔍 Last timer string:', lastTimerValue);
-            
-            if (timerString === lastTimerValue) {
-                console.log('⏭️ Timer unchanged, skipping');
-                return;
-            }
-            
+            // No debounce — Firebase .on() only fires on real changes
             console.log('✅ Timer changed, processing...');
-            lastTimerValue = timerString;
             
             const timerElement = document.getElementById('timer');
             const phaseElement = document.getElementById('phase-name');
@@ -468,7 +481,6 @@ function setupFirebaseListeners() {
             
             // Phase names for display
             const phaseNames = {
-                'waiting': 'Waiting to Start',
                 'lobby': 'Lobby - Select Your Seat',
                 'breakfast': 'Breakfast',
                 'talk': 'Talk Time',
@@ -560,7 +572,7 @@ function setupFirebaseListeners() {
                         database.ref('game/phase').once('value', (phaseSnapshot) => {
                             const currentPhase = phaseSnapshot.val();
                             
-                            if (currentPhase === 'voting') {
+                            if (currentPhase === 'first-vote' || currentPhase === 'second-vote') {
                                 console.log('🔔 VOTING TIMER EXPIRED');
                                 
                                 // Play gong sound
@@ -609,6 +621,424 @@ function setupFirebaseListeners() {
     }, 1000);
 
     // ============================================
+    // FORCE RESET LISTENER (ALL USERS)
+    // ============================================
+    // When host clicks Reset Game, ALL pages reload — including prod tabs
+    let _lastForceReset = null;
+    database.ref('game/forceReset').on('value', (snap) => {
+        const val = snap.val();
+        if (!val) return;
+        if (_lastForceReset === val) return; // dedupe
+        _lastForceReset = val;
+        // Only react if the signal is RECENT (within 5 seconds).
+        const _ageMs = Date.now() - val;
+        if (_ageMs > 5000) {
+            console.log('⏩ forceReset signal is stale (' + Math.round(_ageMs/1000) + 's old) — ignoring');
+            return;
+        }
+        // Main host does NOT reload — they do a soft in-place reset.
+        // Only players and prod members reload.
+        const _cu = window.currentUser;
+        const _isMainHost = _cu && _cu.id === 'host' || 
+            (_cu && _cu.role === 'host' && !_cu.isProdMember && 
+             (_cu.id === 'host' || (_cu.id && !_cu.id.startsWith('prod-'))));
+        if (_isMainHost) {
+            console.log('⏩ forceReset: main host skips reload (soft reset already done)');
+            return;
+        }
+        console.log('🔄 Force reset signal received — performing soft reset');
+        // ── Soft reset: player stays seated and connected, no page reload ──
+        // Players keep their seat/room/LiveKit connection. We only clear
+        // game-UI state that won't be cleared by the Firebase phase → 'lobby' listener.
+
+        // 1. Clear in-memory game-state flags (role, vote — NOT seat/room)
+        // For prod members, preserve their role — only player game-roles (traitor/faithful)
+        // need clearing. Prod members keep their host/prod identity.
+        if (window.currentUser && !window.currentUser.isProdMember) {
+            window.currentUser.role = 'player'; // role will be re-assigned next game
+        }
+        if (!currentUser.isProdMember) currentUser.role = 'player';
+
+        // 2. Clear any phase overlays that might be visible
+        ['night-overlay','breakfast-overlay'].forEach(id => {
+            const _ov = document.getElementById(id);
+            if (_ov) { _ov.classList.remove('visible'); _ov.style.display = 'none'; }
+        });
+        // Restore seat/tab visibility (lobby shows seats)
+        document.querySelectorAll('.video-seat').forEach(s => {
+            s.style.removeProperty('display');
+            s.style.removeProperty('visibility');
+        });
+        const _tabCont = document.querySelector('.tab-container');
+        if (_tabCont) { _tabCont.style.removeProperty('display'); _tabCont.style.removeProperty('visibility'); }
+
+        // 3. Clear vote pill overlays and tally UI
+        ['vote-pill-overlay','vote-pill-overlay-second','banishment-vote-pill-overlay',
+         'banishment-vote-pill-overlay-second','role-reveal-text'].forEach(id => {
+            const _el = document.getElementById(id);
+            if (_el) _el.style.display = 'none';
+        });
+        const _ftc = document.getElementById('first-vote-tally-content');
+        if (_ftc) _ftc.innerHTML = '<p style="color:#bbb;text-align:center;">No votes revealed yet</p>';
+        const _stc = document.getElementById('second-vote-tally-content');
+        if (_stc) _stc.innerHTML = '';
+        const _stEl = document.getElementById('second-vote-tally');
+        if (_stEl) _stEl.style.display = 'none';
+
+        // 4. Reset CoT seat if active (restores z-index and transform)
+        //    Also clear any banishment/vote reveal glows.
+        if (typeof _resetCotSeat === 'function') _resetCotSeat(window._lastCotSeat);
+        for (let _ci = 1; _ci <= 25; _ci++) {
+            const _cs = document.getElementById('seat-' + _ci);
+            if (_cs) {
+                _cs.style.removeProperty('z-index');
+                _cs.style.transform  = 'translate(-50%, -50%)';
+                _cs.style.boxShadow  = ''; // clear banishment/vote glow
+                _cs.style.border     = ''; // clear banishment/vote border
+            }
+        }
+
+        // 5. Clear vote name-tag highlights from seat labels
+        //    Also clear pronouns showingVote so updatePlayerDisplay can restore them.
+        for (let _si = 1; _si <= 25; _si++) {
+            const _ni = document.getElementById('name-' + _si);
+            if (_ni) {
+                delete _ni.dataset.showingVote;
+                _ni.style.fontFamily = 'Arial, sans-serif';
+                _ni.style.fontSize   = '1.2rem';
+                _ni.style.color      = '#fff';
+                _ni.style.textAlign  = '';
+                _ni.style.visibility = '';
+                _ni.style.display    = '';
+            }
+            const _pi = document.getElementById('pronouns-' + _si);
+            if (_pi) {
+                delete _pi.dataset.showingVote;
+                _pi.style.visibility = '';
+                _pi.style.display    = '';
+                _pi.style.color      = '';
+            }
+            // Restore player name/pronouns immediately from gameState cache
+            const _player = gameState && gameState.players &&
+                Object.values(gameState.players).find(p => p.seat === _si);
+            if (_player && _ni) {
+                _ni.textContent = _player.name || 'Unknown';
+                if (_pi) _pi.textContent = _player.pronouns || '';
+            } else if (!_player && _ni) {
+                // Seat is empty — clear to Empty state
+                _ni.style.fontFamily = '';
+                _ni.style.fontSize   = '';
+                _ni.style.color      = '';
+                _ni.textContent = 'Empty';
+                if (_pi) _pi.textContent = '';
+            }
+        }
+
+        // 6. Clear stale phase from sessionStorage (Firebase phase listener
+        //    will re-set it when 'lobby' fires)
+        sessionStorage.removeItem('currentPhase');
+
+        console.log('✅ Player soft reset complete — seat and connection preserved');
+    });
+
+    // prodReset: prod member pages clear their sessionStorage so they don't
+    // auto-reclaim their old seat after a full game reset
+    const _isProdMember = currentUser && currentUser.isProdMember;
+    if (_isProdMember) {
+        let _lastProdReset = null;
+        database.ref('game/prodReset').on('value', (snap) => {
+            const val = snap.val();
+            if (!val) return;
+            if (_lastProdReset === val) return;
+            _lastProdReset = val;
+            if (Date.now() - val > 5000) return; // stale — ignore
+            console.log('🔄 Prod reset signal — clearing prod sessionStorage');
+            sessionStorage.removeItem('prodLetter');
+            sessionStorage.removeItem('playerSeat');
+            sessionStorage.removeItem('playerName');
+            // Reload is handled by the forceReset listener above
+        });
+    }
+
+    // ============================================
+    // REMOVED PROD SEAT LISTENER (PROD MEMBERS)
+    // ============================================
+    // When the host removes a specific prod seat, that member's page clears its
+    // sessionStorage and reloads so the device returns to a fresh state.
+    {
+        const _myProdLetter = sessionStorage.getItem('prodLetter');
+        if (_myProdLetter) {
+            let _lastRemovedSeat = null;
+            database.ref('game/removedProdSeat').on('value', (snap) => {
+                const val = snap.val();
+                if (!val || !val.letter || !val.ts) return;
+                if (_lastRemovedSeat === val.ts) return; // dedupe
+                _lastRemovedSeat = val.ts;
+                if (Date.now() - val.ts > 5000) return; // stale — ignore
+                if (val.letter !== _myProdLetter) return; // not my seat
+                console.log('🔄 My prod seat was removed — clearing session and reloading');
+                // Clear prod-specific sessionStorage so we don't auto-reclaim
+                sessionStorage.removeItem('prodLetter');
+                sessionStorage.removeItem('playerSeat');
+                sessionStorage.removeItem('playerName');
+                sessionStorage.removeItem('isProduction');
+                setTimeout(() => window.location.reload(), 500);
+            });
+        }
+    }
+
+    // ============================================
+    // VOTES RESET LISTENER (ALL USERS)
+    // ============================================
+    // When host clicks Reset Votes, all clients restore name boxes to player names
+    database.ref('game/votesReset').on('value', (snapshot) => {
+        if (!snapshot.val()) return;
+        console.log('🔄 Votes reset signal received — restoring name boxes');
+        // Restore all name tags from gameState with full style reset
+        for (let i = 1; i <= 25; i++) {
+            const nameEl  = document.getElementById('name-' + i);
+            const pronEl  = document.getElementById('pronouns-' + i);
+            const seatLbl = nameEl ? nameEl.parentElement : null;
+            if (!nameEl) continue;
+            const player = Object.values(gameState.players || {}).find(p => p.seat === i);
+            if (player) {
+                // Full inline style reset (clears ShootingStar font, visibility, etc.)
+                nameEl.style.cssText       = '';
+                nameEl.textContent         = player.name || 'Unknown';
+                nameEl.style.color         = '#fff';
+                nameEl.style.fontSize = _nameFontSize();
+                nameEl.style.fontFamily    = 'Arial, sans-serif';
+                nameEl.style.visibility    = 'visible';
+                nameEl.dataset.showingVote = '';
+                if (pronEl) {
+                    pronEl.style.cssText       = '';
+                    pronEl.textContent         = player.pronouns || '';
+                    pronEl.style.visibility    = 'visible';
+                    pronEl.style.display       = 'block';
+                    pronEl.style.opacity       = player.pronouns ? '0.7' : '0.4';
+                    pronEl.dataset.showingVote = '';
+                }
+                if (seatLbl) {
+                    seatLbl.style.background    = '';
+                    seatLbl.dataset.showingVote = '';
+                }
+            } else if (!window._regeneratingSeats) {
+                // Empty seat (skip during seat regeneration to avoid flicker)
+                nameEl.style.fontFamily = 'Arial, sans-serif';
+                nameEl.style.fontSize = _nameFontSize();
+                nameEl.style.color      = '#fff';
+                nameEl.style.textAlign  = '';
+                nameEl.style.visibility = '';
+                nameEl.style.display    = '';
+                nameEl.textContent         = 'Empty';
+                nameEl.dataset.showingVote = '';
+                if (pronEl) {
+                    pronEl.style.visibility = '';
+                    pronEl.style.display    = '';
+                    pronEl.style.color      = '';
+                    pronEl.textContent = '';
+                }
+            }
+            // Remove glows
+            const seatEl = document.getElementById('seat-' + i);
+            if (seatEl) {
+                seatEl.style.boxShadow = '';
+                seatEl.style.border    = '';
+                seatEl.classList.remove('yellow-glow', 'purple-glow');
+            }
+        }
+        // Clear vote tally panels (host-side and player-side IDs)
+        const panels = ['original-count','reveal-count','revote-tally-list','revote-reveal-count',
+                        'second-vote-tally-content'];
+        panels.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '<div style="color:#666;">No votes yet</div>';
+        });
+        // Hide second vote sections (both host-side and player-side)
+        ['second-vote-count','revote-reveal-section','second-vote-section'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+    });
+
+
+    // Helper: hand indicator style — 40% of seat width, left-of-centre
+    function _handIndicatorStyle(seatEl) {
+        // Use stored global seat size (set during generateVideoSeats / generateRoomSeats)
+        // to ensure consistent 40% scaling regardless of when the listener fires.
+        const isRoomSeat = seatEl && seatEl.id && seatEl.id.startsWith('room-seat-');
+        let size;
+        if (isRoomSeat) {
+            size = window.currentRoomSeatSize || parseFloat(seatEl.style.width) || 120;
+        } else {
+            size = window.currentPlayerSize   || parseFloat(seatEl && seatEl.style.width) || 150;
+        }
+        const fs     = Math.round(size * 0.40); // 40% of seat diameter
+        // Position at ~7:30 on the circle (225° = bottom-left)
+        const leftPx   = Math.round(size * -0.05); // just outside left edge
+        const bottomPx = Math.round(size * -0.05); // just below bottom-left rim
+        return [
+            'position:absolute',
+            'bottom:' + bottomPx + 'px',
+            'left:' + leftPx + 'px',
+            'font-size:' + fs + 'px',
+            'line-height:1',
+            'pointer-events:none',
+            'z-index:200',
+            'filter:drop-shadow(0 0 6px rgba(255,200,0,0.9))',
+        ].join(';');
+    }
+
+    // ============================================
+    // RAISE HAND LISTENER (ALL USERS)
+    // ============================================
+    // When any player sets handRaised=true in Firebase, show ✋ on their seat.
+    // Works for numeric seats AND prod letter seats.
+    // ── CONSOLIDATED PLAYERS LISTENER ──────────────────────────────────────────
+    // Single Firebase listener fans out to multiple handlers.
+    // Replaces 3 separate players.on() calls → cuts Firebase reads by 2/3.
+    window._playersHandlers = [];
+    database.ref('players').on('value', (playersSnap) => {
+        if (!playersSnap.val()) return;
+        window._playersHandlers.forEach(fn => { try { fn(playersSnap); } catch(e) { console.error('Players handler error:', e); } });
+    });
+
+    // Handler 1: Hand-raise indicators on seats
+    window._playersHandlers.push((playersSnap) => {
+        const _HAND_BLOCKED = ['night', 'breakfast'];
+        const _curPhase = (window._currentPhase || sessionStorage.getItem('currentPhase') || '').toLowerCase();
+        const _phaseAllowed = !_HAND_BLOCKED.some(b => _curPhase.includes(b));
+
+        playersSnap.forEach((child) => {
+            const player = child.val();
+            if (!player || !player.seat) return;
+            const seatId = 'seat-' + player.seat;
+            const seatEl = document.getElementById(seatId);
+            if (!seatEl) return;
+
+            // Remove any existing hand indicator from main seat
+            const existing = seatEl.querySelector('.hand-raised-indicator');
+            if (existing) existing.remove();
+
+            // If player is in a breakout room, also clear main seat hand
+            // and instead show hand on their breakout room seat
+            const inBreakout = player.room && player.room !== 'main' && player.roomSeat;
+
+            if (inBreakout) {
+                // Remove from main seat (already done above), add to room seat
+                const roomSeatEl = document.getElementById('room-seat-' + player.roomSeat);
+                if (roomSeatEl) {
+                    const existingRoom = roomSeatEl.querySelector('.hand-raised-indicator');
+                    if (existingRoom) existingRoom.remove();
+                }
+                if (player.handRaised && _phaseAllowed && roomSeatEl) {
+                    const hand = document.createElement('div');
+                    hand.className = 'hand-raised-indicator';
+                    hand.textContent = '✋';
+                    hand.style.cssText = _handIndicatorStyle(roomSeatEl);
+                    roomSeatEl.appendChild(hand);
+                }
+            } else if (player.handRaised && _phaseAllowed) {
+                // Player is in main room — show on their main seat
+                const hand = document.createElement('div');
+                hand.className = 'hand-raised-indicator';
+                hand.textContent = '✋';
+                hand.style.cssText = _handIndicatorStyle(seatEl);
+                seatEl.appendChild(hand);
+            }
+        });
+    });
+
+    // ============================================
+    // HAND QUEUE — ordered list of raised hands
+    // ============================================
+    // The HOST maintains game/handQueue (an array of player IDs in raise order).
+    // All clients display the queue; only the host writes to it.
+
+    // A) Display listener — fires for everyone, updates host panel
+    database.ref('game/handQueue').on('value', (qSnap) => {
+        const listEl = document.getElementById('hand-queue-list');
+        if (!listEl) return; // only exists on host page
+        const emptyEl = document.getElementById('hand-queue-empty');
+        const queue = qSnap.val() || [];
+
+        // Remove all existing entries (but keep the empty placeholder)
+        listEl.querySelectorAll('.hand-queue-entry').forEach(el => el.remove());
+
+        if (queue.length === 0) {
+            if (emptyEl) emptyEl.style.display = 'block';
+            return;
+        }
+        if (emptyEl) emptyEl.style.display = 'none';
+
+        queue.forEach((playerId, idx) => {
+            const player = gameState.players && gameState.players[playerId];
+            const name = player ? (player.name || playerId) : playerId;
+            const entry = document.createElement('div');
+            entry.className = 'hand-queue-entry';
+            entry.style.cssText = [
+                'display:flex',
+                'align-items:center',
+                'gap:8px',
+                'padding:5px 4px',
+                'border-bottom:1px solid rgba(255,255,255,0.07)',
+                'color:#e0e0e0',
+            ].join(';');
+            entry.innerHTML = `<span style="color:#888;min-width:18px;font-size:0.8rem;">${idx + 1}.</span>`
+                + `<span style="font-weight:600;">${name}</span>`;
+            listEl.appendChild(entry);
+        });
+    });
+
+    // B) Host-only: watch each player's handRaised field and maintain queue order
+    if (currentUser.role === 'host') {
+        // Track previous handRaised states so we only act on changes
+        const _prevHandState = {};
+
+        window._playersHandlers.push((pSnap) => {
+            if (!pSnap.val()) return;
+            const _phase = (window._currentPhase || '').toLowerCase();
+            const _blocked = ['night','breakfast'].some(b => _phase.includes(b));
+
+            pSnap.forEach((child) => {
+                const pid = child.key;
+                const player = child.val();
+                if (!player || player.isHost || player.isProdMember || player.isObserver) return;
+                const nowRaised = !!player.handRaised;
+                const wasRaised = !!_prevHandState[pid];
+                if (nowRaised === wasRaised) return; // no change
+                _prevHandState[pid] = nowRaised;
+
+                if (_blocked) return; // don't update queue during night/breakfast
+
+                // Read current queue, then update atomically
+                database.ref('game/handQueue').once('value', (qSnap) => {
+                    let queue = qSnap.val() || [];
+                    // Remove player from wherever they are in the queue
+                    queue = queue.filter(id => id !== pid);
+                    if (nowRaised) {
+                        // Append to end (new raise or re-raise after lowering)
+                        queue.push(pid);
+                        console.log('✋ Hand queue: added', player.name, '→ queue:', queue.length);
+                    } else {
+                        console.log('✋ Hand queue: removed', player.name, '→ queue:', queue.length);
+                    }
+                    database.ref('game/handQueue').set(queue.length > 0 ? queue : null);
+                });
+            });
+        });
+
+        // Clear the queue when night phase starts (hands are cleared)
+        database.ref('game/phase').on('value', (phSnap) => {
+            const ph = phSnap.val();
+            if (ph === 'night' || ph === 'breakfast') {
+                database.ref('game/handQueue').remove();
+                console.log('✋ Hand queue cleared for', ph, 'phase');
+            }
+        });
+    }
+
+    // ============================================
     // VOTING ENDED ANIMATION LISTENER (ALL USERS)
     // ============================================
     
@@ -627,10 +1057,30 @@ function setupFirebaseListeners() {
     }
 
     // Listen to player changes
-    database.ref('players').on('value', (snapshot) => {
+    // Handler 3: Main player display update + seat corruption fix
+    window._playersHandlers.push((snapshot) => {
         const players = snapshot.val() || {};
+        // Sanitize: if host or prod member has a numeric seat (corruption),
+        // fix it immediately in Firebase so it doesn't display on a player seat.
+        const _seatFixes = {};
+        for (const _pid in players) {
+            const _pp = players[_pid];
+            if ((_pp.isHost || _pp.isProdMember) && typeof _pp.seat === 'number') {
+                const _correctSeat = _pp.isHost ? 'A' : (_pp.prodLetter || null);
+                if (_correctSeat) {
+                    _seatFixes['players/' + _pid + '/seat'] = _correctSeat;
+                    // Also clear the corrupt numeric seat entry
+                    _seatFixes['game/seats/' + _pp.seat] = null;
+                    // Correct the local object so display isn't corrupted
+                    players[_pid] = Object.assign({}, _pp, { seat: _correctSeat });
+                    console.log('🔧 Fixed corrupt numeric seat for', _pid, '→', _correctSeat);
+                }
+            }
+        }
+        if (Object.keys(_seatFixes).length) database.ref().update(_seatFixes);
         gameState.players = players;
         updatePlayerDisplay();
+        if (typeof window._refreshAVIcons === 'function') window._refreshAVIcons();
     });
 
     // ============================================
@@ -666,6 +1116,29 @@ function setupFirebaseListeners() {
                 break;
             case 'night':
                 enterNightPhase();
+                // Night = start of a new round — clear vote tallies on all clients.
+                // Host DOM clearing is handled by the resetVotes() path or the
+                // Firebase removals. On player side, clear the tally display.
+                if (currentUser.role === 'player') {
+                    const _ntc = document.getElementById('first-vote-tally-content');
+                    if (_ntc) _ntc.innerHTML = '<p style="color:#bbb;text-align:center;">No votes revealed yet</p>';
+                    const _ntc2 = document.getElementById('second-vote-tally-content');
+                    if (_ntc2) _ntc2.innerHTML = '';
+                    const _nts = document.getElementById('second-vote-tally');
+                    if (_nts) _nts.style.display = 'none';
+                }
+                if (currentUser.role === 'host') {
+                    const _tallyEmpty = '<div style="color:#666;">No votes cast yet</div>';
+                    const _revealEmpty = '<div style="color:#666;">No votes revealed yet</div>';
+                    ['original-count','current-count'].forEach(id => {
+                        const _t = document.getElementById(id);
+                        if (_t) _t.innerHTML = _tallyEmpty;
+                    });
+                    ['reveal-count','revote-count','revote-reveal-count'].forEach(id => {
+                        const _t = document.getElementById(id);
+                        if (_t) _t.innerHTML = _revealEmpty;
+                    });
+                }
                 break;
             case 'breakfast':
                 enterBreakfastPhase();
@@ -682,6 +1155,19 @@ function setupFirebaseListeners() {
             default:
                 console.log('Unknown phase:', newPhase);
         }
+        // Re-apply mute/cam-off icons after any phase change
+        setTimeout(() => {
+            if (typeof window._refreshAVIcons === 'function') window._refreshAVIcons();
+            // Reset end-game reveal flag when entering non-end-game phases
+            const _phNow = (window._currentPhase || '').toLowerCase();
+            if (!_phNow.startsWith('end') && _phNow !== 'lobby' && _phNow.includes('vote') && !_phNow.includes('reveal')) {
+                window._endGameRevealActive = false;
+            }
+            // Re-evaluate viewer mode display (reveal phases override viewer mode)
+            if (typeof window.applyViewerMode === 'function' && window.viewerModeEnabled) {
+                window.applyViewerMode(true);
+            }
+        }, 200);
     });
     
     // ============================================
@@ -700,12 +1186,20 @@ function setupFirebaseListeners() {
             const voting = snapshot.val();
             if (!voting) {
                 console.log('⚠️ No voting data');
+                // Close pill overlay if voting was reset
+                if (typeof window.closeVotePillOverlay === 'function') {
+                    window.closeVotePillOverlay();
+                }
                 return;
             }
             console.log('📊 Voting data:', voting);
             
             // Only show reveal controls if revealed is active
             if (voting.revealed && currentUser && currentUser.id) {
+                // Close the vote pill overlay immediately when reveal starts
+                if (typeof window.closeVotePillOverlay === 'function') {
+                    window.closeVotePillOverlay();
+                }
                 console.log('✅ REVEAL MODE ACTIVE');
                 console.log('  Current revealer:', voting.currentRevealer);
                 console.log('  My ID:', currentUser.id);
@@ -744,8 +1238,48 @@ function setupFirebaseListeners() {
                     document.removeEventListener('keydown', handleRevealKeypress);
                 }
             } else {
-                hideRevealButton();
-                document.removeEventListener('keydown', handleRevealKeypress);
+                // During second-vote-reveal, the secondVoteReveal listener owns the
+                // reveal button. Don't let the votingListener (game/firstVote) hide it.
+                if (window._currentPhase !== 'second-vote-reveal') {
+                    hideRevealButton();
+                    document.removeEventListener('keydown', handleRevealKeypress);
+                }
+                // Show pill overlay when voting is active and not yet in reveal
+                // Don't re-open if player already voted this round
+                if (voting.active && !voting.votingLocked && !window.votePillLocked) {
+                    // During second-vote phase, game/firstVote/active is set to true
+                    // by the host to re-enable voting mechanics. This listener fires
+                    // but must NOT open the first-vote pill (which shows ALL players).
+                    // The second-vote pill (tied players only) is opened by the
+                    // game/secondVote/active listener instead.
+                    const _isRevotePhase = window._currentPhase === 'second-vote';
+                    if (_isRevotePhase) {
+                        // Second-vote phase: show the TIED-players pill — but only if it
+                        // isn't already showing the correct (isRevote) version.
+                        // The secondVote/active listener opens it first; this guard prevents
+                        // a second rapid call that would double-populate the pills.
+                        const _pillEl = document.getElementById('vote-pill-overlay');
+                        const _pillOpen = _pillEl && _pillEl.style.display !== 'none';
+                        if (!_pillOpen && typeof window.showVotePillOverlay === 'function' && !window.votePillLocked) {
+                            window.showVotePillOverlay(true); // true = revote, shows tied players only
+                        }
+                    } else {
+                        // First-vote phase: open pill if not already showing
+                        // If player has a pending selection, showVotePillOverlay
+                        // will guard against rebuild internally.
+                        const _pillOverlay = document.getElementById('vote-pill-overlay');
+                        const _pillAlreadyOpen = _pillOverlay && _pillOverlay.style.display !== 'none';
+                        if (!_pillAlreadyOpen && typeof window.showVotePillOverlay === 'function') {
+                            window.showVotePillOverlay(false);
+                        }
+                        // If pill IS open but no selection yet, also safe — overlay stays as-is
+                    }
+                } else if (voting.revealed || voting.votingLocked) {
+                    // Voting ended or reveal started — close the overlay
+                    if (typeof window.closeVotePillOverlay === 'function') {
+                        window.closeVotePillOverlay();
+                    }
+                }
             }
         };
 
@@ -753,55 +1287,45 @@ function setupFirebaseListeners() {
         database.ref('game/firstVote').on('value', window.votingListener);
         console.log('✅ Voting listener attached');
 
-        // Listen for revote reveal updates
+        // MERGED: Single listener for revote reveal (phase title + reveal button)
+        // Previously two separate listeners on the same path caused double-firing.
         database.ref('game/secondVoteReveal').on('value', (snapshot) => {
             const revoteRevealData = snapshot.val();
             const phaseName = document.getElementById('phase-name');
-            
+
             console.log('🔄 REVOTE REVEAL LISTENER FIRED:', revoteRevealData);
-            
-            if (!phaseName) return;
-            
-            if (revoteRevealData && revoteRevealData.active) {
-                // Get current revealer from revealOrder and currentIndex
-                const currentIndex = revoteRevealData.currentIndex || 0;
-                const revealOrder = revoteRevealData.revealOrder || [];
-                const currentRevealerId = revealOrder[currentIndex];
-                
-                if (currentRevealerId) {
-                    // During revote reveal, show which player is revealing
-                    database.ref(`players/${currentRevealerId}`).once('value', (playerSnap) => {
-                        const revealerData = playerSnap.val();
-                        if (revealerData) {
-                            phaseName.textContent = `${revealerData.name} is revealing their vote.`;
-                            console.log(`🔄 REVOTE REVEAL: Phase title updated to "${revealerData.name} is revealing their vote."`);
+
+            // --- PART 1: Update phase title ---
+            if (phaseName) {
+                if (revoteRevealData && revoteRevealData.active) {
+                    const currentIndex = revoteRevealData.currentIndex || 0;
+                    const revealOrder = revoteRevealData.revealOrder || [];
+                    const currentRevealerId = revealOrder[currentIndex];
+
+                    if (currentRevealerId) {
+                        database.ref(`players/${currentRevealerId}`).once('value', (playerSnap) => {
+                            const revealerData = playerSnap.val();
+                            if (revealerData) {
+                                phaseName.textContent = `${revealerData.name} is revealing their vote.`;
+                                console.log(`🔄 REVOTE REVEAL: Phase title updated to "${revealerData.name} is revealing their vote."`);
+                            }
+                        });
+                    }
+                } else {
+                    database.ref('game/phase').once('value', (phaseSnap) => {
+                        if (phaseSnap.val() === 'second-vote') {
+                            phaseName.textContent = 'Revote Phase';
+                            console.log('✅ REVOTE: Phase title set to "Revote Phase"');
                         }
                     });
                 }
-            } else {
-                // Check if we're in revote phase (not reveal)
-                database.ref('game/phase').once('value', (phaseSnap) => {
-                    if (phaseSnap.val() === 'second-vote') {
-                        phaseName.textContent = 'Revote Phase';
-                        console.log('✅ REVOTE: Phase title set to "Revote Phase"');
-                    }
-                });
             }
-        });
-        console.log('✅ Revote reveal listener attached');
 
-        // Listen for revote reveal to show reveal button
-        database.ref('game/secondVoteReveal').on('value', (snapshot) => {
-            const revoteRevealData = snapshot.val();
-            
-            console.log('🔄 REVOTE REVEAL BUTTON LISTENER:', revoteRevealData);
-            
-            // Remove purple glow from all seats when reveal starts
+            // --- PART 2: Remove purple glow when reveal starts ---
             if (revoteRevealData && revoteRevealData.active) {
                 for (let i = 1; i <= 25; i++) {
                     const seat = document.getElementById(`seat-${i}`);
                     if (seat) {
-                        // Remove purple glow
                         const currentShadow = seat.style.boxShadow;
                         if (currentShadow.includes('138, 43, 226')) {
                             seat.style.boxShadow = '';
@@ -811,34 +1335,27 @@ function setupFirebaseListeners() {
                     }
                 }
             }
-            
+
+            // --- PART 3: Show/hide reveal button based on whose turn it is ---
             if (!revoteRevealData || !revoteRevealData.active) {
                 hideRevealButton();
                 document.removeEventListener('keydown', handleRevealKeypress);
                 removeGlowFromMySeat();
                 return;
             }
-            
-            // Get current revealer from revealOrder and currentIndex
+
             const currentIndex = revoteRevealData.currentIndex || 0;
             const revealOrder = revoteRevealData.revealOrder || [];
             const currentRevealerId = revealOrder[currentIndex];
-            
+
             console.log('🔄 REVOTE REVEAL: Checking if it\'s my turn');
-            console.log('  Current index:', currentIndex);
-            console.log('  Current revealer from revealOrder:', currentRevealerId);
-            console.log('  My ID:', currentUser.id);
-            
-            // Check if it's my turn to reveal
+            console.log('  Current revealer:', currentRevealerId, '  My ID:', currentUser.id);
+
             if (currentRevealerId === currentUser.id) {
-                // Check if I have a second vote and haven't already revealed
                 database.ref(`game/secondVote/votes/${currentUser.id}`).once('value', (voteSnap) => {
                     const votedSeat = voteSnap.val();
                     const alreadyRevealed = revoteRevealData.alreadyRevealed?.[currentUser.id];
-                    
-                    console.log('  My second vote:', votedSeat);
-                    console.log('  Already revealed?:', alreadyRevealed);
-                    
+
                     if (votedSeat && !alreadyRevealed) {
                         console.log('✅ REVOTE REVEAL: Showing reveal button');
                         showRevealButton();
@@ -857,7 +1374,7 @@ function setupFirebaseListeners() {
                 removeGlowFromMySeat();
             }
         });
-        console.log('✅ Revote reveal button listener attached');
+        console.log('✅ Revote reveal listener attached (merged)');
         
         // Enable seat clicking for voting
         enableVotingClicks();
@@ -927,16 +1444,22 @@ function setupFirebaseListeners() {
                 showVoteConfirmation(i);
             };
         }
-    }
+    } // end _doShowVoteConfirmation
 
     function disableVotingClicks() {
-        console.log('🚫 Disabling voting clicks');
+        console.log('🚫 Disabling voting clicks — restoring seat-selection handlers');
         
         for (let i = 1; i <= 24; i++) {
             const seat = document.getElementById(`seat-${i}`);
             if (!seat) continue;
             
-            seat.onclick = null;
+            // Restore to normal seat-selection click (not null) so players can
+            // still change seats after voting ends without stale handlers.
+            const _seatNum = i;
+            seat.onclick = (e) => {
+                if (e.target.closest('.seat-label')) return;
+                handleSeatClick(_seatNum);
+            };
             seat.style.cursor = '';
             delete seat.dataset.votingClickHandler;
         }
@@ -1014,6 +1537,20 @@ function setupFirebaseListeners() {
     }
 
     function showVoteConfirmation(seatNumber) {
+        // The pill overlay handles voting — if it's visible, seat clicks do nothing.
+        const _pillOverlay = document.getElementById('vote-pill-overlay');
+        if (_pillOverlay && _pillOverlay.style.display !== 'none') return;
+        // Guard: only fire during an active voting phase.
+        database.ref('game/phase').once('value', (_pgSnap) => {
+            const _pg = _pgSnap.val() || '';
+            if (_pg !== 'first-vote' && _pg !== 'second-vote') {
+                console.log('🗳️ showVoteConfirmation: not in voting phase (' + _pg + ') — ignoring stale handler');
+                return;
+            }
+            _doShowVoteConfirmation(seatNumber);
+        });
+    }
+    function _doShowVoteConfirmation(seatNumber) {
         database.ref('game/firstVote/votingLocked').once('value', (snap) => {
             if (snap.val()) {
                 alert('Voting is closed');
@@ -1081,13 +1618,16 @@ function setupFirebaseListeners() {
         }
     }
 
-    function castVote(seatNumber) {
-        console.log('🗳️ Casting vote for seat:', seatNumber);
+    function castVote(seatNumber, _fromPill) {
+        console.log('🗳️ Casting vote for seat:', seatNumber, _fromPill ? '(from pill)' : '');
         
         // Check if voting is still active
+        // Skip the active check when called from the pill overlay — the pill
+        // is only shown when voting is active, so a double-check just adds a
+        // race-condition window where the vote is rejected despite being valid.
         database.ref('game/firstVote').once('value', (snapshot) => {
             const voting = snapshot.val();
-            if (!voting || !voting.active || voting.votingLocked) {
+            if (!_fromPill && (!voting || !voting.active || voting.votingLocked)) {
                 alert('Voting is closed.');
                 return;
             }
@@ -1101,22 +1641,33 @@ function setupFirebaseListeners() {
                 if (isRevote) {
                     // Store in game/revote/votes
                     voteUpdates['game/secondVote/votes/' + currentUser.id] = seatNumber;
+                    voteUpdates['game/secondVote/locked/' + currentUser.id] = true;
                 } else {
                     // Store in both current and original for first vote
                     voteUpdates['game/firstVote/votes/' + currentUser.id] = seatNumber;
                     voteUpdates['game/firstVote/originalVotes/' + currentUser.id] = seatNumber;
+                    voteUpdates['game/firstVote/locked/' + currentUser.id] = true;
                 }
                 
                 database.ref().update(voteUpdates).then(() => {
                     console.log('✅ Vote recorded for player:', currentUser.id, 'voting for seat:', seatNumber);
 
-                    // Show vote on name tag immediately
+                    // Look up target player name then display vote on name tag
+                    // AND write autoVoteDisplay so the player sees their own vote
+                    // (mirrors what _hostWriteAssignedVote does for host-assigned votes)
                     database.ref('players').once('value', (allPlayersSnap) => {
                         const targetPlayer = Object.values(allPlayersSnap.val() || {}).find(p => p.seat === seatNumber);
-                        const targetName = targetPlayer ? targetPlayer.name : `Seat ${seatNumber}`;
+                        const targetName = targetPlayer ? targetPlayer.name : ('Seat ' + seatNumber);
                         
                         if (currentUser.role === 'player' && currentUser.seat) {
                             console.log('🎯 Showing vote on player name tag:', currentUser.seat, '→', targetName);
+                            // Write autoVoteDisplay so the autoVoteDisplay Firebase listener
+                            // triggers showVoteOnNameTag — same path as host-assigned votes.
+                            database.ref('game/autoVoteDisplay/' + currentUser.id).set({
+                                seat: currentUser.seat,
+                                name: targetName
+                            });
+                            // Also update directly in case listener fires late
                             showVoteOnNameTag(currentUser.seat, targetName, true);
                         }
                     });
@@ -1124,6 +1675,8 @@ function setupFirebaseListeners() {
             });
         });
     }
+    // Expose castVote on window so pill overlay (window scope) can call it
+    window.castVote = castVote;
 
     // ============================================
     // REVOTE PHASE (Stub - to be implemented)
@@ -1153,16 +1706,41 @@ function setupFirebaseListeners() {
             
             if (nameElement && nameElement.dataset.showingVote) {
                 delete nameElement.dataset.showingVote;
-                nameElement.style.cssText = '';
+                // Reset vote-display styles: if seat is now empty, remove inline
+                // styles so CSS defaults apply. If occupied, set player values.
+                if (nameElement.textContent === 'Empty') {
+                    nameElement.style.fontFamily = '';
+                    nameElement.style.fontSize   = '';
+                    nameElement.style.color      = '';
+                    nameElement.style.textAlign  = '';
+                    nameElement.style.visibility = '';
+                    nameElement.style.display    = '';
+                } else {
+                    nameElement.style.fontFamily = 'Arial, sans-serif';
+                    nameElement.style.fontSize   = _nameFontSize();
+                    nameElement.style.color      = '#fff';
+                    nameElement.style.textAlign  = '';
+                    nameElement.style.visibility = '';
+                    nameElement.style.display    = '';
+                }
             }
             if (pronounsElement && pronounsElement.dataset.showingVote) {
                 delete pronounsElement.dataset.showingVote;
                 pronounsElement.style.display = '';
-                pronounsElement.style.cssText = '';
+                // Reset only vote-display styles on pronouns element.
+                pronounsElement.style.visibility = '';
+                pronounsElement.style.display    = '';
+                pronounsElement.style.color      = '';
             }
             if (seatLabel && seatLabel.dataset.showingVote) {
                 delete seatLabel.dataset.showingVote;
-                seatLabel.style.cssText = '';
+                // Reset only the background/border set during vote display.
+                // Using cssText='' wipes ALL inline styles, causing a layout flash.
+                seatLabel.style.background = '';
+                seatLabel.style.border = '';
+                seatLabel.style.color = '';
+                if (seatLabel.parentElement && seatLabel.parentElement.dataset.cotActive)
+                    seatLabel.style.visibility = 'hidden';
             }
         }
         
@@ -1195,7 +1773,23 @@ function setupFirebaseListeners() {
             
             if (nameElement && nameElement.dataset.showingVote) {
                 delete nameElement.dataset.showingVote;
-                nameElement.style.cssText = '';
+                // Reset vote-display styles: if seat is now empty, remove inline
+                // styles so CSS defaults apply. If occupied, set player values.
+                if (nameElement.textContent === 'Empty') {
+                    nameElement.style.fontFamily = '';
+                    nameElement.style.fontSize   = '';
+                    nameElement.style.color      = '';
+                    nameElement.style.textAlign  = '';
+                    nameElement.style.visibility = '';
+                    nameElement.style.display    = '';
+                } else {
+                    nameElement.style.fontFamily = 'Arial, sans-serif';
+                    nameElement.style.fontSize   = _nameFontSize();
+                    nameElement.style.color      = '#fff';
+                    nameElement.style.textAlign  = '';
+                    nameElement.style.visibility = '';
+                    nameElement.style.display    = '';
+                }
             }
             if (pronounsElement && pronounsElement.dataset.showingVote) {
                 delete pronounsElement.dataset.showingVote;
@@ -1207,7 +1801,34 @@ function setupFirebaseListeners() {
 
     function exitRevote() {
         console.log('📤 EXITING REVOTE PHASE');
-        // TODO: Implement revote exit
+
+        // Disable voting seat clicks — restore normal seat-selection handlers
+        disableVotingClicks();
+
+        // Remove purple glow from tied seats
+        for (let i = 1; i <= 25; i++) {
+            const seat = document.getElementById(`seat-${i}`);
+            if (seat) {
+                seat.style.boxShadow = '';
+                seat.style.border = '';
+            }
+        }
+        console.log('🧹 exitRevote: cleared purple glow from all seats');
+
+        // If we're heading into second-vote-reveal, keep the voting listener active
+        // (same logic as exitVoting keeps it for first-vote-reveal)
+        database.ref('game/phase').once('value', (snapshot) => {
+            const nextPhase = snapshot.val();
+            if (nextPhase !== 'second-vote-reveal') {
+                if (window.votingListener) {
+                    database.ref('game/firstVote').off('value', window.votingListener);
+                    window.votingListener = null;
+                    console.log('✅ exitRevote: removed voting listener (not entering second-vote-reveal)');
+                }
+            } else {
+                console.log('✅ exitRevote: keeping voting listener active for second-vote-reveal');
+            }
+        });
     }
 
     // ============================================
@@ -1216,12 +1837,95 @@ function setupFirebaseListeners() {
 
     function enterRevoteReveal() {
         console.log('📥 ENTERING REVOTE REVEAL PHASE');
-        // TODO: Implement revote reveal phase
+
+        // Players only — host UI is driven by its own host.html listeners
+        if (currentUser.role !== 'player') return;
+
+        // Clear all seat glows from the revote phase
+        for (let i = 1; i <= 25; i++) {
+            const seat = document.getElementById(`seat-${i}`);
+            if (seat) {
+                seat.style.boxShadow = '';
+                seat.style.border = '';
+            }
+        }
+        console.log('🧹 enterRevoteReveal: cleared all seat glows');
+
+        // Disable voting clicks — reveal phase is not a voting phase
+        disableVotingClicks();
+
+        // Close the vote pill overlay if it was still open
+        if (typeof window.closeVotePillOverlay === 'function') {
+            window.closeVotePillOverlay();
+        }
+
+        // Listen for second-vote-reveal changes to show/update the reveal button.
+        // The merged listener at the top of setupFirebaseListeners already handles:
+        //   - phase title ("X is revealing their vote")
+        //   - purple glow removal
+        //   - reveal button show/hide
+        // So all we need here is to ensure voting clicks are off and the pill is closed
+        // (done above). The module-level secondVoteReveal listener drives the rest.
+        console.log('✅ enterRevoteReveal: setup complete — reveal button driven by secondVoteReveal listener');
     }
 
     function exitRevoteReveal() {
         console.log('📤 EXITING REVOTE REVEAL PHASE');
-        // TODO: Implement revote reveal exit
+
+        // Hide the reveal button and remove keydown handler
+        hideRevealButton();
+        document.removeEventListener('keydown', handleRevealKeypress);
+
+        // Remove gold glow from all seats (placed during reveal sequence)
+        document.querySelectorAll('.video-seat').forEach(seat => {
+            seat.style.boxShadow = '';
+            seat.style.border = '';
+        });
+        console.log('🧹 exitRevoteReveal: cleared all seat glows');
+
+        // Remove glow from my own seat specifically
+        if (typeof removeGlowFromMySeat === 'function') {
+            removeGlowFromMySeat();
+        }
+
+        // Remove the big reveal text overlay if it's still on screen
+        const bigRevealText = document.getElementById('vote-big-reveal-text');
+        if (bigRevealText) bigRevealText.remove();
+
+        // Clear vote displays on name tags — the circle of truth phase starts next
+        // and name tags should be clean
+        for (let i = 1; i <= 25; i++) {
+            const nameEl  = document.getElementById(`name-${i}`);
+            const pronEl  = document.getElementById(`pronouns-${i}`);
+            const seatEl  = nameEl ? nameEl.parentElement : null;
+            if (nameEl && nameEl.dataset.showingVote) {
+                delete nameEl.dataset.showingVote;
+                nameEl.style.fontFamily = nameEl.textContent === 'Empty' ? '' : 'Arial, sans-serif';
+                nameEl.style.fontSize   = nameEl.textContent === 'Empty' ? '' : _nameFontSize();
+                nameEl.style.color      = nameEl.textContent === 'Empty' ? '' : '#fff';
+                nameEl.style.textAlign  = '';
+                nameEl.style.visibility = '';
+                nameEl.style.display    = '';
+            }
+            if (pronEl && pronEl.dataset.showingVote) {
+                delete pronEl.dataset.showingVote;
+                pronEl.style.visibility = '';
+                pronEl.style.display    = '';
+                pronEl.style.color      = '';
+            }
+            if (seatEl && seatEl.dataset.showingVote) {
+                delete seatEl.dataset.showingVote;
+                seatEl.style.background = '';
+                seatEl.style.border     = '';
+                seatEl.style.color      = '';
+            }
+        }
+        console.log('🧹 exitRevoteReveal: cleared vote displays from name tags');
+
+        // Force player display refresh to restore names
+        updatePlayerDisplay();
+
+        console.log('✅ exitRevoteReveal: cleanup complete');
     }
 
     // ============================================
@@ -1295,8 +1999,10 @@ function setupFirebaseListeners() {
     database.ref('game/firstVote/currentRevealer').on('value', (snapshot) => {
         const currentRevealerId = snapshot.val();
         
-        // Remove all existing glows
+        // Remove all existing glows (but preserve purple tie glows during second-vote)
+        const _phase1 = window._currentPhase || sessionStorage.getItem('currentPhase') || '';
         document.querySelectorAll('.video-seat').forEach(seat => {
+            if (_phase1 === 'second-vote' && seat.style.boxShadow.includes('138, 43, 226')) return;
             seat.style.boxShadow = '';
             seat.style.border = '';
         });
@@ -1425,6 +2131,247 @@ function setupFirebaseListeners() {
             }
         }, 100);
     });
+
+    // Unmute own tracks when a seat is assigned (covers host/prod who are muted
+    // until they claim their seat, same as players).
+    // Watch for seat assignment to unmute tracks when a player/host claims a seat.
+    // The watcher's first fire (immediate, with current Firebase value) is skipped —
+    // it represents the existing state, not a new assignment.
+    if (currentUser.id) {
+        let _seatWatcherFirstFire = true;  // skip the immediate initial fire
+        let _prevSeat = null;              // track previous seat to detect genuine changes
+        database.ref('players/' + currentUser.id + '/seat').on('value', (seatSnap) => {
+            const newSeat = seatSnap.val();
+            if (_seatWatcherFirstFire) {
+                _seatWatcherFirstFire = false;
+                _prevSeat = newSeat; // record initial state without acting on it
+                return;
+            }
+            if (newSeat && !_prevSeat) {
+                // Seat was just assigned (went from null → seat value)
+                _prevSeat = newSeat;
+                const _lkR = window._lkRoom;
+                if (_lkR && _lkR.localParticipant) {
+                    const _pId = currentUser.id;
+                    database.ref('players/' + _pId).once('value', (pSnap) => {
+                        const pData = pSnap.val() || {};
+                        const _mp = _lkR.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                        const _cp = _lkR.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+                        if (_mp) { pData.audioMuted ? _mp.mute() : _mp.unmute(); }
+                        if (_cp) { pData.videoMuted  ? _cp.mute()  : _cp.unmute(); }
+                        console.log('🔊 Tracks unblocked on seat assignment:', newSeat);
+                    });
+                }
+            } else if (!newSeat) {
+                _prevSeat = null; // seat removed — next assignment will unmute again
+            } else {
+                _prevSeat = newSeat;
+            }
+        });
+    }
+
+    // Show host-assigned votes on this player's own screen.
+    // ── Host force-mute / force-camera-off (players only) ──────────────────────────
+    // These live in game.js/setupFirebaseListeners so currentUser, database, and
+    // LivekitClient are all guaranteed to be initialised.
+    if (currentUser.role === 'player' && currentUser.id) {
+        function _applyForceMuteGJ(shouldMute) {
+            const _r = window._lkRoom;
+            if (!_r || _r.state !== 'connected') {
+                setTimeout(() => _applyForceMuteGJ(shouldMute), 500); return;
+            }
+            const _mp = _r.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+            if (!_mp) {
+                setTimeout(() => _applyForceMuteGJ(shouldMute), 500); return;
+            }
+            if (shouldMute) {
+                if (!_mp.isMuted) _mp.mute();
+                database.ref('players/' + currentUser.id + '/audioMuted').set(true);
+                console.log('🔇 game.js: Host force-muted mic via LiveKit');
+            } else {
+                // Seat guard: don't unmute players who haven't claimed a seat yet —
+                // they should stay silent until they formally sit down.
+                // The initial Firebase fire (value=false on page load) would otherwise
+                // unmute tracks that should stay silent.
+                const _hasSeatNow = !!(currentUser.seat || currentUser.roomSeat);
+                if (!_hasSeatNow) {
+                    console.log('🔇 game.js: Skipping unmute — player has no seat yet');
+                    return;
+                }
+                // Unmute unconditionally — the host clicked 'Unmute All' which means
+                // they want everyone unmuted. Don't check hostForcedMute here because
+                // the host clears it at the same time as writing muteAllPlayers=false,
+                // and Firebase timing means it may not be cleared yet when this fires.
+                if (_mp.isMuted) _mp.unmute();
+                database.ref('players/' + currentUser.id + '/audioMuted').set(false);
+                console.log('🔊 game.js: Host force-unmuted mic via LiveKit');
+            }
+        }
+        database.ref('game/muteAllPlayers').on('value', (snap) => {
+            if (snap.val() === null) return;
+            _applyForceMuteGJ(!!snap.val());
+        });
+
+        // Per-player nightMuted listener (players only).
+        // When the host writes nightMuted:true (night/breakfast phase),
+        // the player mutes their own LiveKit tracks so they can't be heard/seen.
+        // When nightMuted clears (player accepted invite or phase ended),
+        // tracks are unmuted automatically.
+        if (currentUser.role === 'player' && currentUser.id) {
+            let _wasNightMuted = false; // track whether we've ever been night-muted
+            database.ref('players/' + currentUser.id + '/nightMuted').on('value', (nmSnap) => {
+                const _val = nmSnap.val();
+                const _shouldNightMute = !!_val;
+                const _r = window._lkRoom;
+                const _lp = _r && _r.state === 'connected' && _r.localParticipant;
+                const _mp = _lp && _lp.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                const _cp = _lp && _lp.getTrackPublication(LivekitClient.Track.Source.Camera);
+                if (_shouldNightMute) {
+                    _wasNightMuted = true;
+                    if (_mp && !_mp.isMuted) _mp.mute();
+                    if (_cp && !_cp.isMuted) _cp.mute();
+                    // Retry if LiveKit not connected yet — tracks may not be published
+                    if (!_lp) {
+                        setTimeout(() => {
+                            const _r2 = window._lkRoom;
+                            const _lp2 = _r2 && _r2.state === 'connected' && _r2.localParticipant;
+                            const _mp2 = _lp2 && _lp2.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                            const _cp2 = _lp2 && _lp2.getTrackPublication(LivekitClient.Track.Source.Camera);
+                            if (_mp2 && !_mp2.isMuted) _mp2.mute();
+                            if (_cp2 && !_cp2.isMuted) _cp2.mute();
+                            console.log('🌙 nightMuted retry: tracks silenced');
+                        }, 2000);
+                    }
+                    console.log('🌙 nightMuted: tracks silenced');
+                } else if (_wasNightMuted && (_val === null || _val === false)) {
+                    // nightMuted was cleared (host ended night/breakfast, or player accepted invite)
+                    _wasNightMuted = false;
+                    if (_mp && _mp.isMuted) _mp.unmute();
+                    if (_cp && _cp.isMuted) _cp.unmute();
+                    console.log('🌙 nightMuted cleared: tracks restored');
+                }
+            });
+        }
+
+        // Per-player host-forced mic mute listener
+        // When host mutes an individual player's mic, this fires on their device
+        // and directly mutes/unmutes the LiveKit mic track.
+        if (currentUser.role === 'player' && currentUser.id) {
+            database.ref('players/' + currentUser.id + '/hostForcedMic').on('value', (hfSnap) => {
+                const _forced = hfSnap.val();
+                if (_forced === null) return; // field not set — no action
+                const _r = window._lkRoom;
+                const _lp = _r && _r.state === 'connected' && _r.localParticipant;
+                const _mp = _lp && _lp.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                if (_mp) {
+                    if (_forced && !_mp.isMuted) {
+                        _mp.mute();
+                        console.log('🎤 Host force-muted mic');
+                    } else if (!_forced && _mp.isMuted) {
+                        _mp.unmute();
+                        console.log('🎤 Host force-unmuted mic');
+                    }
+                } else if (_forced) {
+                    // LiveKit not connected yet — retry
+                    setTimeout(() => {
+                        const _r2 = window._lkRoom;
+                        const _lp2 = _r2 && _r2.state === 'connected' && _r2.localParticipant;
+                        const _mp2 = _lp2 && _lp2.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                        if (_mp2 && !_mp2.isMuted) _mp2.mute();
+                    }, 1500);
+                }
+            });
+
+            // Per-player host-forced camera mute listener
+            database.ref('players/' + currentUser.id + '/hostForcedCam').on('value', (hfcSnap) => {
+                const _forcedCam = hfcSnap.val();
+                if (_forcedCam === null) return;
+                const _r = window._lkRoom;
+                const _lp = _r && _r.state === 'connected' && _r.localParticipant;
+                const _cp = _lp && _lp.getTrackPublication(LivekitClient.Track.Source.Camera);
+                if (_cp) {
+                    if (_forcedCam && !_cp.isMuted) {
+                        _cp.mute();
+                        console.log('📹 Host force-muted camera');
+                    } else if (!_forcedCam && _cp.isMuted) {
+                        _cp.unmute();
+                        console.log('📹 Host force-unmuted camera');
+                    }
+                } else if (_forcedCam) {
+                    setTimeout(() => {
+                        const _r2 = window._lkRoom;
+                        const _lp2 = _r2 && _r2.state === 'connected' && _r2.localParticipant;
+                        const _cp2 = _lp2 && _lp2.getTrackPublication(LivekitClient.Track.Source.Camera);
+                        if (_cp2 && !_cp2.isMuted) _cp2.mute();
+                    }, 1500);
+                }
+            });
+        }
+
+        function _applyForceCamGJ(camerasOff) {
+            const _r = window._lkRoom;
+            if (!_r || _r.state !== 'connected') {
+                setTimeout(() => _applyForceCamGJ(camerasOff), 500); return;
+            }
+            const _cp = _r.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+            if (!_cp) {
+                setTimeout(() => _applyForceCamGJ(camerasOff), 500); return;
+            }
+            if (camerasOff) {
+                if (!_cp.isMuted) _cp.mute();
+                database.ref('players/' + currentUser.id + '/videoMuted').set(true);
+                console.log('📵 game.js: Host force-disabled camera via LiveKit');
+            } else {
+                // Same seat guard as mic: don't re-enable camera for unseated players.
+                const _hasSeatNow = !!(currentUser.seat || currentUser.roomSeat);
+                if (!_hasSeatNow) {
+                    console.log('📵 game.js: Skipping camera-enable — player has no seat yet');
+                    return;
+                }
+                if (_cp.isMuted) _cp.unmute();
+                database.ref('players/' + currentUser.id + '/videoMuted').set(false);
+                console.log('📹 game.js: Host force-enabled camera via LiveKit');
+            }
+        }
+        database.ref('game/camerasOffPlayers').on('value', (snap) => {
+            if (snap.val() === null) return;
+            _applyForceCamGJ(!!snap.val());
+        });
+    }
+
+    // Must be inside setupFirebaseListeners() — currentUser.id is guaranteed set here.
+    if (currentUser.id) {
+        database.ref('game/autoVoteDisplay/' + currentUser.id).on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (!data || currentUser.role !== 'player') return;
+            // Check if the seat DOM element already exists
+            const seatEl = document.getElementById('name-' + data.seat);
+            if (seatEl) {
+                // Seat exists — display immediately and clear the stale value
+                showVoteOnNameTag(data.seat, data.name, true);
+                _applyPillHostChange(data);
+                database.ref('game/autoVoteDisplay/' + currentUser.id).remove();
+            } else {
+                // Seats not generated yet — wait for them then display
+                const _waitForSeat = setInterval(() => {
+                    if (document.getElementById('name-' + data.seat)) {
+                        clearInterval(_waitForSeat);
+                        // Re-read to make sure value wasn't cleared in the meantime
+                        database.ref('game/autoVoteDisplay/' + currentUser.id).once('value', (snap) => {
+                            const d = snap.val();
+                            if (d && currentUser.role === 'player') {
+                                showVoteOnNameTag(d.seat, d.name, true);
+                                _applyPillHostChange(d);
+                                database.ref('game/autoVoteDisplay/' + currentUser.id).remove();
+                            }
+                        });
+                    }
+                }, 200);
+                // Safety: stop polling after 30 s to avoid leak
+                setTimeout(() => clearInterval(_waitForSeat), 30000);
+            }
+        });
+    }
 }
 
 // TEST: Verify functions are global
@@ -1439,7 +2386,40 @@ console.log('revealRole:', typeof revealRole);
 // VOTE DISPLAY HELPER FUNCTIONS (GLOBAL)
 // ============================================
 
+// Helper: returns true if the current phase is a vote reveal phase.
+// Used by viewer mode logic to allow vote display during reveals.
+window._isRevealPhase = function() {
+    const phase = window._currentPhase
+        || sessionStorage.getItem('currentPhase')
+        || '';
+    // Phase-name based reveals (first-vote-reveal, second-vote-reveal etc.)
+    if (phase.includes('reveal') || phase === 'circle-of-truth') return true;
+    // End-game reveals set a global flag when banishment/smoke reveals are active
+    if (window._endGameRevealActive) return true;
+    return false;
+};
+
 function showVoteOnNameTag(seatNumber, votedForName, playerView) {
+    // Viewer mode guard: host/prod members cannot see votes on name boxes
+    // UNLESS the current phase is an explicit reveal phase.
+    const _isHostOrProd = currentUser && (currentUser.role === 'host' || currentUser.isProdMember
+        || currentUser.role === 'observer');
+    if (_isHostOrProd && localStorage.getItem('viewerModeEnabled') === 'true') {
+        // Only allow name-box vote display during reveal phases (by phase name)
+        const _ph = (window._currentPhase || sessionStorage.getItem('currentPhase') || '').toLowerCase();
+        const _revealPhases = [
+            'first-vote-reveal', 'second-vote-reveal',
+            'smoke-vote-reveal', 'banishment-reveal', 'banishment-tie-reveal',
+            'circle-of-truth'
+        ];
+        // Also allow during end-game reveals (banishment/smoke) when explicitly flagged
+        const _endGameReveal = window._endGameRevealActive === true;
+        const _isReveal = _revealPhases.some(r => _ph.includes(r)) || _ph.includes('reveal') || _endGameReveal;
+        if (!_isReveal) {
+            console.log('👁️ Viewer mode: suppressing vote display on name tag (phase:', _ph, ')');
+            return;
+        }
+    }
     console.log('showVoteOnNameTag called:', {seatNumber, votedForName, playerView, currentUserRole: currentUser.role});
 
     const nameElement = document.getElementById(`name-${seatNumber}`);
@@ -1499,6 +2479,8 @@ function showVoteOnNameTag(seatNumber, votedForName, playerView) {
 }
 
 function updateVoteTally(votes, targetElement = 'original-count') {
+    // Note: tally always updates in background; section visibility is controlled
+    // by hideRealtimeVoteDisplays/showRealtimeVoteDisplays for viewer mode.
     console.log('📊 updateVoteTally called with:', votes, 'target:', targetElement);
     console.log('Current user role:', currentUser.role);
 
@@ -1582,6 +2564,170 @@ function showRevealButton() {
     
     revealBtn.style.display = 'block';
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// VOTE PILL OVERLAY — shown during first-vote and second-vote phases
+// ──────────────────────────────────────────────────────────────────────
+window._pillSelectedSeat = null;
+
+window.showVotePillOverlay = function(isRevote) {
+    // If player already has a selection pending (hasn't locked in yet),
+    // don't rebuild the overlay — it would wipe their selection.
+    if (window._pillSelectedSeat && !window.votePillLocked) {
+        console.log('🗳️ showVotePillOverlay: skipping rebuild — pending selection for seat', window._pillSelectedSeat);
+        return;
+    }
+    // Build list of eligible players to vote for
+    database.ref('players').once('value', (pSnap) => {
+        const allPlayers = pSnap.val() || {};
+        let eligible = Object.values(allPlayers).filter(pl =>
+            pl.seat && !pl.isHost && !pl.isProdMember &&
+            pl.id !== currentUser.id &&       // can't vote for self (by id)
+            pl.seat !== currentUser.seat       // belt-and-suspenders: also exclude by seat
+        );
+
+        if (isRevote) {
+            // Revote: only show tied players
+            database.ref('game/secondVote/tiedSeats').once('value', (tSnap) => {
+                const tied = tSnap.val() || [];
+                eligible = eligible.filter(pl => tied.includes(pl.seat));
+                _buildPillOverlay(eligible, isRevote);
+            });
+        } else {
+            _buildPillOverlay(eligible, isRevote);
+        }
+    });
+};
+
+function _buildPillOverlay(eligible, isRevote) {
+    const overlay  = document.getElementById('vote-pill-overlay');
+    const title    = document.getElementById('vote-pill-title');
+    const subtitle = document.getElementById('vote-pill-subtitle');
+    const btnCont  = document.getElementById('vote-pill-buttons');
+    const selEl    = document.getElementById('vote-pill-selection');
+    const lockBtn  = document.getElementById('vote-pill-lock-btn');
+    const lockedMsg= document.getElementById('vote-pill-locked-msg');
+    if (!overlay) return;
+
+    // Reset state
+    window._pillSelectedSeat = null;
+    window.votePillLocked = false;
+    if (title)    title.textContent    = isRevote ? '🗳️ Revote' : '🗳️ Cast Your Vote';
+    if (subtitle) subtitle.textContent = isRevote
+        ? 'Only tied players are shown. Select one to vote.'
+        : 'Select a player to vote for, then lock in.';
+    if (selEl)    selEl.textContent    = '';
+    if (lockedMsg) {
+        lockedMsg.style.display = 'none';
+        lockedMsg.textContent   = '✅ Vote locked in! Waiting for reveal...';
+        lockedMsg.style.color   = '#4CAF50'; // restore default green
+    }
+    if (lockBtn) { lockBtn.style.opacity = '0.4'; lockBtn.style.pointerEvents = 'none'; }
+    if (btnCont)  btnCont.innerHTML    = '';
+
+    eligible.sort((a, b) => (a.seat || 0) - (b.seat || 0));
+    eligible.forEach(pl => {
+        const btn = document.createElement('button');
+        btn.dataset.seat = pl.seat;
+        btn.textContent  = pl.name || ('Seat ' + pl.seat);
+        btn.style.cssText = 'padding:14px 22px; font-size:1.1rem; font-weight:bold;' +
+            ' background:rgba(220,20,60,0.15); border:2px solid rgba(220,20,60,0.5);' +
+            ' border-radius:10px; color:white; cursor:pointer; min-width:120px; transition:all 0.15s;';
+        btn.onclick = () => {
+            if (window.votePillLocked) return;
+            window._pillSelectedSeat = pl.seat;
+            // Highlight selected
+            btnCont.querySelectorAll('button').forEach(b => {
+                b.style.background = 'rgba(220,20,60,0.15)';
+                b.style.borderColor = 'rgba(220,20,60,0.5)';
+            });
+            btn.style.background  = 'rgba(220,20,60,0.6)';
+            btn.style.borderColor = '#DC143C';
+            if (selEl) selEl.textContent = 'Voting for: ' + btn.textContent;
+            if (lockBtn) { lockBtn.style.opacity = '1'; lockBtn.style.pointerEvents = 'auto'; }
+        };
+        if (btnCont) btnCont.appendChild(btn);
+    });
+
+    overlay.style.display = 'flex';
+}
+
+window.lockInPillVote = function() {
+    if (!window._pillSelectedSeat || window.votePillLocked) return;
+    window.votePillLocked = true;
+    const lockBtn   = document.getElementById('vote-pill-lock-btn');
+    const lockedMsg = document.getElementById('vote-pill-locked-msg');
+    if (lockBtn)   { lockBtn.style.opacity = '0.4'; lockBtn.style.pointerEvents = 'none'; }
+    if (lockedMsg)   lockedMsg.style.display = 'block';
+    window.castVote(window._pillSelectedSeat, true); // true = fromPill, skip active guard
+};
+
+// Called when host assigns/changes a player's vote.
+// Updates whichever voting pill overlay is currently open.
+function _applyPillHostChange(data) {
+    if (!data || !data.changedBy) return; // player's own vote — no change needed
+    // Detect which overlay is open: regular vote or banishment
+    const _banishOverlay = document.getElementById('banishment-vote-overlay');
+    const _banishOpen = _banishOverlay && _banishOverlay.style.display === 'flex';
+    if (_banishOpen) {
+        // Update banishment overlay
+        const _bDisplay = document.getElementById('banishment-vote-display');
+        const _bMsg     = document.getElementById('banishment-locked-msg');
+        const _bLock    = document.getElementById('banishment-lock-btn');
+        const _bPills   = document.getElementById('banishment-player-pills');
+        if (_bPills) _bPills.querySelectorAll('button').forEach(btn => {
+            const isNew = btn.dataset.name === data.name;
+            btn.style.background   = isNew ? 'rgba(220,20,60,0.5)' : 'rgba(220,20,60,0.15)';
+            btn.style.borderWidth  = isNew ? '3px' : '2px';
+        });
+        if (_bDisplay) _bDisplay.textContent = 'Voting to banish: ' + data.name;
+        if (_bLock)    _bLock.disabled = true;
+        if (_bMsg) {
+            _bMsg.textContent    = data.changedBy + ' changed your vote to ' + data.name + '.';
+            _bMsg.style.display  = 'block';
+            _bMsg.style.color    = '#FFD700';
+        }
+        return;
+    }
+    const overlay  = document.getElementById('vote-pill-overlay');
+    if (!overlay || overlay.style.display === 'none') return; // overlay not open
+
+    const btnCont  = document.getElementById('vote-pill-buttons');
+    const selEl    = document.getElementById('vote-pill-selection');
+    const lockedMsg= document.getElementById('vote-pill-locked-msg');
+    const lockBtn  = document.getElementById('vote-pill-lock-btn');
+
+    // Find which pill button matches the new target name
+    if (btnCont) {
+        btnCont.querySelectorAll('button').forEach(btn => {
+            const isNew = btn.textContent === data.name;
+            btn.style.background  = isNew ? 'rgba(220,20,60,0.6)' : 'rgba(220,20,60,0.15)';
+            btn.style.borderColor = isNew ? '#DC143C'              : 'rgba(220,20,60,0.5)';
+        });
+    }
+
+    // Update selection display
+    if (selEl) selEl.textContent = 'Voting for: ' + data.name;
+
+    // Lock the overlay (vote is now locked in by host)
+    window.votePillLocked = true;
+    window._pillSelectedSeat = data.seat || null; // record the new target seat
+    if (lockBtn) { lockBtn.style.opacity = '0.4'; lockBtn.style.pointerEvents = 'none'; }
+
+    // Show changed-by message
+    if (lockedMsg) {
+        lockedMsg.textContent = data.changedBy + ' changed your vote to ' + data.name + '.';
+        lockedMsg.style.display = 'block';
+        lockedMsg.style.color = '#FFD700'; // gold to distinguish from normal lock-in
+    }
+}
+
+window.closeVotePillOverlay = function() {
+    const overlay = document.getElementById('vote-pill-overlay');
+    if (overlay) overlay.style.display = 'none';
+    window._pillSelectedSeat = null;
+    window.votePillLocked = false;
+};
 
 function hideRevealButton() {
     const btn = document.getElementById('my-reveal-button');
@@ -1736,67 +2882,40 @@ function revealMyVote() {
     }
 }
 
-function updateRevealedVotesDisplay() {
-    console.log('🔄 Updating revealed votes display');
-    
-    database.ref('game/voteReveal').once('value', (snapshot) => {
-        const data = snapshot.val();
-        if (!data || !data.revealedVotes) {
-            console.log('⚠️ No revealed votes yet');
-            return;
-        }
-        
-        console.log('📋 ALL revealed so far:', data.revealedVotes);
-        console.log('📊 Total count:', data.revealedVotes.length);
-        
-        database.ref('game/firstVote/votes').once('value', (votesSnap) => {
-            const allVotes = votesSnap.val() || {};
-            
-            // CRITICAL: Only show the LAST player's vote (most recent)
-            const justRevealedId = data.revealedVotes[data.revealedVotes.length - 1];
-            console.log('🆕 Only processing player ID:', justRevealedId);
-            
-            // Show ONLY this one player's vote
-            database.ref('players/' + justRevealedId).once('value', (playerSnap) => {
-                const playerData = playerSnap.val();
-                if (!playerData) {
-                    console.log('❌ Player not found:', justRevealedId);
-                    return;
-                }
-                
-                const votedForSeat = allVotes[justRevealedId];
-                if (votedForSeat) {
-                    console.log(`✅ Player in seat ${playerData.seat} voted for seat ${votedForSeat}`);
-                    
-                    // Get the name of who they voted for
-                    database.ref('players').once('value', (playersSnap) => {
-                        const allPlayers = playersSnap.val() || {};
-                        let votedForName = 'Unknown';
-                        
-                        // Find player name by seat number
-                        for (const pid in allPlayers) {
-                            if (allPlayers[pid].seat === votedForSeat) {
-                                votedForName = allPlayers[pid].name;
-                                break;
-                            }
-                        }
-                        
-                        console.log(`✅ Displaying: "${playerData.name}" → "${votedForName}"`);
-                        
-                        // CORRECT SYNTAX: seat number, voted-for name, is player view
-                        showVoteOnNameTag(playerData.seat, votedForName, false);
-                    });
-                } else {
-                    console.log(`⚠️ No vote found for player in seat ${playerData.seat}`);
-                }
-            });
-        });
-    });
-}
+// updateRevealedVotesDisplay() — REMOVED (dead code).
+// This function read from 'game/voteReveal', a path that is never written to
+// anywhere in the codebase. It was never called (zero call sites exist).
+// The actual vote reveal display is handled by the two listeners below:
+//   Line ~4682: game/revealedVoteDisplay child_added → showVoteOnNameTag + big reveal text
+//   Line ~4702: game/revealedVoteDisplay value → host tally (reveal-count element)
+//   Line ~4752: game/revealedVoteDisplay value → player tally (first-vote-tally-content element)
 
 // ============================================
 // CIRCLE OF TRUTH PHASE (GLOBAL)
 // ============================================
+
+// Track the last CoT seat so we can always reset it even if Firebase is cleared
+window._lastCotSeat = null;
+
+function _resetCotSeat(seatNumber) {
+    if (!seatNumber) return;
+    const seat = document.getElementById('seat-' + seatNumber);
+    if (seat) {
+        seat.style.transition = 'transform 0.5s ease';
+        seat.style.transform = 'translate(-50%, -50%)';
+        seat.style.removeProperty('z-index');
+        delete seat.dataset.cotActive;
+        const label = seat.querySelector('.seat-label') || seat.querySelector('[class*="label"]');
+        if (label) { label.style.visibility = ''; label.style.transform = ''; label.style.transformOrigin = ''; }
+    }
+    // Restore all other seats' z-index — remove the important override
+    for (let _i = 1; _i <= 25; _i++) {
+        const _s = document.getElementById('seat-' + _i);
+        if (_s) _s.style.removeProperty('z-index');
+    }
+    window._lastCotSeat = null;
+    console.log('🔄 CoT seat', seatNumber, 'reset to normal size');
+}
 
 function handleCircleUpdate(snapshot) {
     const data = snapshot.val();
@@ -1804,11 +2923,15 @@ function handleCircleUpdate(snapshot) {
     console.log('🔍 Circle update received:', data);
     
     if (!data || !data.active) {
-        console.log('❌ Circle of Truth not active');
+        console.log('❌ Circle of Truth not active — resetting seat size');
+        // Reset whichever seat was last enlarged
+        const seatToReset = (data && data.seatNumber) || window._lastCotSeat;
+        _resetCotSeat(seatToReset);
         return;
     }
     
     console.log('🎯 Circle of Truth active for seat:', data.seatNumber);
+    window._lastCotSeat = data.seatNumber;
     
     // Enlarge the selected player's seat FOR EVERYONE
     const seat = document.getElementById(`seat-${data.seatNumber}`);
@@ -1820,35 +2943,34 @@ function handleCircleUpdate(snapshot) {
     
     console.log('📏 Applying transform to seat', data.seatNumber);
     
-    // Apply transform with higher specificity
-    seat.style.transition = 'transform 0.5s ease';
-    seat.style.transform = 'translate(-50%, -50%) scale(2.0)';
-    seat.style.zIndex = '1000';
-    
-    // Counter-scale label
-    const label = seat.querySelector('.seat-label');
-    if (label) {
-        label.style.transform = 'scale(0.5)';
-        label.style.transformOrigin = 'center';
-    }
-    
-    console.log('✅ Enlarged seat', data.seatNumber);
-    
-    // Reset all other seats
+    // Set all OTHER seats to a low z-index. The CSS has z-index:50 !important,
+    // so we must use setProperty with 'important' flag to override it.
     for (let i = 1; i <= 25; i++) {
         if (i !== data.seatNumber) {
             const otherSeat = document.getElementById(`seat-${i}`);
             if (otherSeat) {
+                otherSeat.style.setProperty('z-index', '1', 'important');
                 otherSeat.style.transform = 'translate(-50%, -50%)';
-                otherSeat.style.zIndex = '';
-                
                 const otherLabel = otherSeat.querySelector('.seat-label');
-                if (otherLabel) {
-                    otherLabel.style.transform = '';
-                }
+                if (otherLabel) otherLabel.style.transform = '';
             }
         }
     }
+    
+    // Apply CoT seat — z-index 1000 !important beats CSS z-index:50 !important
+    // (later-declared inline important wins when specificity is equal)
+    seat.style.transition = 'transform 0.5s ease';
+    seat.style.transform = 'translate(-50%, -50%) scale(2.0)';
+    seat.style.setProperty('z-index', '1000', 'important');
+    
+    // Hide the name label while the seat is enlarged for CoT.
+    // A scaled child label overflows the seat and can appear in front of neighboring seats.
+    // Hiding it is the cleanest solution — the user confirmed this is acceptable.
+    const _cotLabel = seat.querySelector('.seat-label') || seat.querySelector('[class*="label"]');
+    if (_cotLabel) _cotLabel.style.visibility = 'hidden';
+    seat.dataset.cotActive = 'true';
+    
+    console.log('✅ Enlarged seat', data.seatNumber, 'with z-index 1000 above all neighbours');
 }
 
 function handleRevealReady(snapshot) {
@@ -1955,12 +3077,12 @@ function revealRole() {
     function handlePhaseChange(phase) {
         console.log('Phase changed to:', phase);
         gameState.phase = phase; // Update gameState
+        window._currentPhase = phase; // Keep global in sync for updateSeatDisplay
         
         // Force phase element update immediately
         const phaseElement = document.getElementById('phase-name');
         if (phaseElement && phase) {
             const phaseNames = {
-                'waiting': 'Waiting to Start',
                 'lobby': 'Lobby - Select Your Seat',
                 'breakfast': 'Breakfast',
                 'talk': 'Talk Time',
@@ -1978,7 +3100,9 @@ function revealRole() {
         
         // Update body class for phase-specific overlay
         document.body.className = ''; // Clear all phase classes
-        document.body.classList.add(`phase-${phase}`);
+        // Sanitize phase for use as CSS class (phase can contain spaces/punctuation)
+        const _safePhase = phase.replace(/[^a-zA-Z0-9-_]/g, '-');
+        document.body.classList.add(`phase-${_safePhase}`);
         
         // Handle night phase overlay
         if (phase === 'night') {
@@ -2000,32 +3124,37 @@ function revealRole() {
             
             // Send all non-host, non-turret players to waiting room
             if (currentUser.role === 'host') {
+                // Keep players in their seats during night — the overlay hides them visually.
+                // Just mark them as night-muted so their audio/video are silenced.
+                // Seats and room assignments are preserved so re-entry is instant.
                 database.ref('players').once('value', (snapshot) => {
                     snapshot.forEach((child) => {
                         const player = child.val();
-                        if (child.key !== 'host' && player.room !== 'turret') {
-                            // Send to waiting room and clear seat
-                            database.ref('players/' + child.key).update({
-                                room: 'waiting',
-                                seat: null
-                            });
-                            
-                            // Clear their seat in game/seats
-                            if (player.seat) {
-                                database.ref('game/seats/' + player.seat).remove();
-                            }
+                        if (child.key !== 'host' && player.room !== 'turret' && !player.isProdMember) {
+                            // Clear seat and move to waiting — mute audio/video
+                            const _nu = {};
+                            _nu['players/' + child.key + '/room'] = 'waiting';
+                            _nu['players/' + child.key + '/seat'] = null;
+                            _nu['players/' + child.key + '/roomSeat'] = null;
+                            _nu['players/' + child.key + '/nightMuted'] = true;
+                            _nu['players/' + child.key + '/audioMuted'] = true;
+                            _nu['players/' + child.key + '/videoMuted'] = true;
+                            if (player.seat) _nu['game/seats/' + player.seat] = null;
+                            database.ref().update(_nu);
                         }
                     });
+                    // Reset breakfast seat counter so next breakfast starts from seat 1
+                    database.ref('game/breakfastSeatCounter').remove();
                 });
             }
         } else {
             hideNightOverlay();
             
-            // For PLAYERS, show seats when leaving night phase (if not in waiting room)
-            // But only for phases where seats should actually be shown
-            const phasesWithSeats = ['lobby', 'circle-of-truth', 'first-vote', 'first-vote-reveal', 'second-vote', 'second-vote-reveal', 'talk', 'deliberation'];
-            if (currentUser.role === 'player' && currentUser.room !== 'waiting' && phasesWithSeats.includes(phase)) {
-                console.log('Leaving night phase - showing seats for player');
+            // Only show seats when transitioning to a non-overlay phase.
+            // breakfast is also an overlay phase — don't expose seats when entering it.
+            const _isOverlayPhase = (phase === 'breakfast' || phase === 'night');
+            if (currentUser.role === 'player' && !_isOverlayPhase) {
+                console.log('Leaving night/breakfast phase - showing seats for player');
                 document.querySelectorAll('.video-seat').forEach(seat => {
                     seat.style.removeProperty('display');
                     seat.style.removeProperty('visibility');
@@ -2035,6 +3164,19 @@ function revealRole() {
                     tabContainer.style.removeProperty('display');
                     tabContainer.style.removeProperty('visibility');
                 }
+            }
+            // Host: clear nightMuted flag for all players when night fully ends
+            if (currentUser.role === 'host' && !_isOverlayPhase) {
+                database.ref('players').once('value', (snapshot) => {
+                    snapshot.forEach((child) => {
+                        const player = child.val();
+                        if (player.nightMuted && !player.isProdMember) {
+                            database.ref('players/' + child.key).update({
+                                nightMuted: null
+                            });
+                        }
+                    });
+                });
             }
         }
     }
@@ -2048,7 +3190,8 @@ function showNightOverlay() {
     overlay.classList.add('visible');
     overlay.style.display = 'flex';
     overlay.style.position = 'fixed'; overlay.style.top = '0'; overlay.style.left = '0';
-    overlay.style.width = '100%'; overlay.style.height = '100%'; overlay.style.zIndex = '9999';
+    overlay.style.width = '100%'; overlay.style.height = '100%';
+    overlay.style.setProperty('z-index', '10000', 'important');
     // Removed async Firebase re-verification — it read stale 'turret' and re-hid the overlay
 }
 
@@ -2100,12 +3243,17 @@ function playGongSound() {
 // ============================================
 
 function generateVideoSeats() {
-    // Remove any existing player seats
-    for (let i = 1; i <= 24; i++) {
-        const existingSeat = document.getElementById(`seat-${i}`);
-        if (existingSeat) existingSeat.remove();
-    }
-    
+    // Note: existing seats are REUSED (repositioned) where possible.
+    // Only newly-added seats are created; only removed seats are deleted.
+    // This preserves video feeds and name labels across seat count changes.
+
+    // Hide ALL existing player seats before repositioning so they never
+    // flash at the wrong position. They are revealed below after all
+    // coordinates are calculated and applied — same technique as the host seat.
+    document.querySelectorAll('.video-seat:not(#seat-A)').forEach(s => {
+        s.style.visibility = 'hidden';
+    });
+
     // ============================================
     // DEFINE THREE SECTIONS OF THE PAGE
     // ============================================
@@ -2113,8 +3261,14 @@ function generateVideoSeats() {
     const viewportWidth = document.documentElement.clientWidth;
     const viewportHeight = window.innerHeight;
     
+    // On narrow mobile screens the right-side tab panel becomes a bottom bar,
+    // freeing the full width for seats. Shrink the side section margins accordingly.
+    const _isMobile = viewportWidth <= 600;
+    // Landscape phone: wide but very short — treat like mobile for sizing purposes
+    const _isLandscapeMobile = !_isMobile && viewportHeight <= 500 && viewportWidth <= 1024;
+    const _isMobileLayout = _isMobile || _isLandscapeMobile;
     // Define section widths as percentages (21% of viewport)
-    const sectionWidthPercent = 12; // Each side section is 12% of viewport
+    const sectionWidthPercent = _isMobileLayout ? 6 : 12; // Each side section is 12% of viewport
     const sectionWidthPx = (viewportWidth * sectionWidthPercent) / 100;
     
     console.log(`Section width: ${sectionWidthPx}px = ${sectionWidthPercent.toFixed(2)}%`);
@@ -2142,7 +3296,7 @@ function generateVideoSeats() {
     const leftBorderX = centerSectionLeft;
     const rightBorderX = centerSectionRight;
     const topBorderY = 20;
-    const bottomBorderY = viewportHeight - 50;
+    const bottomBorderY = viewportHeight - (_isMobileLayout ? 110 : 50); // extra room for mobile/landscape bottom bar
     
     // Calculate seating area dimensions (center section)
     const seatingAreaWidth = centerSectionWidth;
@@ -2177,7 +3331,7 @@ function generateVideoSeats() {
     const calculatedPlayerSize = Math.min(maxSeatFromWidth, maxSeatFromHeight);
     
     // Apply min/max constraints
-    const minPlayerSize = 80; // Minimum 80px for mobile
+    const minPlayerSize = _isMobileLayout ? 48 : 80; // Smaller minimum on mobile/landscape
     const maxPlayerSize = 200; // Maximum 200px for large screens
     const finalPlayerSize = Math.min(Math.max(calculatedPlayerSize, minPlayerSize), maxPlayerSize);
     
@@ -2206,7 +3360,7 @@ function generateVideoSeats() {
     // Calculate optimal grid layout based on seat count
     // Always use 8 columns max, and calculate rows needed
     let rows, cols;
-    cols = 8; // Always 8 columns
+    cols = _isMobile ? 6 : 8; // 6 columns on mobile for larger tap targets
 
     if (totalSeats <= 8) {
         rows = 1;
@@ -2276,7 +3430,7 @@ function generateVideoSeats() {
             // For 21 seats (0 extra): [7, 7, 7]
             
             if (rows === 3) {
-                // Special handling for 3 rows to get 8-8-8 -> 8-7-8 -> 7-8-7 -> 7-7-7
+                // Special handling for 3 rows: distribute extras to outer rows first
                 if (extraSeats === 2) {
                     seatsPerRow[0]++; // Top
                     seatsPerRow[2]++; // Bottom
@@ -2330,34 +3484,61 @@ function generateVideoSeats() {
     // CREATE SEAT ELEMENTS
     // ============================================
     
+    // Track the highest seat number in this render
+    const _newMaxSeat = seats.length > 0 ? seats[seats.length - 1].number : 0;
+    // Remove seats that no longer exist (beyond the new count)
+    for (let _s = _newMaxSeat + 1; _s <= 25; _s++) {
+        const _old = document.getElementById('seat-' + _s);
+        if (_old) _old.remove();
+    }
+
     seats.forEach(seat => {
-        const seatElement = document.createElement('div');
-        seatElement.className = 'video-seat empty';
-        seatElement.id = `seat-${seat.number}`;
-        seatElement.style.position = 'fixed';
-        seatElement.style.left = `${seat.x}px`;
-        seatElement.style.top = `${seat.y}px`;
-        seatElement.style.width = `${seat.size}px`;
-        seatElement.style.height = `${seat.size}px`;
-        seatElement.style.transform = 'translate(-50%, -50%)';
+        // REUSE existing seat element if it exists — avoids destroying video/name
+        let seatElement = document.getElementById(`seat-${seat.number}`);
+        if (seatElement) {
+            // Just reposition — no DOM rebuild, video and name preserved
+            seatElement.style.left   = `${seat.x}px`;
+            seatElement.style.top    = `${seat.y}px`;
+            seatElement.style.width  = `${seat.size}px`;
+            seatElement.style.height = `${seat.size}px`;
+            // Reset onclick to normal seat-selection handler so stale voting
+            // handlers from a previous round don't persist on reused elements.
+            if (!seatElement.dataset.votingClickHandler) {
+                const _rn = seat.number;
+                seatElement.onclick = (e) => {
+                    if (e.target.closest('.seat-label')) return;
+                    handleSeatClick(_rn);
+                };
+            }
+            return; // skip the rest of this iteration
+        }
+        // NEW seat — create from scratch
+        const seatElement2 = document.createElement('div');
+        seatElement2.className = 'video-seat empty';
+        seatElement2.id = `seat-${seat.number}`;
+        seatElement2.style.position = 'fixed';
+        seatElement2.style.left = `${seat.x}px`;
+        seatElement2.style.top = `${seat.y}px`;
+        seatElement2.style.width = `${seat.size}px`;
+        seatElement2.style.height = `${seat.size}px`;
+        seatElement2.style.transform = 'translate(-50%, -50%)';
         
         // Name tag below seat
         const labelStyle = 'position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); white-space: nowrap;';
         
-        seatElement.innerHTML = `
+        seatElement2.innerHTML = `
             <div id="video-${seat.number}"></div>
             <div class="seat-label" id="seat-label-${seat.number}">
-                <span class="player-name" id="name-${seat.number}">Empty</span>
-                <span class="player-pronouns" id="pronouns-${seat.number}"></span>
-            </div>
-            <div class="seat-av-controls" id="av-controls-${seat.number}" style="display:none">
                 <button class="av-btn mic-btn" id="mic-btn-${seat.number}" title="Toggle Mic (M)" onclick="event.stopPropagation(); window.toggleMic && window.toggleMic()">
                     <svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
                 </button>
                 <button class="av-btn cam-btn" id="cam-btn-${seat.number}" title="Toggle Camera (V)" onclick="event.stopPropagation(); window.toggleCam && window.toggleCam()">
                     <svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
                 </button>
+                <span class="player-name" id="name-${seat.number}">Empty</span>
+                <span class="player-pronouns" id="pronouns-${seat.number}"></span>
             </div>
+            <div class="seat-av-controls" id="av-controls-${seat.number}" style="display:none"></div>
             <div class="av-status-icons" id="av-status-${seat.number}">
                 <span class="av-icon mic-off-icon" id="mic-off-${seat.number}" style="display:none">
                     <svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
@@ -2372,9 +3553,10 @@ function generateVideoSeats() {
             </button>
             ` : ''}
             <div class="vote-indicator" id="vote-${seat.number}"></div>
+            <div class="audio-ring" id="aring-${seat.number}"></div>
         `;
         
-        seatElement.addEventListener('click', (e) => {
+        seatElement2.addEventListener('click', (e) => {
             // Don't trigger if clicking controls, labels, or remove buttons
             if (
                 e.target.closest('.seat-label') || 
@@ -2390,13 +3572,54 @@ function generateVideoSeats() {
                 return;
             }
             
+            // HOST: show seat action menu (Assign Vote / Reveal Vote / Reveal Role)
+            if (window.currentUser && window.currentUser.role === 'host') {
+                _showHostSeatActionMenu(seat.number, e.clientX, e.clientY);
+                return;
+            }
+            
             // Normal seat claiming
             handleSeatClick(seat.number);
         });
-        document.body.appendChild(seatElement);
+        // Hide before appending so the browser never paints this seat
+        // at an incorrect position. It will be revealed at the end of
+        // generateVideoSeats() once all positions are finalised.
+        seatElement2.style.visibility = 'hidden';
+        document.body.appendChild(seatElement2);
     });
     
     console.log(`Generated 24 player seats in 8x3 grid layout`);
+
+    // Reveal all player seats now that every seat has its final position.
+    // They were hidden at the top of this function to prevent a flash at
+    // the wrong position. Only reveal if not in night/breakfast overlay.
+    const _revealPhase = window._currentPhase || '';
+    if (_revealPhase !== 'night' && _revealPhase !== 'breakfast') {
+        document.querySelectorAll('.video-seat:not(#seat-A)').forEach(s => {
+            if (!s.style.getPropertyValue('display').includes('none')) {
+                s.style.visibility = '';
+            }
+        });
+    }
+
+    // After generating new seat DOM elements, re-apply night/breakfast hiding
+    // if the current phase requires it. New elements have no inline style, so
+    // the old display:none is lost every time seats are regenerated.
+    if (currentUser && currentUser.role === 'player') {
+        const _phaseAtGenerate = window._currentPhase || '';
+        if (_phaseAtGenerate === 'night' || _phaseAtGenerate === 'breakfast') {
+            // Exception: player was invited back to main room during breakfast — don't re-hide.
+            if (!window._breakfastSeatVisible) {
+                document.querySelectorAll('.video-seat').forEach(s => {
+                    s.style.setProperty('display', 'none', 'important');
+                    s.style.setProperty('visibility', 'hidden', 'important');
+                });
+                console.log('🌙 generateVideoSeats: re-hid seats (phase:', _phaseAtGenerate, ')');
+            } else {
+                console.log('🌙 generateVideoSeats: skipping re-hide — breakfast seat visible (invited back)');
+            }
+        }
+    }
 
     // ============================================
     // GENERATE ROOM-SPECIFIC SEATS
@@ -2423,6 +3646,7 @@ function generateVideoSeats() {
         
         // Seat size matching main roundtable calculation
         const seatSize = Math.min(200, viewportWidth * 0.156);
+        window.currentRoomSeatSize = seatSize; // stored for hand indicator sizing
         const horizontalSpacing = seatSize * 0.3;
         const verticalSpacing = seatSize * 0.3;
         
@@ -2470,16 +3694,35 @@ function generateVideoSeats() {
                 videoDiv.className = 'video-container';
                 videoDiv.style.cssText = 'width:100%;height:100%;position:absolute;top:0;left:0;border-radius:50%;overflow:hidden;';
                 
-                // Name tag
+                // Name tag with AV buttons as 'shoulders' inside it
                 const nameTag = document.createElement('div');
                 nameTag.className = 'seat-label';
+                nameTag.id = `seat-label-room-${seatIndex}`;
                 nameTag.innerHTML = `
+                    <button class="av-btn mic-btn" id="room-mic-btn-${seatIndex}" title="Toggle Mic (M)" onclick="event.stopPropagation();window.toggleMic&&window.toggleMic()"><svg viewBox='0 0 24 24' fill='white' width='14' height='14'><path d='M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z'/></svg></button>
+                    <button class="av-btn cam-btn" id="room-cam-btn-${seatIndex}" title="Toggle Camera (V)" onclick="event.stopPropagation();window.toggleCam&&window.toggleCam()"><svg viewBox='0 0 24 24' fill='white' width='14' height='14'><path d='M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z'/></svg></button>
                     <span id="room-name-${seatIndex}" class="player-name">Empty</span>
                     <span id="room-pronouns-${seatIndex}" class="player-pronouns"></span>
                 `;
-                
+
+                // Empty legacy container (referenced by some code paths)
+                const roomAvDiv = document.createElement('div');
+                roomAvDiv.id = `room-av-controls-${seatIndex}`;
+                roomAvDiv.style.display = 'none';
+
+                // AV status icons (mic-off/cam-off indicators for other players' seats)
+                const roomStatusDiv = document.createElement('div');
+                roomStatusDiv.id = `room-av-status-${seatIndex}`;
+                roomStatusDiv.className = 'av-status-icons';
+                roomStatusDiv.innerHTML = `
+                    <span class="av-icon mic-off-icon" id="room-mic-off-${seatIndex}" style="display:none"><svg viewBox='0 0 24 24' fill='white' width='12' height='12'><path d='M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z'/></svg></span>
+                    <span class="av-icon cam-off-icon" id="room-cam-off-${seatIndex}" style="display:none"><svg viewBox='0 0 24 24' fill='white' width='12' height='12'><path d='M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z'/></svg></span>
+                `;
+
                 seatElement.appendChild(videoDiv);
                 seatElement.appendChild(nameTag);
+                seatElement.appendChild(roomAvDiv);
+                seatElement.appendChild(roomStatusDiv);
                 container.appendChild(seatElement);
             }
         }
@@ -2493,7 +3736,7 @@ function generateVideoSeats() {
         if (overlay) {
             overlay.style.display = 'block';
             
-            // Update room name display
+            // Update room name display — write to top-left #breakout-room-label
             const roomNames = {
                 'kitchen': 'Kitchen',
                 'library': 'Library',
@@ -2503,24 +3746,82 @@ function generateVideoSeats() {
                 'gym': 'Gym',
                 'turret': 'The Turret'
             };
-            
-            const roomNameEl = document.getElementById('room-name-display');
-            if (roomNameEl) {
-                roomNameEl.textContent = roomNames[roomId] || roomId;
+            const _brlEl  = document.getElementById('breakout-room-label');
+            const _brnEl  = document.getElementById('breakout-room-name');
+            if (_brnEl) _brnEl.textContent = roomNames[roomId] || roomId;
+            if (_brlEl) _brlEl.style.display = 'block';
+
+            // Start (or restart) real-time watcher for prod members in this room
+            if (window._prodInRoomListenerGJ) {
+                database.ref('players').off('value', window._prodInRoomListenerGJ);
             }
+            const _watchRoomGJ = roomId;
+            window._prodInRoomListenerGJ = database.ref('players').on('value', (_pSnGJ) => {
+                const _pElGJ = document.getElementById('prod-in-room-display');
+                if (!_pElGJ) return;
+                const _names = [];
+                _pSnGJ.forEach((_ch) => {
+                    const _pl = _ch.val();
+                    // Include prod members AND the main host (isHost) — both are production
+                    if (_pl && (_pl.isProdMember || _pl.isHost) && _pl.room === _watchRoomGJ && _pl.name) {
+                        _names.push(_pl.name);
+                    }
+                });
+                if (_names.length === 1) {
+                    _pElGJ.textContent = _names[0] + ' is here.';
+                } else if (_names.length === 2) {
+                    _pElGJ.textContent = _names[0] + ' and ' + _names[1] + ' are here.';
+                } else if (_names.length > 2) {
+                    const _ln = _names[_names.length - 1];
+                    const _rs = _names.slice(0, -1).join(', ');
+                    _pElGJ.textContent = _rs + ', and ' + _ln + ' are here.';
+                } else {
+                    _pElGJ.textContent = '';
+                }
+            });
             
             generateRoomSeats(roomId, seatLimit);
+            // Re-apply mute/cam-off icons + hand indicators for newly created room seats
+            setTimeout(() => {
+                if (typeof window._refreshAVIcons === 'function') window._refreshAVIcons();
+                // Re-trigger players listener to re-apply any raised hands
+                database.ref('players').once('value', (pSnap) => {
+                    if (!pSnap.val()) return;
+                    const _phase = (window._currentPhase || '').toLowerCase();
+                    const _ok = !['night','breakfast'].some(b => _phase.includes(b));
+                    pSnap.forEach((child) => {
+                        const pl = child.val();
+                        if (!pl || !pl.handRaised || !_ok) return;
+                        if (pl.room && pl.room !== 'main' && pl.roomSeat) {
+                            const rs = document.getElementById('room-seat-' + pl.roomSeat);
+                            if (rs && !rs.querySelector('.hand-raised-indicator')) {
+                                const hand = document.createElement('div');
+                                hand.className = 'hand-raised-indicator';
+                                hand.textContent = '✋';
+                                hand.style.cssText = _handIndicatorStyle(rs);
+                                rs.appendChild(hand);
+                            }
+                        }
+                    });
+                });
+            }, 100);
 
             // ── Populate room seat names from Firebase ───────────────────
             if (window._roomNamesListener) {
                 database.ref('players').off('value', window._roomNamesListener);
             }
             window._roomNamesListener = database.ref('players').on('value', (pSnap) => {
+                // Reset all seat labels AND AV icons together so departed players
+                // leave no ghost names or icons behind
                 for (let s = 1; s <= seatLimit; s++) {
                     const nameEl = document.getElementById('room-name-' + s);
                     const pronEl = document.getElementById('room-pronouns-' + s);
                     if (nameEl) nameEl.textContent = 'Empty';
                     if (pronEl) pronEl.textContent = '';
+                    const micOff = document.getElementById('room-mic-off-' + s);
+                    const camOff = document.getElementById('room-cam-off-' + s);
+                    if (micOff) micOff.style.display = 'none';
+                    if (camOff) camOff.style.display = 'none';
                 }
                 pSnap.forEach((child) => {
                     const p = child.val();
@@ -2529,6 +3830,11 @@ function generateVideoSeats() {
                     const pronEl = document.getElementById('room-pronouns-' + p.roomSeat);
                     if (nameEl) nameEl.textContent = p.name || 'Player';
                     if (pronEl) pronEl.textContent = p.pronouns || '';
+                    // Re-apply AV icons for players currently in this room
+                    const micOff = document.getElementById('room-mic-off-' + p.roomSeat);
+                    const camOff = document.getElementById('room-cam-off-' + p.roomSeat);
+                    if (micOff) micOff.style.display = p.audioMuted ? 'flex' : 'none';
+                    if (camOff) camOff.style.display = p.videoMuted ? 'flex' : 'none';
                 });
             });
 
@@ -2560,6 +3866,17 @@ function generateVideoSeats() {
         if (overlay) {
             overlay.style.display = 'none';
         }
+        // Hide breakout room label and clean up prod watcher
+        const _brlH = document.getElementById('breakout-room-label');
+        if (_brlH) _brlH.style.display = 'none';
+        if (window._prodInRoomListenerGJ) {
+            database.ref('players').off('value', window._prodInRoomListenerGJ);
+            window._prodInRoomListenerGJ = null;
+        }
+        // Re-apply mute/cam-off icons on main room seats after returning from breakout
+        setTimeout(() => {
+            if (typeof window._refreshAVIcons === 'function') window._refreshAVIcons();
+        }, 100);
         // Clean up room names listener
         if (window._roomNamesListener) {
             database.ref('players').off('value', window._roomNamesListener);
@@ -2582,13 +3899,21 @@ function generateVideoSeats() {
     
     const hostSeat = document.getElementById('seat-A');
     if (hostSeat) {
-        // Center host in left section, matching left margin distance from top
-        const hostX = leftSectionWidth / 2;
-        const hostY = leftSectionWidth / 2; // Halfway down the left section
-        
-        // Constrain host size to fit in left section
-        const maxHostSize = leftSectionWidth - 40; // 20px margin on each side
-        const actualHostSize = Math.min(finalHostSize, maxHostSize);
+        let hostX, hostY, actualHostSize;
+        if (_isMobileLayout) {
+            // On mobile the left section is only ~23px wide — too narrow to use.
+            // Instead, pin the host seat to the top-left with a clear margin
+            // so it's fully visible and not cut off by the screen edge.
+            actualHostSize = Math.min(finalHostSize, 70); // smaller on mobile — less overlap with seat 1
+            hostX = (actualHostSize / 2) + 8; // 8px from left edge
+            hostY = (actualHostSize / 2) + 8; // 8px from top edge
+        } else {
+            // Desktop: center host in left section
+            hostX = leftSectionWidth / 2;
+            hostY = leftSectionWidth / 2;
+            const maxHostSize = leftSectionWidth - 40; // 20px margin each side
+            actualHostSize = Math.min(finalHostSize, maxHostSize);
+        }
         
         hostSeat.style.position = 'fixed';
         hostSeat.style.left = `${hostX}px`;
@@ -2596,6 +3921,7 @@ function generateVideoSeats() {
         hostSeat.style.width = `${actualHostSize}px`;
         hostSeat.style.height = `${actualHostSize}px`;
         hostSeat.style.transform = 'translate(-50%, -50%)';
+        hostSeat.style.visibility = 'visible'; // reveal now that position is correct
         
         console.log(`Host positioned in left section: (${hostX.toFixed(0)}, ${hostY}) with size ${actualHostSize.toFixed(0)}px`);
 
@@ -2606,14 +3932,40 @@ function generateVideoSeats() {
                 if (!window.currentUser || !window.currentUser.seat) return;
                 const mySeat = window.currentUser.seat;
                 if (mySeat === 'A') return; // already main host
-                if (!['B','C','D','E','F','G','H','I','J'].includes(String(mySeat))) return;
+                if (!['B','C','D'].includes(String(mySeat))) return;
                 _showSeatSwitchMenu('A', e.clientX, e.clientY);
             });
         }
 
         // Position production member seats below the main host
         _positionProdSeats(hostX, hostY, actualHostSize, finalPlayerSize, leftSectionWidth);
-        
+
+        // After seat elements exist, do one direct read to set names/pronouns.
+        // This covers the race where the players listener or _positionProdSeats
+        // inner listener fired before seat elements existed and returned early.
+        setTimeout(() => {
+            database.ref('players').once('value', (_nameSnap) => {
+                _nameSnap.forEach((_nc) => {
+                    const _np = _nc.val();
+                    if (!_np || !_np.seat) return;
+                    const _seat = String(_np.seat);
+                    const _nameEl = document.getElementById('name-' + _seat);
+                    const _pronEl = document.getElementById('pronouns-' + _seat);
+                    if (!_nameEl) return;
+                    // Always update name and pronouns from Firebase (authoritative)
+                    if (_np.name) {
+                        _nameEl.textContent = _np.name;
+                        _nameEl.style.fontFamily = 'Arial, sans-serif';
+                        _nameEl.style.fontSize = _nameFontSize();
+                        _nameEl.style.color = '#fff';
+                    }
+                    if (_pronEl) {
+                        _pronEl.textContent = _np.pronouns || '';
+                    }
+                });
+            });
+        }, 500); // 500ms gives Firebase listeners time to fire first
+
         console.log(`Host positioned at top-left: (${hostX}, ${hostY}) with size ${finalHostSize}px`);
     }
     
@@ -2623,7 +3975,7 @@ function generateVideoSeats() {
     }
 
     // Re-show remove buttons if seat remove mode is active
-    if (typeof seatRemoveModeActive !== 'undefined' && seatRemoveModeActive) {
+    if (typeof window.seatRemoveModeActive !== 'undefined' && window.seatRemoveModeActive) {
         setTimeout(() => {
             document.querySelectorAll('.seat-remove-btn').forEach(removeBtn => {
                 removeBtn.style.display = 'flex';
@@ -2696,12 +4048,41 @@ function generateVideoSeats() {
             }
         }
         
-        // Step 2: Remove all existing player seats (but not host seat)
-        const existingSeats = document.querySelectorAll('.video-seat:not(.host)');
-        existingSeats.forEach(seat => seat.remove());
+        // Step 2: Mark regeneration in progress (no seat destruction — generateVideoSeats
+        // now reuses existing seats, only adding/removing the ones that changed)
+        window._regeneratingSeats = true;
         
-        // Step 3: Regenerate with new count
+        // Step 3: Clean up any stale host/prod entries from numeric player seats
+        database.ref('game/seats').once('value', (seatsSnap) => {
+            const seatEntries = seatsSnap.val() || {};
+            const cleanups = {};
+            for (const seatNum in seatEntries) {
+                const occupantId = seatEntries[seatNum];
+                // Numeric seat keys only; if occupant is host or starts with 'host-', remove
+                if (/^\d+$/.test(seatNum) && occupantId &&
+                    (occupantId === 'host' || String(occupantId).startsWith('host-'))) {
+                    cleanups['game/seats/' + seatNum] = null;
+                    // Also restore the host/prod seat field back to its correct letter
+                    if (occupantId === 'host') {
+                        cleanups['players/host/seat'] = 'A';
+                    } else {
+                        // prod-B → seat B, prod-C → seat C, etc.
+                        const _parts = String(occupantId).split('-');
+                        const _letter = _parts[_parts.length - 1];
+                        if (_letter && /^[B-J]$/.test(_letter)) {
+                            cleanups['players/' + occupantId + '/seat'] = _letter;
+                        }
+                    }
+                    console.log('🧹 Restoring host/prod from numeric seat', seatNum, '→ correct letter for', occupantId);
+                }
+            }
+            if (Object.keys(cleanups).length) database.ref().update(cleanups);
+        });
+
+        // Step 4: Regenerate with new count
         generateVideoSeats();
+
+        // (Step 5 removed — seats are now reused in place, no name flash possible)
     }
 
     // ============================================
@@ -2736,6 +4117,11 @@ function generateVideoSeats() {
     function handleSeatClick(seatNumber) {
         // Only players can interact with seats
         if (currentUser.role !== 'player') return;
+        // Block main room seat clicks when player is in a breakout room
+        if (currentUser.room && currentUser.room !== 'main' && currentUser.room !== 'waiting') {
+            console.log('🚫 Blocked main room seat click — player is in breakout room:', currentUser.room);
+            return;
+        }
         
         // Check game state first
         Promise.all([
@@ -2872,6 +4258,19 @@ function generateVideoSeats() {
     function claimSeat(seatNumber, playerName, pronouns) {
         console.log('Attempting to claim seat:', seatNumber, 'for player:', playerName);
         
+        // STEP 0: Clear any lingering video from previous seat (handles breakout return)
+        // Scan all video-N containers and remove any owned by this player's identity
+        const _myName = playerName;
+        for (let _s = 1; _s <= 24; _s++) {
+            if (_s === seatNumber) continue; // keep target seat
+            const _vd = document.getElementById('video-' + _s);
+            if (_vd && _vd.dataset.lkIdentity === _myName) {
+                _vd.querySelectorAll('.lk-video').forEach(v => { v.srcObject = null; v.remove(); });
+                delete _vd.dataset.lkIdentity;
+                console.log('📹 Pre-claim: cleared lingering video from seat', _s);
+            }
+        }
+
         // STEP 1: Clear old seat and WAIT for it
         const oldSeat = currentUser.seat;
         
@@ -2924,6 +4323,12 @@ function generateVideoSeats() {
             sessionStorage.setItem('playerName', playerName);
             sessionStorage.setItem('playerSeat', seatNumber);
             
+            // Show raise hand button now that seat is set
+            // (game/seats listener may have fired before currentUser.seat was set)
+            if (currentUser.role === 'player' && typeof window._showRaiseHandBtn === 'function') {
+                window._showRaiseHandBtn();
+            }
+            
             console.log('✅ Successfully claimed seat:', seatNumber, 'as', playerName);
             
             // Update seat label immediately
@@ -2953,19 +4358,50 @@ function generateVideoSeats() {
                 if (typeof window.setupAVControls === 'function') {
                     window.setupAVControls(seatNumber);
                 }
+                // Join LiveKit now if not yet connected — but ONLY if not in an overlay phase.
+                // During night/breakfast, players must stay disconnected.
+                const _claimPhase = window._currentPhase ||
+                    sessionStorage.getItem('currentPhase') || '';
+                const _claimOverlay = _claimPhase === 'night' || _claimPhase === 'breakfast';
+                const _lkR = window._lkRoom;
+                if (!_claimOverlay && (!_lkR || !_lkR.localParticipant)) {
+                    const _joinRoom = window.currentUser && window.currentUser.room || 'main';
+                    if (typeof window.joinLiveKitRoom === 'function') {
+                        console.log('🔊 Joining LiveKit now that seat is claimed');
+                        window.joinLiveKitRoom(_joinRoom);
+                    }
+                } else {
+                    // Already connected — just unmute, respecting Firebase flags
+                    const _pId = window.currentUser && window.currentUser.id;
+                    database.ref('players/' + _pId).once('value', (pSnap) => {
+                        const pData = pSnap.val() || {};
+                        const _mp = _lkR.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                        const _cp = _lkR.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+                        if (_mp) { pData.audioMuted ? _mp.mute() : _mp.unmute(); }
+                        if (_cp) { pData.videoMuted ? _cp.mute() : _cp.unmute(); }
+                        console.log('🔊 Tracks unblocked on seat claim | audioMuted:', !!pData.audioMuted, '| videoMuted:', !!pData.videoMuted);
+                    });
+                }
             }
 
-            // Move video element to new seat if it exists
+            // Clear video from old seat and re-attach to new seat via LiveKit
             if (oldSeat && oldSeat !== seatNumber) {
+                // Remove lingering video from old seat
                 const oldVideoDiv = document.getElementById(`video-${oldSeat}`);
-                const newVideoDiv = document.getElementById(`video-${seatNumber}`);
-                
-                if (oldVideoDiv && newVideoDiv && oldVideoDiv.children.length > 0) {
-                    // Move all video elements from old seat to new seat
-                    while (oldVideoDiv.firstChild) {
-                        newVideoDiv.appendChild(oldVideoDiv.firstChild);
-                    }
-                    console.log('📹 Moved video from seat', oldSeat, 'to seat', seatNumber);
+                if (oldVideoDiv) {
+                    oldVideoDiv.querySelectorAll('.lk-video').forEach(v => { v.srcObject = null; v.remove(); });
+                    delete oldVideoDiv.dataset.lkIdentity; // allow next player to claim
+                    console.log('📹 Cleared video from old seat', oldSeat);
+                }
+                // LiveKit watcher will re-attach to new seat automatically
+                // Force re-attach of own video to new seat
+                const room = window._lkRoom;
+                if (room && room.localParticipant) {
+                    room.localParticipant.trackPublications.forEach((pub) => {
+                        if (pub.kind === 'video' && pub.track) {
+                            setTimeout(() => _lkAttachVideo(pub.track, seatNumber, true, 0, true), 200);
+                        }
+                    });
                 }
             }
 
@@ -2976,12 +4412,28 @@ function generateVideoSeats() {
             }
         });
     }
+    // Expose claimSeat on window so preset auto-sit (player.html) can call it
+    window.claimSeat = claimSeat;
 
 // ============================================
 // PLAYER DISPLAY UPDATES
 // ============================================
 
     function updatePlayerDisplay() {
+        // During night/breakfast, seats must stay hidden regardless of player updates.
+        // Firebase writes (seat cleared, room changed) re-fire this function and
+        // can re-show seats via CSS class changes. Re-apply the hide every time.
+        const _updPhase = window._currentPhase || '';
+        if (currentUser.role === 'player' && (_updPhase === 'night' || _updPhase === 'breakfast')) {
+            // Exception: player was invited back to main room during breakfast
+            if (!window._breakfastSeatVisible) {
+                document.querySelectorAll('.video-seat').forEach(s => {
+                    s.style.setProperty('display', 'none', 'important');
+                    s.style.setProperty('visibility', 'hidden', 'important');
+                });
+                return; // No point updating display when overlay is active
+            }
+        }
         // Update main host seat (seat-A)
         const _hostPlayer = Object.values(gameState.players || {}).find(
             p => p.seat === 'A' || (p.isHost && !p.isProdMember)
@@ -2989,24 +4441,124 @@ function generateVideoSeats() {
         if (_hostPlayer) {
             const _nameA = document.getElementById('name-A');
             const _pronA = document.getElementById('pronouns-A');
-            if (_nameA && _nameA.textContent !== _hostPlayer.name) {
-                _nameA.textContent = _getDisplayName('A', _hostPlayer.name || 'Host');
+            // Show room label on host seat when host is in a breakout room,
+            // same as player seats do via updateSeatDisplay.
+            const _currentPhase = window._currentPhase || (gameState && gameState.phase);
+            const _overlayActive = (_currentPhase === 'night' || _currentPhase === 'breakfast');
+            // When a display swap is active, seat A shows the OTHER player (from seatB).
+            // The overlay must track THAT player's room, not _hostPlayer's room.
+            const _swH = window._activeDisplaySwap;
+            const _seatASwapInvolved = _swH && (String(_swH.seatA) === 'A' || String(_swH.seatB) === 'A');
+            let _seatADisplayPlayer = _hostPlayer; // who is SHOWN in seat A
+            if (_seatASwapInvolved) {
+                // Find the player who is DISPLAYED in seat A (the one from the other seat)
+                const _otherSeat = String(_swH.seatA) === 'A' ? _swH.seatB : _swH.seatA;
+                const _otherName = String(_swH.seatA) === 'A' ? _swH.nameB : _swH.nameA;
+                const _otherPlayer = Object.values(gameState.players || {}).find(
+                    p => p.name === _otherName || String(p.seat) === String(_otherSeat)
+                );
+                if (_otherPlayer) _seatADisplayPlayer = _otherPlayer;
             }
-            if (_pronA) _pronA.textContent = _hostPlayer.pronouns || '';
+            const _hostInBreakout = !_overlayActive &&
+                _seatADisplayPlayer.room && _seatADisplayPlayer.room !== 'main' && _seatADisplayPlayer.room !== 'waiting';
+            const _hostRoomNames = {
+                'kitchen': 'Kitchen', 'library': 'Library', 'living': 'Living Room',
+                'courtyard': 'Courtyard', 'bathroom': 'Bathroom', 'gym': 'Gym', 'turret': 'Turret'
+            };
+            if (_nameA) {
+                let _hostDisplayName = _hostPlayer.name || 'Host';
+                if (_seatASwapInvolved) {
+                    _hostDisplayName = String(_swH.seatA) === 'A' ? _swH.nameB : _swH.nameA;
+                }
+                _nameA.textContent = _hostDisplayName;
+            }
+            if (_pronA) {
+                _pronA.textContent = _seatADisplayPlayer.pronouns || _hostPlayer.pronouns || '';
+            }
+            // Show/clear breakout overlay on video-A
+            const _videoA = document.getElementById('video-A');
+            if (_videoA) {
+                let _overlayA = _videoA.querySelector('.name-overlay');
+                if (_hostInBreakout) {
+                    if (!_overlayA) {
+                        _overlayA = document.createElement('div');
+                        _overlayA.className = 'name-overlay';
+                        _overlayA.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,0.8);border-radius:50%;color:white;text-align:center;z-index:5;';
+                        _videoA.appendChild(_overlayA);
+                    }
+                    const _dispName = _seatASwapInvolved
+                        ? (String(_swH.seatA) === 'A' ? _swH.nameB : _swH.nameA)
+                        : (_hostPlayer.name || 'Host');
+                    _overlayA.innerHTML = `<div style="font-size:1.1rem;font-weight:bold;">${_dispName}</div><div style="font-size:0.85rem;margin-top:4px;color:#bbb;">${_hostRoomNames[_seatADisplayPlayer.room] || _seatADisplayPlayer.room}</div>`;
+                } else {
+                    if (_overlayA) _overlayA.remove();
+                }
+            }
         }
 
         // Also update prod member seats (letter seats B-J)
-        ['B','C','D','E','F','G','H','I','J'].forEach(letter => {
+        const _prodRoomNames = {
+            'kitchen': 'Kitchen', 'library': 'Library', 'living': 'Living Room',
+            'courtyard': 'Courtyard', 'bathroom': 'Bathroom', 'gym': 'Gym', 'turret': 'Turret'
+        };
+        const _prodPhase = window._currentPhase || (gameState && gameState.phase) || '';
+        const _prodOverlayActive = (_prodPhase === 'night' || _prodPhase === 'breakfast');
+        ['B','C','D'].forEach(letter => {
             const nameEl = document.getElementById('name-' + letter);
             if (!nameEl) return;
-            // Find prod member in Firebase data
+            // Find prod member in this seat (isProdMember=true; main host has isProdMember=false)
             const prodPlayer = Object.values(gameState.players || {}).find(
                 p => p.seat === letter && p.isProdMember
             );
             if (prodPlayer) {
-                nameEl.textContent = _getDisplayName(letter, prodPlayer.name || letter);
+                // Respect display swap
+                const _swP = window._activeDisplaySwap;
+                let _pName = prodPlayer.name || letter;
+                if (_swP) {
+                    if (String(letter) === String(_swP.seatA)) _pName = _swP.nameB;
+                    else if (String(letter) === String(_swP.seatB)) _pName = _swP.nameA;
+                }
+                nameEl.textContent = _pName;
                 const pronEl = document.getElementById('pronouns-' + letter);
-                if (pronEl) pronEl.textContent = prodPlayer.pronouns || '';
+                // Respect display swap for pronouns too
+                let _pPron = prodPlayer.pronouns || '';
+                if (_swP) {
+                    if (String(letter) === String(_swP.seatA)) _pPron = _swP.pronounsB || '';
+                    else if (String(letter) === String(_swP.seatB)) _pPron = _swP.pronounsA || '';
+                }
+                if (pronEl) pronEl.textContent = _pPron;
+                // Show black overlay when prod seat's DISPLAYED player is in breakout
+                const _videoDiv = document.getElementById('video-' + letter);
+                if (_videoDiv) {
+                    // Find who is ACTUALLY displayed in this seat (may differ from prodPlayer after swap)
+                    const _swOv = window._activeDisplaySwap;
+                    let _displayedPlayer = prodPlayer;
+                    if (_swOv) {
+                        let _displayedName = null;
+                        if (String(letter) === String(_swOv.seatA)) _displayedName = _swOv.nameB;
+                        else if (String(letter) === String(_swOv.seatB)) _displayedName = _swOv.nameA;
+                        if (_displayedName) {
+                            const _dp = Object.values(gameState.players || {}).find(p => p.name === _displayedName);
+                            if (_dp) _displayedPlayer = _dp;
+                        }
+                    }
+                    const _inBreakout = !_prodOverlayActive &&
+                        _displayedPlayer.room && _displayedPlayer.room !== 'main' && _displayedPlayer.room !== 'waiting';
+                    let _overlay = _videoDiv.querySelector('.name-overlay');
+                    if (_inBreakout) {
+                        if (!_overlay) {
+                            _overlay = document.createElement('div');
+                            _overlay.className = 'name-overlay';
+                            _overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,0.8);border-radius:50%;color:white;z-index:10;pointer-events:none;';
+                            _videoDiv.appendChild(_overlay);
+                        }
+                        const _rName = _prodRoomNames[_displayedPlayer.room] || _displayedPlayer.room;
+                        const _ovName = _displayedPlayer.name || letter;
+                        _overlay.innerHTML = `<div style="font-size:1.2rem;font-weight:bold;">${_ovName}</div><div style="font-size:0.9rem;margin-top:5px;color:#bbb;">${_rName}</div>`;
+                    } else {
+                        if (_overlay) _overlay.remove();
+                    }
+                }
             }
         });
         for (let i = 1; i <= 24; i++) {
@@ -3034,13 +4586,20 @@ function generateVideoSeats() {
                 if (!nameElement.dataset.showingVote) {
                     nameElement.textContent = playerInSeat.name || 'Unknown';
                     nameElement.style.color = '#fff';
-                    nameElement.style.fontSize = '1.2rem';
+                    nameElement.style.fontSize = _nameFontSize();
                     nameElement.style.fontFamily = 'Arial, sans-serif'; // ← Normal font for names
                     console.log(`✅ Updated seat ${i} with name: ${playerInSeat.name}`);
                 }
 
                 if (seatLabel && !seatLabel.dataset.showingVote) {
-                    seatLabel.style.cssText = ''; // Reset background
+                    // Preserve CoT label visibility if this seat is the active CoT seat
+                    const _wasCotHidden = seatElement.dataset.cotActive && seatLabel.style.visibility === 'hidden';
+                    // Reset only the background/border set during vote display.
+                    // Using cssText='' wipes ALL inline styles, causing a layout flash.
+                    seatLabel.style.background = '';
+                    seatLabel.style.border = '';
+                    seatLabel.style.color = ''; // Reset background
+                    if (_wasCotHidden) seatLabel.style.visibility = 'hidden';
                 }
                 
                 // Update pronouns display (SINGLE UPDATE - no flashing)
@@ -3093,6 +4652,15 @@ function generateVideoSeats() {
                         seatLabel.style.cursor = 'pointer';
                         seatLabel.onclick = (e) => {
                             e.stopPropagation(); // Prevent seat click
+                            // Issue 9: route to Circle of Truth if selection mode active
+                            if (window.circleOfTruthSelectionMode && playerInSeat && !playerInSeat.isHost) {
+                                if (typeof window.selectPlayerForCircleOfTruth === 'function') {
+                                    window.selectPlayerForCircleOfTruth(i, {...playerInSeat, id: Object.keys(gameState.players || {}).find(k => gameState.players[k].seat === i)});
+                                }
+                                window.circleOfTruthSelectionMode = false;
+                                document.querySelectorAll('.video-seat').forEach(s => { s.style.cursor = ''; s.style.border = ''; });
+                                return;
+                            }
                             editNameAndPronouns(i);
                         };
                     }
@@ -3117,9 +4685,23 @@ function generateVideoSeats() {
                         controls.style.display = 'none';
                     }
                 }
-            } else {
+            } else if (!window._regeneratingSeats) {
+                // Skip clearing to 'Empty' while seats are being rebuilt —
+                // avoids the visual flicker where occupied seats flash as empty
                 seatElement.classList.add('empty');
                 seatElement.classList.remove('active');
+                // Remove disconnect icon — seat is now empty
+                _hideDisconnectIcon(i);
+                // Always clear vote-display inline styles on empty seats so the
+                // CSS defaults take over cleanly. This prevents a font/size flash
+                // when a seat transitions from occupied-with-vote to empty.
+                nameElement.style.fontFamily = '';
+                nameElement.style.fontSize   = '';
+                nameElement.style.color      = '';
+                nameElement.style.textAlign  = '';
+                nameElement.style.visibility = '';
+                nameElement.style.display    = '';
+                delete nameElement.dataset.showingVote;
                 nameElement.textContent = 'Empty';
                 nameElement.onclick = null;
 
@@ -3139,101 +4721,22 @@ function generateVideoSeats() {
                     muteIndicator.textContent = '';
                     muteIndicator.style.visibility = 'hidden';
                 }
+                // Detach any lingering video feed from this now-empty seat
+                _lkDetachSeat(i, true);
+                // Remove any name-overlay left by updateSeatDisplay (e.g. 'Laptop - Kitchen')
+                const _emptyVid = document.getElementById('video-' + i);
+                if (_emptyVid) {
+                    const _overlay = _emptyVid.querySelector('.name-overlay');
+                    if (_overlay) _overlay.remove();
+                }
             }
         }
     }
 
-    // ============================================
-    // VOTE TALLY SYSTEM - COMPLETE REWRITE
-    // ============================================
-    
-    // Listen for ORIGINAL votes (never cleared)
-    database.ref('game/firstVote/originalVotes').on('value', (snapshot) => {
-        const votes = snapshot.val();
-        if (currentUser.role === 'host' && votes) {
-            updateVoteTally(votes, 'original-count');
-            
-            // Show votes on name tags during voting phase only
-            database.ref('game/phase').once('value', (phaseSnap) => {
-                if (phaseSnap.val() === 'first-vote') {
-                    database.ref('game/firstVote/revealed').once('value', (revealedSnapshot) => {
-                        if (!revealedSnapshot.val()) {
-                            database.ref('players').once('value', (playersSnapshot) => {
-                                const players = playersSnapshot.val() || {};
-                                
-                                for (let voterId in votes) {
-                                    const voterPlayer = players[voterId];
-                                    if (voterPlayer && voterPlayer.seat) {
-                                        const targetSeat = votes[voterId];
-                                        const targetPlayer = Object.values(players).find(p => p.seat === targetSeat);
-                                        const targetName = targetPlayer ? targetPlayer.name : `Seat ${targetSeat}`;
-                                        
-                                        showVoteOnNameTag(voterPlayer.seat, targetName, false);
-                                    }
-                                }
-                            });
-                        }
-                    });
-                }
-            });
-        }
-    });
-    
-    // Listen for CURRENT votes (used during revote) - HOST ONLY
-    // DELAYED to ensure seats exist first
-    setTimeout(() => {
-        database.ref('game/firstVote/votes').on('value', (snapshot) => {
-            const votes = snapshot.val();
-            console.log('🎯 Host updating vote displays:', votes);
-        
-            if (!votes) return;
-        
-            // Determine if this is a revote
-            database.ref('game/firstVote/isRevote').once('value', (revoteSnapshot) => {
-                const isRevote = revoteSnapshot.val() || false;
-                
-                if (currentUser.role === 'host') {
-                    // Show/hide revote sections
-                    const revoteSection = document.getElementById('revote-section');
-                    const revoteRevealSection = document.getElementById('revote-reveal-section');
-                    
-                    if (isRevote) {
-                        // During revote, show revote sections and update revote total
-                        if (revoteSection) revoteSection.style.display = 'block';
-                        updateVoteTally(votes, 'revote-total');
-                    } else {
-                        // During original vote, hide revote sections
-                        if (revoteSection) revoteSection.style.display = 'none';
-                        if (revoteRevealSection) revoteRevealSection.style.display = 'none';
-                    }
-                    
-                    // Show votes on name tags during voting phase only
-                    database.ref('game/phase').once('value', (phaseSnap) => {
-                        if (phaseSnap.val() === 'first-vote') {
-                            database.ref('game/firstVote/revealed').once('value', (revealedSnapshot) => {
-                                if (!revealedSnapshot.val()) {
-                                    database.ref('players').once('value', (playersSnapshot) => {
-                                        const players = playersSnapshot.val() || {};
-                                        
-                                        for (let voterId in votes) {
-                                            const voterPlayer = players[voterId];
-                                            if (voterPlayer && voterPlayer.seat) {
-                                                const targetSeat = votes[voterId];
-                                                const targetPlayer = Object.values(players).find(p => p.seat === targetSeat);
-                                                const targetName = targetPlayer ? targetPlayer.name : `Seat ${targetSeat}`;
-                                                
-                                                showVoteOnNameTag(voterPlayer.seat, targetName, false);
-                                            }
-                                        }
-                                    });
-                                }
-                            });
-                        }
-                    });
-                }
-            });
-        });
-    }, 2000); // Close setTimeout - wait for seats to generate
+    // NOTE: Vote tally listeners (game/firstVote/originalVotes and game/firstVote/votes)
+    // are registered in the VOTE TALLY LISTENERS section earlier in setupFirebaseListeners
+    // (around lines 1210 and 1243). The duplicate block that was here was removed to
+    // prevent double-firing which caused the "runaway listener" storm in production.
 
 // Listen for revealed votes during reveal phase
 database.ref('game/revealedVoteDisplay').on('child_added', (snapshot) => {
@@ -3255,10 +4758,18 @@ database.ref('game/revealedVoteDisplay').on('child_added', (snapshot) => {
     }
 });
 
-// Update Reveal Count as votes are revealed (for host)
+// HOST ONLY: Update the "Reveal Count" tally panel as first votes are revealed.
+// NOTE: There are intentionally TWO .on('value') listeners on game/revealedVoteDisplay —
+// this one (host, updates #reveal-count) and the one below (player, updates
+// #first-vote-tally-content). They serve different roles and different DOM elements.
+// Do NOT remove one thinking it is a duplicate of the other.
 database.ref('game/revealedVoteDisplay').on('value', (snapshot) => {
     if (currentUser.role !== 'host') return;
-    
+
+    // Null guard: when revealedVoteDisplay is removed (e.g. by Check Results),
+    // do NOT clear the tally. Only Reset All Votes / Reset Game should clear it.
+    if (!snapshot.val()) return;
+
     const revealedVotes = snapshot.val() || {};
     const revealCountElement = document.getElementById('reveal-count');
     
@@ -3272,12 +4783,8 @@ database.ref('game/revealedVoteDisplay').on('value', (snapshot) => {
             revealCounts[voteData.votedFor] = (revealCounts[voteData.votedFor] || 0) + 1;
         }
     }
-    
-    // Display reveal tally
-    if (Object.keys(revealCounts).length === 0) {
-        revealCountElement.innerHTML = '<div style="color: #666;">No votes revealed yet</div>';
-        return;
-    }
+
+    if (Object.keys(revealCounts).length === 0) return; // no data — leave tally alone
     
     revealCountElement.innerHTML = '';
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
@@ -3305,9 +4812,18 @@ database.ref('game/revealedVoteDisplay').on('value', (snapshot) => {
     }
 });
 
-// PLAYER: Listen for FIRST VOTE revealed votes to update vote count display
+// PLAYER ONLY: Update the first-vote tally panel as votes are revealed.
+// NOTE: This is intentionally a second .on('value') listener on game/revealedVoteDisplay.
+// The listener above handles the HOST tally (#reveal-count).
+// This one handles the PLAYER tally (#first-vote-tally-content).
+// Both must exist — they update different DOM elements for different roles.
 database.ref('game/revealedVoteDisplay').on('value', (snapshot) => {
     if (currentUser.role !== 'player') return;
+
+    // When revealedVoteDisplay is removed (null) — e.g. after Check Results —
+    // do NOT reset the tally. Only update when there's actual data to show.
+    // Tallies should only be cleared by Reset Game or Reset All Votes.
+    if (!snapshot.val()) return;
     
     // Check if we're in second vote reveal
     database.ref('game/secondVoteReveal/active').once('value', (revoteSnap) => {
@@ -3336,10 +4852,7 @@ database.ref('game/revealedVoteDisplay').on('value', (snapshot) => {
             }
         }
         
-        if (Object.keys(revealCounts).length === 0) {
-            revealCountElement.innerHTML = '<p style="color: #bbb; text-align: center;">No votes revealed yet</p>';
-            return;
-        }
+        if (Object.keys(revealCounts).length === 0) return; // no data — leave tally alone
         
         revealCountElement.innerHTML = '';
         const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
@@ -3421,12 +4934,13 @@ database.ref('game/firstVote/votes').on('value', (snapshot) => {
 
 // PLAYER & HOST: Listen for SECOND VOTE reveals and display on name tags AND tally
 database.ref('game/secondVoteReveal/revealedVotes').on('value', (snapshot) => {
+    // When secondVoteReveal is removed (e.g. by Check Results), snapshot.val() is null.
+    // Do NOT clear the tally — tallies only clear on Reset All Votes, Reset Game, or Night phase.
+    if (!snapshot.val()) return;
+
     const revealedVotes = snapshot.val() || {};
     
     console.log('🎯 SECOND VOTE REVEALS updated:', revealedVotes);
-    
-    // Skip if no data
-    if (Object.keys(revealedVotes).length === 0) return;
     
     // PART 1: Display each revealed vote on name tags
     Object.entries(revealedVotes).forEach(([playerId, voteData]) => {
@@ -3540,7 +5054,12 @@ function updateSeatDisplay(seatNumber, playerData) {
     if (!videoDiv) return;
     
     // Check if player is in different room
-    const isInDifferentRoom = playerData.room && playerData.room !== 'main';
+    // 'waiting' is an internal state, not a displayable room
+    // During night/breakfast, overlay handles display — don't show room labels
+    const _currentPhase = window._currentPhase || (gameState && gameState.phase);
+    const _overlayActive = (_currentPhase === 'night' || _currentPhase === 'breakfast');
+    const isInDifferentRoom = !_overlayActive &&
+        playerData.room && playerData.room !== 'main' && playerData.room !== 'waiting';
     
     // Check if video is off (we'll track this in Firebase)
     const isVideoOff = playerData.videoOff === true;
@@ -3663,6 +5182,22 @@ window.addEventListener('resize', () => {
             }
             
             generateVideoSeats(); // Regenerate with new dimensions
+
+            // Night/breakfast seat re-hiding is handled inside generateVideoSeats() itself.
+
+            // Immediately restore player names to avoid 'Empty' flash during resize
+            for (const pid in gameState.players) {
+                const _pp = gameState.players[pid];
+                if (!_pp.seat || typeof _pp.seat !== 'number') continue;
+                const _nameEl = document.getElementById('name-' + _pp.seat);
+                if (_nameEl && _nameEl.textContent === 'Empty') {
+                    _nameEl.textContent = _pp.name || 'Empty';
+                    const _pronEl = document.getElementById('pronouns-' + _pp.seat);
+                    if (_pronEl && _pp.pronouns) _pronEl.textContent = _pp.pronouns;
+                    const _seatEl = document.getElementById('seat-' + _pp.seat);
+                    if (_seatEl) { _seatEl.classList.remove('empty'); _seatEl.classList.add('active'); }
+                }
+            }
             
             // RESTORE VIDEO ELEMENTS after regenerating
             setTimeout(() => {
@@ -3679,7 +5214,47 @@ window.addEventListener('resize', () => {
                     }
                 }
                 console.log('✅ Video elements preserved through resize');
-                _repositionAllAVControls();
+                // AV buttons are CSS-positioned — no repositioning needed after resize
+                // Re-apply mute/cam-off icons (seat HTML was rebuilt, so icons reset)
+                if (typeof window._refreshAVIcons === 'function') window._refreshAVIcons();
+                // Re-scan LiveKit participants to reattach any video that wasn't preserved
+                const _lkRoomRef = window._lkRoom;
+                if (_lkRoomRef) {
+                    _lkRoomRef.remoteParticipants.forEach(async (participant) => {
+                        const seat = await _lkIdentityToSeat(participant.identity, true);
+                        if (!seat) return;
+                        const container = document.getElementById('video-' + seat);
+                        if (!container || container.querySelector('.lk-video')) return;
+                        participant.trackPublications.forEach((pub) => {
+                            if (pub.kind === LivekitClient.Track.Kind.Video && pub.track && pub.isSubscribed) {
+                                _lkAttachVideo(pub.track, seat, true, 0, false, participant.identity);
+                                console.log('📹 Post-resize reattach:', participant.identity, '→ video-' + seat);
+                            }
+                        });
+                    });
+                    // Also reattach own video if it was lost
+                    const _u = _lkCurrentUser ? _lkCurrentUser() : window.currentUser;
+                    if (_u && _u.seat) {
+                        const _ownDiv = document.getElementById('video-' + _u.seat);
+                        if (_ownDiv && !_ownDiv.querySelector('.lk-video')) {
+                            _lkRoomRef.localParticipant.trackPublications.forEach((pub) => {
+                                if (pub.kind === LivekitClient.Track.Kind.Video && pub.track) {
+                                    _lkAttachVideo(pub.track, _u.seat, true, 0, true);
+                                    console.log('📹 Post-resize reattach own video → video-' + _u.seat);
+                                }
+                            });
+                        }
+                    }
+                }
+                // Re-apply Circle of Truth red glow if still active (host-only)
+                if (window._cotTargetSeat) {
+                    const _cotSeat = document.getElementById('seat-' + window._cotTargetSeat);
+                    if (_cotSeat) {
+                        _cotSeat.style.boxShadow = '0 0 40px 15px rgba(255, 0, 0, 0.85)';
+                        _cotSeat.style.border = '4px solid #ff0000';
+                        _cotSeat.dataset.cotTarget = 'true';
+                    }
+                }
             }, 10);
             
             // Re-setup player controls after resize regenerates seats
@@ -3949,40 +5524,11 @@ database.ref('game/roleReveal').on('value', (snapshot) => {
     }, 8000);
 });
 
-// Host sees all votes in real-time on name tags
-if (currentUser && currentUser.role === 'host') {
-    database.ref('game/firstVote/votes').on('value', (snapshot) => {
-        const votes = snapshot.val();
-        if (!votes) return;
-        
-        console.log('🎯 Host updating vote displays:', votes);
-        
-        // Show each vote on name tag
-        Object.keys(votes).forEach(voterId => {
-            const votedForSeat = votes[voterId];
-            
-            database.ref('players/' + voterId).once('value', (voterSnap) => {
-                const voter = voterSnap.val();
-                if (!voter || !voter.seat) return;
-                
-                database.ref('players').once('value', (allPlayersSnap) => {
-                    const targetPlayer = Object.values(allPlayersSnap.val() || {}).find(p => p.seat === votedForSeat);
-                    const targetName = targetPlayer ? targetPlayer.name : `Seat ${votedForSeat}`;
-                    
-                    showVoteOnNameTag(voter.seat, targetName, false);
-                });
-            });
-        });
-    });
-}
+// NOTE: Host vote-display listener (game/firstVote/votes) is inside
+// setupFirebaseListeners() at the VOTE TALLY LISTENERS section.
+// The duplicate that was here was removed to prevent double-firing.
 
-// Show auto-votes on player's own screen
-database.ref('game/autoVoteDisplay/' + currentUser.id).on('value', (snapshot) => {
-    const data = snapshot.val();
-    if (data && currentUser.role === 'player') {
-        showVoteOnNameTag(data.seat, data.name, true);
-    }
-});
+// autoVoteDisplay listener moved into setupFirebaseListeners()
 
 // Clear ghost seats when players refresh/disconnect
 database.ref('players').on('child_changed', (snapshot) => {
@@ -4016,6 +5562,15 @@ database.ref('players').on('child_changed', (snapshot) => {
 database.ref('game/secondVote/active').on('value', (snapshot) => {
     if (snapshot.val() === true) {
         console.log('🔄 Revote started - clearing vote displays');
+        // Open pill overlay for second vote (player role only)
+        if (typeof currentUser !== 'undefined' && currentUser.role === 'player') {
+            // Always open the tied-players pill when secondVote becomes active.
+            // No 'already open' guard here — the first-vote pill (all players) may
+            // be showing and must be replaced with the correct tied-players version.
+            if (typeof window.showVotePillOverlay === 'function' && !window.votePillLocked) {
+                window.showVotePillOverlay(true); // true = isRevote, shows tied players only
+            }
+        }
         
         // Clear all vote displays
         for (let i = 1; i <= 25; i++) {
@@ -4025,16 +5580,41 @@ database.ref('game/secondVote/active').on('value', (snapshot) => {
             
             if (nameElement && nameElement.dataset.showingVote) {
                 delete nameElement.dataset.showingVote;
-                nameElement.style.cssText = '';
+                // Reset vote-display styles: if seat is now empty, remove inline
+                // styles so CSS defaults apply. If occupied, set player values.
+                if (nameElement.textContent === 'Empty') {
+                    nameElement.style.fontFamily = '';
+                    nameElement.style.fontSize   = '';
+                    nameElement.style.color      = '';
+                    nameElement.style.textAlign  = '';
+                    nameElement.style.visibility = '';
+                    nameElement.style.display    = '';
+                } else {
+                    nameElement.style.fontFamily = 'Arial, sans-serif';
+                    nameElement.style.fontSize   = _nameFontSize();
+                    nameElement.style.color      = '#fff';
+                    nameElement.style.textAlign  = '';
+                    nameElement.style.visibility = '';
+                    nameElement.style.display    = '';
+                }
             }
             if (pronounsElement && pronounsElement.dataset.showingVote) {
                 delete pronounsElement.dataset.showingVote;
                 pronounsElement.style.display = '';
-                pronounsElement.style.cssText = '';
+                // Reset only vote-display styles on pronouns element.
+                pronounsElement.style.visibility = '';
+                pronounsElement.style.display    = '';
+                pronounsElement.style.color      = '';
             }
             if (seatLabel && seatLabel.dataset.showingVote) {
                 delete seatLabel.dataset.showingVote;
-                seatLabel.style.cssText = '';
+                // Reset only the background/border set during vote display.
+                // Using cssText='' wipes ALL inline styles, causing a layout flash.
+                seatLabel.style.background = '';
+                seatLabel.style.border = '';
+                seatLabel.style.color = '';
+                if (seatLabel.parentElement && seatLabel.parentElement.dataset.cotActive)
+                    seatLabel.style.visibility = 'hidden';
             }
         }
 
@@ -4049,6 +5629,11 @@ database.ref('game/secondVote/active').on('value', (snapshot) => {
         
         // Force player display update
         updatePlayerDisplay();
+    } else {
+        // Revote ended — close pill overlay
+        if (typeof window.closeVotePillOverlay === 'function') {
+            window.closeVotePillOverlay();
+        }
     }
 });
 
@@ -4081,9 +5666,9 @@ database.ref('game/triggerRoleReveal').on('value', (snapshot) => {
                     seatElement.style.transform = 'translate(-50%, -50%) scale(1.0)';
                     seatElement.style.transition = 'transform 0.5s ease';
                     
-                    // Also restore name tag size
+                    // Also restore name tag size (skip if CoT is hiding it)
                     const seatLabel = seatElement.querySelector('.seat-label');
-                    if (seatLabel) {
+                    if (seatLabel && !seatElement.dataset.cotActive) {
                         seatLabel.style.transform = 'scale(1.0)';
                     }
                 }
@@ -4174,6 +5759,26 @@ function showRoleAnimation(role) {
     }, 5000);
 }
 
+// Listen for tally clearing signal (Reset All Votes / Reset Game)
+database.ref('game/clearTallies').on('value', (snapshot) => {
+    if (!snapshot.val()) return;
+    // Clear all vote tally displays on all clients
+    const _tallyEls = [
+        'first-vote-tally-content', 'second-vote-tally-content',
+        'original-count', 'current-count', 'reveal-count',
+        'revote-count', 'revote-reveal-count'
+    ];
+    _tallyEls.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+    });
+    const _svSection = document.getElementById('second-vote-tally');
+    if (_svSection) _svSection.style.display = 'none';
+    const _svSection2 = document.getElementById('second-vote-section');
+    if (_svSection2) _svSection2.style.display = 'none';
+    console.log('🧹 All vote tallies cleared by signal');
+});
+
 // Listen for vote display clearing
 database.ref('game/clearVoteDisplays').on('value', (snapshot) => {
     if (!snapshot.val()) return;
@@ -4188,16 +5793,32 @@ database.ref('game/clearVoteDisplays').on('value', (snapshot) => {
         
         if (nameElement && nameElement.dataset.showingVote) {
             delete nameElement.dataset.showingVote;
-            nameElement.style.cssText = '';
+            // Reset only vote-display styles on the name element — targeted,
+            // not cssText='' which causes a full style recalculation flash.
+            nameElement.style.fontFamily = 'Arial, sans-serif';
+            nameElement.style.fontSize   = _nameFontSize();
+            nameElement.style.color      = '#fff';
+            nameElement.style.textAlign  = '';
+            nameElement.style.visibility = '';
+            nameElement.style.display    = '';
         }
         if (pronounsElement && pronounsElement.dataset.showingVote) {
             delete pronounsElement.dataset.showingVote;
             pronounsElement.style.display = '';
-            pronounsElement.style.cssText = '';
+            // Reset only vote-display styles on pronouns element.
+            pronounsElement.style.visibility = '';
+            pronounsElement.style.display    = '';
+            pronounsElement.style.color      = '';
         }
         if (seatLabel && seatLabel.dataset.showingVote) {
             delete seatLabel.dataset.showingVote;
-            seatLabel.style.cssText = '';
+            // Reset only the background/border set during vote display.
+            // Using cssText='' wipes ALL inline styles, causing a layout flash.
+            seatLabel.style.background = '';
+            seatLabel.style.border = '';
+            seatLabel.style.color = '';
+            if (seatLabel.parentElement && seatLabel.parentElement.dataset.cotActive)
+                seatLabel.style.visibility = 'hidden';
         }
     }
     
@@ -4232,6 +5853,13 @@ database.ref('game/roomLimits/main').on('value', () => {
 // ============================================
 // END GAME — WINNERS DISPLAY (all clients)
 // ============================================
+// NOTE: There are intentionally TWO .on('value') listeners on game/endGame/winners:
+//   1. THIS listener (here) — updates the FULL-SCREEN overlay (#endgame-winners-overlay,
+//      #winners-team-name, #winners-player-names).
+//   2. A second listener near the bottom of the file — updates the PHASE TITLE BAR
+//      (#phase-name) and inline names display (#endgame-winners-names-display).
+// They serve different DOM elements and must both exist. Do NOT remove one thinking
+// it is a duplicate of the other.
 database.ref('game/endGame/winners').on('value', (snapshot) => {
     const data = snapshot.val();
     const overlay = document.getElementById('endgame-winners-overlay');
@@ -4239,7 +5867,7 @@ database.ref('game/endGame/winners').on('value', (snapshot) => {
     if (!data) { overlay.style.display = 'none'; return; }
     const teamNameEl = document.getElementById('winners-team-name');
     const playerNamesEl = document.getElementById('winners-player-names');
-    if (teamNameEl) { teamNameEl.textContent = data.teamName || ''; teamNameEl.style.color = data.teamColor || '#FFD700'; }
+    if (teamNameEl) { teamNameEl.textContent = data.teamLabel || data.teamName || ''; teamNameEl.style.color = data.teamColor || '#FFD700'; }
     if (playerNamesEl) { playerNamesEl.textContent = data.winnerText || ''; playerNamesEl.style.color = data.teamColor || '#FFD700'; }
     overlay.style.display = 'flex';
 });
@@ -4247,124 +5875,156 @@ database.ref('game/endGame/winners').on('value', (snapshot) => {
 // Prod members get letter seats (B, C, D...) positioned in the left column
 // below the main host seat. Each gets a video circle the same size as player seats.
 
-function _positionProdSeats(hostX, hostY, hostSize, playerSize, leftSectionWidth) {
-    const letters = ['B','C','D','E','F','G','H','I','J'];
-    const margin = 8; // gap between seats
+// _doProdSeatLayout: the actual DOM-layout work for prod seats.
+// Called both from the one-time immediate .once() read and from the persistent
+// .on('value') listener (which re-uses the last-known resize dimensions).
+// Keeping this as a named function means the layout logic is defined once.
+function _doProdSeatLayout(hostX, hostY, hostSize, playerSize, leftSectionWidth, snap) {
+    const _isHostOrProd = currentUser.role === 'host' || currentUser.isProdMember
+                       || currentUser.role === 'observer';
+    const _isPlayerView = !_isHostOrProd;
+    const FIXED_LETTERS = ['B', 'C', 'D'];
+    const _bottomMargin  = 24;
+    const _topOfSpace    = hostY + hostSize / 2 + 12;
+    const _availHeight   = window.innerHeight - _bottomMargin - _topOfSpace;
+    const _nProd         = FIXED_LETTERS.length;
+    const _spacing0      = _availHeight / (_nProd + 1);
+    const _vw = window.innerWidth;
+    const _vh = window.innerHeight;
+    const _isProdMobile = _vw <= 600 || (_vh <= 500 && _vw <= 1024);
+    let _size;
+    if (!_isProdMobile && _vw >= 1200) {
+        _size = Math.max(40, Math.min(playerSize, _spacing0 * 0.60, leftSectionWidth - 20));
+    } else if (!_isProdMobile) {
+        _size = Math.min(40, Math.round(playerSize * 0.40), _spacing0 * 0.45);
+        _size = Math.max(24, _size);
+    } else {
+        _size = Math.min(44, Math.round(playerSize * 0.80), _spacing0 * 0.40);
+        _size = Math.max(36, _size);
+    }
 
-    // Watch Firebase for prod members and create/update their seats
-    database.ref('players').orderByChild('isProdMember').equalTo(true).on('value', (snap) => {
-        // Collect active prod members sorted by seat letter
-        const prodMembers = [];
-        snap.forEach(child => {
-            const p = child.val();
-            if (p && p.seat && p.status !== 'removed') prodMembers.push(p);
-        });
-        prodMembers.sort((a, b) => a.seat.localeCompare(b.seat));
+    const _memberByLetter = {};
+    snap.forEach(child => {
+        const p = child.val();
+        if (p && p.seat && FIXED_LETTERS.includes(p.seat) && p.status !== 'removed') {
+            _memberByLetter[p.seat] = p;
+        }
+    });
 
-        // Remove prod seats that are no longer active
-        const _activeLetters = prodMembers.map(p => p.seat);
-        document.querySelectorAll('.prod-seat').forEach(el => {
-            const letter = el.id.replace('seat-', '');
-            if (!_activeLetters.includes(letter)) el.remove();
-        });
+    document.querySelectorAll('.prod-seat').forEach(el => {
+        const _l = el.id.replace('seat-', '');
+        if (!FIXED_LETTERS.includes(_l)) el.remove();
+    });
 
-        // Create and position a seat for each prod member
-        // --- Dynamic scaling: shrink seats/spacing if they'd go off-screen ---
-        const _n = prodMembers.length;
-        const _gap0 = hostSize / 2 + 110 + playerSize / 2; // host→first seat
-        const _spacing0 = playerSize + 90; // center-to-center between seats
-        const _bottomMargin = 80; // px from bottom of window
-        const _availableHeight = window.innerHeight - (hostY + _gap0) - _bottomMargin;
-        // Height needed from first seat center to last seat center
-        const _neededHeight = (_n - 1) * _spacing0;
-        // Scale factor: shrink if needed, never enlarge
-        const _scale = (_n > 1 && _neededHeight > _availableHeight)
-            ? Math.max(0.45, _availableHeight / _neededHeight)
-            : 1.0;
-        const _scaledSpacing = _spacing0 * _scale;
-        const _scaledSize = playerSize * _scale;
-        // Also scale the initial gap slightly when squishing
-        const _scaledGap = _scale < 1
-            ? (hostSize / 2 + Math.max(50, 110 * _scale) + _scaledSize / 2)
-            : _gap0;
+    FIXED_LETTERS.forEach((letter, idx) => {
+        const seatId = 'seat-' + letter;
+        const member = _memberByLetter[letter] || null;
+        const y = _topOfSpace + _spacing0 * (idx + 1);
+        const x = hostX;
+        const size = _size;
 
-        prodMembers.forEach((p, idx) => {
-            const letter = p.seat; // 'B', 'C', etc.
-            const seatId = 'seat-' + letter;
+        if (_isPlayerView && !member) {
+            const _stale = document.getElementById(seatId);
+            if (_stale) _stale.remove();
+            return;
+        }
 
-            // Use scaled gap and spacing
-            const gap = _scaledGap;
-            const y = hostY + gap + idx * _scaledSpacing;
-            const x = hostX; // same X as host (centered in left column)
-
-            // Constrain to left section; use scaled size
-            const maxSize = leftSectionWidth - 20;
-            const size = Math.min(_scaledSize, maxSize);
-
-            let seatEl = document.getElementById(seatId);
-            if (!seatEl) {
-                seatEl = document.createElement('div');
-                seatEl.id = seatId;
-                seatEl.className = 'video-seat prod-seat';
-                seatEl.innerHTML = `
-                    <div id="video-${letter}"></div>
-                    <div class="seat-label" id="seat-label-${letter}">
-                        <span class="player-name" id="name-${letter}">${p.name || letter}</span>
-                        <span class="player-pronouns" id="pronouns-${letter}">${p.pronouns || ''}</span>
-                    </div>
-                    <div class="seat-av-controls" id="av-controls-${letter}" style="display:none">
-                        <button class="av-btn mic-btn" id="mic-btn-${letter}" title="Toggle Mic (M)" onclick="event.stopPropagation(); window.toggleMic && window.toggleMic()"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
-                        <button class="av-btn cam-btn" id="cam-btn-${letter}" title="Toggle Camera (V)" onclick="event.stopPropagation(); window.toggleCam && window.toggleCam()"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></button>
-                    </div>
-                    <div class="av-status-icons" id="av-status-${letter}">
-                        <span class="av-icon mic-off-icon" id="mic-off-${letter}" style="display:none"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></span>
-                        <span class="av-icon cam-off-icon" id="cam-off-${letter}" style="display:none"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></span>
-                    </div>
-                `;
-                // Click to offer seat switch (only visible to prod/host members)
+        let seatEl = document.getElementById(seatId);
+        if (!seatEl) {
+            seatEl = document.createElement('div');
+            seatEl.id = seatId;
+            seatEl.className = 'video-seat prod-seat empty';
+            seatEl.innerHTML = `
+                <div id="video-${letter}"></div>
+                <div class="seat-label" id="seat-label-${letter}">
+                    <button class="av-btn mic-btn" id="mic-btn-${letter}" title="Toggle Mic (M)" onclick="event.stopPropagation(); window.toggleMic && window.toggleMic()"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
+                    <button class="av-btn cam-btn" id="cam-btn-${letter}" title="Toggle Camera (V)" onclick="event.stopPropagation(); window.toggleCam && window.toggleCam()"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></button>
+                    <span class="player-name" id="name-${letter}" style="font-family:Arial,sans-serif;font-size:1.2rem;color:#fff;">Empty</span>
+                    <span class="player-pronouns" id="pronouns-${letter}"></span>
+                </div>
+                <div class="seat-av-controls" id="av-controls-${letter}" style="display:none"></div>
+                <div class="av-status-icons" id="av-status-${letter}">
+                    <span class="av-icon mic-off-icon" id="mic-off-${letter}" style="display:none"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></span>
+                    <span class="av-icon cam-off-icon" id="cam-off-${letter}" style="display:none"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></button></span>
+                </div>
+                <div class="audio-ring" id="aring-${letter}"></div>
+            `;
+            if (_isHostOrProd) {
                 seatEl.addEventListener('click', (e) => {
                     if (!window.currentUser || !window.currentUser.seat) return;
                     const mySeat = window.currentUser.seat;
-                    if (mySeat === letter) return; // can't switch with yourself
-                    // Only show switch option between prod/host seats
-                    if (!['A','B','C','D','E','F','G','H','I','J'].includes(String(mySeat))) return;
+                    if (mySeat === letter) return;
+                    if (!['A','B','C','D'].includes(String(mySeat))) return;
                     _showSeatSwitchMenu(letter, e.clientX, e.clientY);
                 });
-                document.body.appendChild(seatEl);
-                // AV controls for our own new seat
-                if (window.currentUser && window.currentUser.seat === letter) {
-                    setTimeout(() => {
-                        if (typeof window.setupAVControls === 'function') window.setupAVControls(letter);
-                    }, 200);
-                }
-            } else {
-                // Update name in existing seat
-                const nameEl = document.getElementById('name-' + letter);
-                if (nameEl) nameEl.textContent = _getDisplayName(letter, p.name || letter);
             }
-
-            // Position the seat
-            seatEl.style.position  = 'fixed';
-            seatEl.style.left      = x + 'px';
-            seatEl.style.top       = y + 'px';
-            seatEl.style.width     = size + 'px';
-            seatEl.style.height    = size + 'px';
-            seatEl.style.transform = 'translate(-50%, -50%)';
-
-            // Scale name label font size with seat size
-            const _nameFontSize  = Math.max(0.7,  1.5 * _scale).toFixed(2);
-            const _pronFontSize  = Math.max(0.6,  0.8 * _scale).toFixed(2);
-            const _nameEl2 = seatEl.querySelector('.player-name');
-            const _pronEl2 = seatEl.querySelector('.player-pronouns');
-            if (_nameEl2) _nameEl2.style.fontSize = _nameFontSize + 'rem';
-            if (_pronEl2) _pronEl2.style.fontSize = _pronFontSize + 'rem';
-
-        });
-
-        // Trigger AV icon update
-        if (window._avIconsListener) {
-            // Force re-evaluation by the existing listener
+            document.body.appendChild(seatEl);
         }
+
+        const _nameEl = document.getElementById('name-' + letter);
+        const _pronEl = document.getElementById('pronouns-' + letter);
+        if (member) {
+            seatEl.classList.remove('empty');
+            seatEl.classList.add('active');
+            const _sw = window._activeDisplaySwap;
+            let _displayName = member.name || letter;
+            let _displayPron = member.pronouns || '';
+            if (_sw) {
+                if (String(letter) === String(_sw.seatA)) { _displayName = _sw.nameB; _displayPron = _sw.pronounsB; }
+                else if (String(letter) === String(_sw.seatB)) { _displayName = _sw.nameA; _displayPron = _sw.pronounsA; }
+            }
+            if (_nameEl) { _nameEl.textContent = _displayName; _nameEl.style.fontFamily = 'Arial, sans-serif'; _nameEl.style.fontSize = _nameFontSize(); _nameEl.style.color = '#fff'; }
+            if (_pronEl) _pronEl.textContent = _displayPron;
+            if (window.currentUser && window.currentUser.seat === letter && !seatEl._avControlsSetup) {
+                seatEl._avControlsSetup = true;
+                setTimeout(() => { if (typeof window.setupAVControls === 'function') window.setupAVControls(letter); }, 200);
+            }
+        } else {
+            seatEl.classList.add('empty');
+            seatEl.classList.remove('active');
+            if (_nameEl) { _nameEl.textContent = 'Empty'; _nameEl.style.fontFamily = ''; _nameEl.style.fontSize = ''; _nameEl.style.color = ''; }
+            if (_pronEl) _pronEl.textContent = '';
+        }
+
+        seatEl.style.position  = 'fixed';
+        seatEl.style.left      = x + 'px';
+        seatEl.style.top       = y + 'px';
+        seatEl.style.setProperty('width',  size + 'px', 'important');
+        seatEl.style.setProperty('height', size + 'px', 'important');
+        seatEl.style.transform = 'translate(-50%, -50%)';
+    });
+
+    if (window._avIconsListener) { /* force re-evaluation by existing listener */ }
+}
+
+function _positionProdSeats(hostX, hostY, hostSize, playerSize, leftSectionWidth) {
+    const _isHostOrProd = currentUser.role === 'host' || currentUser.isProdMember
+                       || currentUser.role === 'observer';
+    const _isPlayerView = !_isHostOrProd; // regular players see occupied seats only
+
+    const FIXED_LETTERS = ['B', 'C', 'D']; // Always exactly 3 prod seats
+
+    // GUARD: This function runs on every window resize. Without the guard below,
+    // each resize would stack another persistent .on('value') listener on the players
+    // path — causing the players node to fire N callbacks per change after N resizes.
+    // Fix: register the persistent listener exactly once and store the latest layout
+    // args on window so the callback can re-use them when prod membership changes.
+    window._lastProdSeatArgs = { hostX, hostY, hostSize, playerSize, leftSectionWidth };
+    if (!window._prodSeatsListenerRegistered) {
+        window._prodSeatsListenerRegistered = true;
+        database.ref('players').orderByChild('isProdMember').equalTo(true).on('value', (snap) => {
+            // When prod membership changes, re-run the layout using the most recent
+            // resize dimensions stored above.
+            const a = window._lastProdSeatArgs || {};
+            _doProdSeatLayout(a.hostX, a.hostY, a.hostSize, a.playerSize, a.leftSectionWidth, snap);
+        });
+        console.log('✅ _positionProdSeats: persistent players listener registered (once)');
+    }
+    // Run the layout immediately for the current resize dimensions.
+    // All layout logic lives in _doProdSeatLayout (above) — called from both
+    // this one-time read AND the persistent .on('value') listener registered above.
+    database.ref('players').orderByChild('isProdMember').equalTo(true).once('value', (snap) => {
+        _doProdSeatLayout(hostX, hostY, hostSize, playerSize, leftSectionWidth, snap);
     });
 }
 
@@ -4372,6 +6032,361 @@ function _positionProdSeats(hostX, hostY, hostSize, playerSize, leftSectionWidth
 // ── Seat Switch System ─────────────────────────────────────────────────────
 // Production members can swap seats with each other. A switch menu appears
 // when clicking another prod/host seat. Target gets a confirmation modal.
+
+
+// ============================================
+// HOST SEAT ACTION MENU
+// ============================================
+window._hostSeatActionMenu = null;
+
+function _dismissHostActionMenu() {
+    if (window._hostSeatActionMenu) {
+        window._hostSeatActionMenu.remove();
+        window._hostSeatActionMenu = null;
+    }
+}
+
+function _detectHostActionContext(cb) {
+    const phase = (window._currentPhase || '').toLowerCase();
+    if (phase === 'circle-of-truth') { cb({ mode: 'role', roleType: 'cot' }); return; }
+
+    database.ref('game/endGame').once('value', (egSnap) => {
+        const eg = egSnap.val() || {};
+        if (eg.finalReveal && eg.finalReveal.active)                           { cb({ mode: 'role',   roleType: 'final'         }); return; }
+        if (eg.smokeVote   && eg.smokeVote.revealActive)                       { cb({ mode: 'reveal', voteKey: 'smoke'           }); return; }
+        if (eg.smokeVote   && eg.smokeVote.active && !eg.smokeVote.revealActive){ cb({ mode: 'vote',   voteKey: 'smoke'           }); return; }
+        if (eg.banishmentTie && eg.banishmentTie.revealed)                     { cb({ mode: 'reveal', voteKey: 'banishmentTie'   }); return; }
+        if (eg.banishmentTie && eg.banishmentTie.active && !eg.banishmentTie.revealed){ cb({ mode: 'vote', voteKey: 'banishmentTie'}); return; }
+        if (eg.banishment  && eg.banishment.revealed)                          { cb({ mode: 'reveal', voteKey: 'banishment'      }); return; }
+        if (eg.banishment  && eg.banishment.active && !eg.banishment.revealed) { cb({ mode: 'vote',   voteKey: 'banishment'      }); return; }
+
+        database.ref('game/secondVoteReveal/active').once('value', (svSnap) => {
+            if (svSnap.val() === true)       { cb({ mode: 'reveal', voteKey: 'secondVote' }); return; }
+            if (phase === 'second-vote')     { cb({ mode: 'vote',   voteKey: 'secondVote' }); return; }
+            if (phase === 'first-vote')      { cb({ mode: 'vote',   voteKey: 'firstVote'  }); return; }
+            database.ref('game/firstVote/revealed').once('value', (rvSnap) => {
+                if (rvSnap.val() === true)   { cb({ mode: 'reveal', voteKey: 'firstVote'  }); return; }
+                cb(null);
+            });
+        });
+    });
+}
+
+function _showHostSeatActionMenu(seatNumber, mouseX, mouseY) {
+    if (!window.currentUser || window.currentUser.role !== 'host') return;
+    const nameEl = document.getElementById('name-' + seatNumber);
+    const seatName = nameEl ? nameEl.textContent.trim() : '';
+    if (!seatName || seatName === 'EMPTY' || seatName === '') return;
+
+    _dismissHostActionMenu();
+
+    _detectHostActionContext((ctx) => {
+        if (!ctx) return;
+
+        const menu = document.createElement('div');
+        menu.id = 'host-seat-action-menu';
+        window._hostSeatActionMenu = menu;
+
+        const px = Math.min(mouseX + 10, window.innerWidth  - 200);
+        const py = Math.min(mouseY - 10,  window.innerHeight - 130);
+
+        menu.style.cssText = 'position:fixed;background:rgba(20,20,30,0.97);border:1px solid rgba(255,215,0,0.5);border-radius:8px;padding:10px 14px;z-index:9999;display:flex;flex-direction:column;gap:8px;min-width:175px;box-shadow:0 4px 20px rgba(0,0,0,0.7);left:' + px + 'px;top:' + py + 'px;';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'color:#FFD700;font-size:12px;font-weight:bold;margin-bottom:2px';
+        header.textContent = 'Seat ' + seatNumber + ' — ' + seatName;
+        menu.appendChild(header);
+
+        const actionLabel = ctx.mode === 'vote' ? '\uD83D\uDCCB Assign Vote'
+                          : ctx.mode === 'reveal' ? '\uD83D\uDC41 Reveal Vote'
+                          : '\uD83C\uDFAD Reveal Role';
+        const actionColor = ctx.mode === 'vote'   ? 'linear-gradient(135deg,#1a3a5c,#2a6090)'
+                          : ctx.mode === 'reveal' ? 'linear-gradient(135deg,#1a4a1a,#2d7a2d)'
+                          :                         'linear-gradient(135deg,#4a1a4a,#7a2d7a)';
+
+        const actionBtn = document.createElement('button');
+        actionBtn.textContent = actionLabel;
+        actionBtn.style.cssText = 'background:' + actionColor + ';color:white;border:none;padding:9px 12px;border-radius:5px;cursor:pointer;font-size:13px;text-align:left;';
+        actionBtn.onclick = () => {
+            _dismissHostActionMenu();
+            if      (ctx.mode === 'vote')   _hostAssignVote(seatNumber, seatName, ctx.voteKey);
+            else if (ctx.mode === 'reveal') _hostRevealVote(seatNumber, seatName, ctx.voteKey);
+            else                            _hostRevealRole(seatNumber, seatName, ctx.roleType);
+        };
+        menu.appendChild(actionBtn);
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.style.cssText = 'background:rgba(255,255,255,0.08);color:#bbb;border:none;padding:7px 12px;border-radius:5px;cursor:pointer;font-size:12px;';
+        cancelBtn.onclick = _dismissHostActionMenu;
+        menu.appendChild(cancelBtn);
+
+        document.body.appendChild(menu);
+        setTimeout(() => {
+            const dismiss = (e) => {
+                if (!menu.contains(e.target)) { _dismissHostActionMenu(); document.removeEventListener('click', dismiss); }
+            };
+            document.addEventListener('click', dismiss);
+        }, 50);
+    });
+}
+
+// ASSIGN VOTE
+function _hostAssignVote(voterSeat, voterName, voteKey) {
+    // Smoke vote: assign 'end' or 'banish', not a player
+    if (voteKey === 'smoke') {
+        _hostAssignSmokeVote(voterSeat, voterName);
+        return;
+    }
+    database.ref('players').once('value', (pSnap) => {
+        const players = pSnap.val() || {};
+        const voterEntry = Object.entries(players).find(([k,v]) => v.seat === voterSeat);
+        if (!voterEntry) { alert('Could not find player in seat ' + voterSeat); return; }
+        const [voterId] = voterEntry;
+        const candidates = Object.values(players).filter(p => p.seat && !p.isHost && p.id !== voterId && p.name).sort((a,b) => a.seat - b.seat);
+
+        const existing = document.getElementById('host-assign-vote-modal');
+        if (existing) existing.remove();
+        const modal = document.createElement('div');
+        modal.id = 'host-assign-vote-modal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center;';
+        modal.innerHTML = '<div style="background:#1a1a2e;border:1px solid rgba(102,126,234,0.5);border-radius:12px;padding:28px 32px;max-width:500px;width:90%;text-align:center;"><h3 style="color:#667eea;margin:0 0 6px;">Assign Vote for ' + voterName + '</h3><p style="color:#bbb;margin:0 0 18px;font-size:0.9rem;">Select who Seat ' + voterSeat + ' is voting for:</p><div id="host-assign-vote-pills" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:18px;"></div><p id="host-assign-vote-display" style="color:#4CAF50;font-weight:bold;min-height:1.4em;margin-bottom:14px;"></p><div style="display:flex;gap:10px;justify-content:center;"><button id="host-assign-vote-confirm" style="padding:10px 24px;background:#667eea;border:none;border-radius:7px;color:white;font-weight:bold;font-size:1rem;cursor:pointer;" disabled>Assign</button><button id="host-assign-vote-cancel" style="padding:10px 24px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:7px;color:#bbb;cursor:pointer;">Cancel</button></div></div>';
+        document.body.appendChild(modal);
+
+        const pillsEl   = document.getElementById('host-assign-vote-pills');
+        const displayEl = document.getElementById('host-assign-vote-display');
+        const confirmEl = document.getElementById('host-assign-vote-confirm');
+        let selectedSeat = null, selectedName = null;
+
+        candidates.forEach(cand => {
+            const btn = document.createElement('button');
+            btn.textContent = cand.name;
+            btn.dataset.seat = cand.seat;
+            btn.style.cssText = 'padding:10px 18px;background:rgba(102,126,234,0.15);border:2px solid #667eea;border-radius:50px;color:white;cursor:pointer;font-size:0.95rem;font-weight:bold;';
+            btn.onclick = () => {
+                selectedSeat = cand.seat; selectedName = cand.name;
+                pillsEl.querySelectorAll('button').forEach(b => { b.style.background = b === btn ? 'rgba(102,126,234,0.6)' : 'rgba(102,126,234,0.15)'; b.style.borderColor = b === btn ? '#fff' : '#667eea'; });
+                displayEl.textContent = 'Voting for: ' + cand.name;
+                confirmEl.disabled = false;
+            };
+            pillsEl.appendChild(btn);
+        });
+
+        confirmEl.onclick = () => { if (!selectedSeat) return; modal.remove(); _hostWriteAssignedVote(voterId, voterSeat, voterName, selectedSeat, selectedName, voteKey); };
+        document.getElementById('host-assign-vote-cancel').onclick = () => modal.remove();
+    });
+}
+
+function _hostAssignSmokeVote(voterSeat, voterName) {
+    database.ref('players').once('value', (pSnap) => {
+        const players = pSnap.val() || {};
+        const voterEntry = Object.entries(players).find(([k,v]) => v.seat === voterSeat);
+        if (!voterEntry) { alert('Could not find player in seat ' + voterSeat); return; }
+        const [voterId] = voterEntry;
+
+        const existing = document.getElementById('host-assign-vote-modal');
+        if (existing) existing.remove();
+        const modal = document.createElement('div');
+        modal.id = 'host-assign-vote-modal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center;';
+        modal.innerHTML = '<div style="background:#1a1a2e;border:1px solid rgba(102,126,234,0.5);border-radius:12px;padding:28px 32px;max-width:420px;width:90%;text-align:center;">'
+            + '<h3 style="color:#667eea;margin:0 0 8px;">Assign Smoke Vote for ' + voterName + '</h3>'
+            + '<p style="color:#bbb;margin:0 0 24px;font-size:0.9rem;">Select their vote:</p>'
+            + '<div style="display:flex;gap:16px;justify-content:center;margin-bottom:20px;">'
+            + '<button id="smoke-assign-end" style="padding:14px 28px;background:#1a3a6b;border:3px solid #4169E1;border-radius:10px;color:white;cursor:pointer;font-size:1rem;font-weight:bold;">End The Game</button>'
+            + '<button id="smoke-assign-banish" style="padding:14px 28px;background:#5a0010;border:3px solid #DC143C;border-radius:10px;color:white;cursor:pointer;font-size:1rem;font-weight:bold;">Banish</button>'
+            + '</div>'
+            + '<button id="host-assign-vote-cancel" style="padding:8px 20px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:7px;color:#bbb;cursor:pointer;">Cancel</button>'
+            + '</div>';
+        document.body.appendChild(modal);
+
+        const _writeSmoke = (choice) => {
+            modal.remove();
+            const updates = {};
+            updates['game/endGame/smokeVote/votes/'  + voterId] = choice;
+            updates['game/endGame/smokeVote/locked/' + voterId] = true;
+            const label = choice === 'end' ? 'End' : 'Banish';
+            updates['game/autoVoteDisplay/' + voterId] = { seat: voterSeat, name: label };
+            database.ref().update(updates).then(() => {
+                showVoteOnNameTag(voterSeat, label, false);
+                console.log('Host assigned smoke vote: Seat', voterSeat, '->', choice);
+            });
+        };
+        document.getElementById('smoke-assign-end').onclick    = () => _writeSmoke('end');
+        document.getElementById('smoke-assign-banish').onclick = () => _writeSmoke('banish');
+        document.getElementById('host-assign-vote-cancel').onclick = () => modal.remove();
+    });
+}
+
+function _hostWriteAssignedVote(voterId, voterSeat, voterName, targetSeat, targetName, voteKey) {
+    const updates = {};
+    if (voteKey === 'firstVote') {
+        updates['game/firstVote/votes/'         + voterId] = targetSeat;
+        updates['game/firstVote/originalVotes/' + voterId] = targetSeat;
+        updates['game/firstVote/locked/'        + voterId] = true;
+    } else if (voteKey === 'secondVote') {
+        updates['game/secondVote/votes/'  + voterId] = targetSeat;
+        updates['game/secondVote/locked/' + voterId] = true;
+    } else {
+        updates['game/endGame/' + voteKey + '/votes/'  + voterId] = targetSeat;
+        updates['game/endGame/' + voteKey + '/locked/' + voterId] = true;
+    }
+    // Push vote display to the voter's own screen.
+    // Include the host's name so the player sees who changed their vote.
+    const _changedBy = (window.currentUser && window.currentUser.name) || 'Production';
+    updates['game/autoVoteDisplay/' + voterId] = {
+        seat: voterSeat, name: targetName,
+        changedBy: _changedBy  // undefined when player casts own vote
+    };
+    database.ref().update(updates).then(() => {
+        // Also update on host/all-client view
+        showVoteOnNameTag(voterSeat, targetName, false);
+        console.log('Host assigned vote: Seat', voterSeat, '->', targetName, '(key:', voteKey + ')');
+    });
+}
+
+// REVEAL VOTE
+function _hostRevealVote(seatNumber, seatName, voteKey) {
+    database.ref('players').once('value', (pSnap) => {
+        const players = pSnap.val() || {};
+        const entry = Object.entries(players).find(([k,v]) => v.seat === seatNumber);
+        if (!entry) { alert('Could not find player in seat ' + seatNumber); return; }
+        const [playerId] = entry;
+
+        const existing = document.getElementById('host-reveal-vote-modal');
+        if (existing) existing.remove();
+        const modal = document.createElement('div');
+        modal.id = 'host-reveal-vote-modal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center;';
+        modal.innerHTML = '<div style="background:#1a1a2e;border:1px solid rgba(50,205,50,0.4);border-radius:12px;padding:28px 32px;max-width:380px;width:90%;text-align:center;"><h3 style="color:#4CAF50;margin:0 0 8px;">Reveal Vote for ' + seatName + '</h3><p style="color:#bbb;font-size:0.9rem;margin:0 0 22px;">Press “Reveal Vote” when ready.</p><div style="display:flex;gap:10px;justify-content:center;"><button id="host-reveal-vote-confirm" style="padding:11px 26px;background:#4CAF50;border:none;border-radius:7px;color:white;font-weight:bold;font-size:1rem;cursor:pointer;">Reveal Vote</button><button id="host-reveal-vote-cancel" style="padding:11px 26px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:7px;color:#bbb;cursor:pointer;">Cancel</button></div></div>';
+        document.body.appendChild(modal);
+
+        document.getElementById('host-reveal-vote-confirm').onclick = () => { modal.remove(); _hostTriggerReveal(playerId, voteKey); };
+        document.getElementById('host-reveal-vote-cancel').onclick  = () => modal.remove();
+    });
+}
+
+function _hostTriggerReveal(playerId, voteKey) {
+    // Perform the FULL reveal on behalf of the player — same writes as revealMyVote()
+    // so the vote appears in the tally and on all name boxes exactly as normal.
+    if (voteKey === 'firstVote') {
+        _hostDoRevealWrite(playerId, 'game/firstVote/votes', 'game/revealedVoteDisplay', 'game/firstVote/alreadyRevealed');
+    } else if (voteKey === 'secondVote') {
+        _hostDoRevealWrite(playerId, 'game/secondVote/votes', 'game/secondVoteReveal/revealedVotes', 'game/secondVoteReveal/alreadyRevealed');
+    } else if (voteKey === 'smoke') {
+        // Smoke reveal: write to game/endGame/smokeReveal (same as performSmokeReveal)
+        database.ref('game/endGame/smokeVote').once('value', (smokeSnap) => {
+            const smokeData = smokeSnap.val() || {};
+            const voteData  = (smokeData.votes || {})[playerId];
+            const choice    = voteData || null;
+            const color     = choice === 'end' ? '#4169E1' : '#DC143C';
+            database.ref('players/' + playerId).once('value', (pSnap) => {
+                const p = pSnap.val() || {};
+                database.ref('game/endGame/smokeReveal').set({
+                    playerId, playerSeat: p.seat, choice,
+                    label:        choice === 'end' ? 'END THE GAME' : 'BANISH',
+                    nameBoxLabel: choice === 'end' ? 'End' : 'Banish',
+                    color, timestamp: Date.now()
+                });
+                database.ref('players/' + playerId + '/endGameReadyToRevealSmoke').set(false);
+            });
+        });
+    } else {
+        // banishment or banishmentTie — same as performBanishmentReveal()
+        database.ref('game/endGame/' + voteKey).once('value', (snap) => {
+            const data = snap.val() || {};
+            const votedSeat = (data.votes || {})[playerId];
+            if (!votedSeat) { alert('No vote found for this player in ' + voteKey); return; }
+            database.ref('players').once('value', (pSnap) => {
+                const players      = pSnap.val() || {};
+                const voterPlayer  = players[playerId];
+                const targetPlayer = Object.values(players).find(p => p.seat === parseInt(votedSeat, 10));
+                const votedFor     = targetPlayer ? targetPlayer.name : ('Seat ' + votedSeat);
+                database.ref('game/endGame/' + voteKey + '/revealedVotes/' + playerId).set({
+                    seat: voterPlayer ? voterPlayer.seat : null,
+                    name: voterPlayer ? voterPlayer.name : null,
+                    votedFor, timestamp: Date.now()
+                });
+                database.ref('game/endGame/' + voteKey + '/alreadyRevealed/' + playerId).set(true);
+                database.ref('players/' + playerId + '/endGameReadyToRevealBanish').set(false);
+            });
+        });
+    }
+}
+
+// Shared helper: reads vote from votePath, writes reveal to revealPath
+// This exactly mirrors revealMyVote() logic for first/second vote reveal
+function _hostDoRevealWrite(playerId, votePath, revealPath, alreadyRevealedPath) {
+    database.ref(votePath).once('value', (votesSnap) => {
+        const allVotes = votesSnap.val() || {};
+        const votedSeat = allVotes[playerId];
+        if (!votedSeat) { alert('No vote found for this player.'); return; }
+        database.ref('players').once('value', (pSnap) => {
+            const players      = pSnap.val() || {};
+            const voterPlayer  = players[playerId];
+            const targetPlayer = Object.values(players).find(p => p.seat === votedSeat);
+            const targetName   = targetPlayer ? targetPlayer.name : ('Seat ' + votedSeat);
+            const revealData   = {
+                seat:      voterPlayer ? voterPlayer.seat : null,
+                name:      voterPlayer ? voterPlayer.name : null,
+                votedFor:  targetName,
+                timestamp: Date.now()
+            };
+            database.ref(revealPath + '/' + playerId).set(revealData);
+            database.ref(alreadyRevealedPath + '/' + playerId).set(true);
+            console.log('Host performed reveal write for player', playerId, '->', targetName);
+        });
+    });
+}
+
+// REVEAL ROLE
+function _hostRevealRole(seatNumber, seatName, roleType) {
+    database.ref('players').once('value', (pSnap) => {
+        const players = pSnap.val() || {};
+        const entry = Object.entries(players).find(([k,v]) => v.seat === seatNumber);
+        if (!entry) { alert('Could not find player in seat ' + seatNumber); return; }
+        const [playerId] = entry;
+
+        const existing = document.getElementById('host-reveal-role-modal');
+        if (existing) existing.remove();
+        const modal = document.createElement('div');
+        modal.id = 'host-reveal-role-modal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center;';
+        modal.innerHTML = '<div style="background:#1a1a2e;border:1px solid rgba(148,0,211,0.5);border-radius:12px;padding:28px 32px;max-width:380px;width:90%;text-align:center;"><h3 style="color:#da70d6;margin:0 0 8px;">Reveal Role for ' + seatName + '</h3><p style="color:#bbb;font-size:0.9rem;margin:0 0 22px;">Press “Reveal Role” when ready.</p><div style="display:flex;gap:10px;justify-content:center;"><button id="host-reveal-role-confirm" style="padding:11px 26px;background:linear-gradient(135deg,#7a2d9a,#9a3dba);border:none;border-radius:7px;color:white;font-weight:bold;font-size:1rem;cursor:pointer;">Reveal Role</button><button id="host-reveal-role-cancel" style="padding:11px 26px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:7px;color:#bbb;cursor:pointer;">Cancel</button></div></div>';
+        document.body.appendChild(modal);
+
+        document.getElementById('host-reveal-role-confirm').onclick = () => {
+            modal.remove();
+            if (roleType === 'cot') {
+                // Read the CoT data and player role, then write game/roleReveal directly
+                // so the big reveal text appears for everyone immediately — same as if
+                // the player clicked 'Reveal Role' themselves.
+                database.ref('game/circleOfTruth').once('value', (cotSnap) => {
+                    const cotData = cotSnap.val();
+                    database.ref('players/' + playerId + '/role').once('value', (roleSnap) => {
+                        const playerRole = roleSnap.val();
+                        if (!playerRole) { alert('No role assigned to this player.'); return; }
+                        // Write the roleReveal signal — picked up by all clients
+                        database.ref('game/roleReveal').set({
+                            role: playerRole,
+                            playerId: playerId,
+                            seatNumber: cotData ? cotData.seatNumber : null,
+                            timestamp: Date.now()
+                        });
+                        // Clear the readyToRevealRole flag
+                        database.ref('players/' + playerId + '/readyToRevealRole').set(false);
+                        console.log('Host revealed role for CoT player:', playerRole);
+                    });
+                });
+            } else {
+                const ref2 = database.ref('players/' + playerId + '/readyToRevealEndGameRole');
+                ref2.set(false).then(() => ref2.set(true));
+            }
+        };
+        document.getElementById('host-reveal-role-cancel').onclick = () => modal.remove();
+    });
+}
+
 
 function _showSeatSwitchMenu(targetSeat, mouseX, mouseY) {
     // Remove any existing switch menu
@@ -4438,9 +6453,13 @@ function _setupSeatSwitchListener() {
         if (!sw) return;
         console.log('🔄 Display swap received:', sw.seatA, '↔', sw.seatB);
         _applyDisplaySwap(sw.seatA, sw.seatB, sw.nameA, sw.nameB, sw.identityA, sw.identityB);
-        // Store swap state globally — persists until a new swap or game reset
-        window._activeDisplaySwap = { seatA: sw.seatA, seatB: sw.seatB,
-            nameA: sw.nameA, nameB: sw.nameB };
+        // Store swap state so _lkIdentityToSeat and name displays can respect it
+        window._activeDisplaySwap = {
+            seatA: sw.seatA, seatB: sw.seatB,
+            nameA: sw.nameA, nameB: sw.nameB,
+            pronounsA: sw.pronounsA || '', pronounsB: sw.pronounsB || '',
+            identityA: sw.identityA, identityB: sw.identityB
+        };
     });
 
     database.ref('game/seatSwitch').on('value', (snap) => {
@@ -4494,12 +6513,8 @@ function _setupSeatSwitchListener() {
 }
 
 function _executeSeatSwap(seatA, seatB) {
-    // Visual-only swap: names and video feeds swap between two circles.
-    // Firebase player records (seat field, isProdMember, role) are NOT changed.
-    // This avoids conflicts between the host system and prod seat system.
-    console.log('🔄 Executing visual seat swap:', seatA, '↔', seatB);
+    console.log('🔄 Executing permanent seat swap:', seatA, '↔', seatB);
 
-    // Read both players' info from Firebase to get names and identities
     database.ref('players').once('value', (snap) => {
         let playerA = null, playerB = null, keyA = null, keyB = null;
         snap.forEach((child) => {
@@ -4513,91 +6528,110 @@ function _executeSeatSwap(seatA, seatB) {
             return;
         }
 
-        // Write a display-only swap record — all tabs will read this and swap their DOM
+        // Write displaySwap so all tabs update their DOM and video immediately.
+        // We do NOT change seat fields in Firebase — prod seat letters are permanent
+        // identity (FIXED_LETTERS=['B','C','D'] in _positionProdSeats), changing them
+        // causes prod seats to disappear. The swap is view-layer only.
         database.ref('game/displaySwap').set({
-            seatA: seatA,
-            seatB: seatB,
+            seatA, seatB,
             nameA: playerA.name || seatA,
             nameB: playerB.name || seatB,
-            identityA: playerA.name, // LiveKit identity = player name
+            pronounsA: playerA.pronouns || '',
+            pronounsB: playerB.pronouns || '',
+            identityA: playerA.name,
             identityB: playerB.name,
             swappedAt: Date.now()
         });
-        console.log('🔄 Display swap written to Firebase');
+        console.log('🔄 Display swap written — ' + seatA + '↔' + seatB);
     });
 }
 
-// Helper: get the display name for a seat, respecting any active visual swap
-function _getDisplayName(seat, originalName) {
-    const sw = window._activeDisplaySwap;
-    if (!sw) return originalName;
-    if (String(seat) === String(sw.seatA)) return sw.nameB; // seatA now shows nameB
-    if (String(seat) === String(sw.seatB)) return sw.nameA; // seatB now shows nameA
-    return originalName;
-}
 
 
-// Apply a visual seat swap on this page — swaps names and video feeds
+// Apply a visual seat swap on this page — swaps names, AV buttons, and video feeds
 function _applyDisplaySwap(seatA, seatB, nameA, nameB, identityA, identityB) {
     console.log('🔄 Applying visual swap:', seatA, '↔', seatB);
 
-    // Swap name labels
+    // Step 1: Swap name and pronouns labels
     const nameElA = document.getElementById('name-' + seatA);
     const nameElB = document.getElementById('name-' + seatB);
-    if (nameElA) nameElA.textContent = nameB; // seat A now shows name B
-    if (nameElB) nameElB.textContent = nameA; // seat B now shows name A
+    if (nameElA) nameElA.textContent = nameB;
+    if (nameElB) nameElB.textContent = nameA;
+    const pronElA = document.getElementById('pronouns-' + seatA);
+    const pronElB = document.getElementById('pronouns-' + seatB);
+    // Firebase will propagate the correct pronouns, but swap DOM immediately too
+    if (pronElA && pronElB) {
+        const _tmpPron = pronElA.textContent;
+        pronElA.textContent = pronElB.textContent;
+        pronElB.textContent = _tmpPron;
+    }
 
-    // Swap video feeds: remove existing videos and re-attach to swapped positions
-    const room = window._lkRoom;
-    if (room) {
-        // Handle local participant
-        const localIdentity = room.localParticipant && room.localParticipant.identity;
-        const myNewSeat = (localIdentity === identityA) ? seatB
-                        : (localIdentity === identityB) ? seatA
-                        : null;
-
-        // Re-attach all prod/host seat videos to swapped positions
-        const allParticipants = [...(room.remoteParticipants ? room.remoteParticipants.values() : [])];
-        if (room.localParticipant) allParticipants.push(room.localParticipant);
-
-        allParticipants.forEach((participant) => {
-            const identity = participant.identity;
-            let targetSeat = null;
-            if (identity === identityA) targetSeat = seatB; // was in A, now shows in B
-            else if (identity === identityB) targetSeat = seatA; // was in B, now shows in A
-            if (!targetSeat) return;
-
-            // Find and move existing video element
-            const oldVideoA = document.getElementById('video-' + seatA);
-            const oldVideoB = document.getElementById('video-' + seatB);
-            const vidA = oldVideoA && oldVideoA.querySelector('.lk-video');
-            const vidB = oldVideoB && oldVideoB.querySelector('.lk-video');
-
-            // Detach both first, then re-attach to swapped positions
-            if (vidA) { vidA.remove(); }
-            if (vidB) { vidB.remove(); }
-
-            // Re-attach using tracks
-            participant.trackPublications.forEach((pub) => {
-                if (pub.kind === LivekitClient.Track.Kind.Video && pub.track && pub.isSubscribed) {
-                    setTimeout(() => _lkAttachVideo(pub.track, targetSeat, true, 0, participant === room.localParticipant), 100);
-                }
-                // For local participant, use localParticipant.videoTrack
-                if (participant === room.localParticipant && pub.kind === 'video' && pub.track) {
-                    setTimeout(() => _lkAttachVideo(pub.track, targetSeat, true, 0, true), 100);
-                }
-            });
-        });
-
-        // Update our own seat tracking if we're one of the swapped people
-        const myS = window.currentUser && window.currentUser.seat;
-        if (String(myS) === String(seatA)) {
-            window.currentUser.seat = seatB;
+    // Step 2: Update currentUser.seat so AV buttons target the swapped seat
+    // Note: Firebase seat field is NOT changed — only the local view is updated
+    const _cu = window.currentUser;
+    if (_cu) {
+        if (String(_cu.seat) === String(seatA)) {
+            _cu.seat = seatB;
             sessionStorage.setItem('playerSeat', String(seatB));
-        } else if (String(myS) === String(seatB)) {
-            window.currentUser.seat = seatA;
+            console.log('🔄 My seat updated locally:', seatA, '→', seatB);
+        } else if (String(_cu.seat) === String(seatB)) {
+            _cu.seat = seatA;
             sessionStorage.setItem('playerSeat', String(seatA));
+            console.log('🔄 My seat updated locally:', seatB, '→', seatA);
         }
+    }
+
+    // Step 3 removed: AV buttons stay in their seat containers.
+    // setupAVControls(newSeat) is called below and handles show/hide correctly.
+
+    // Step 4: Swap video feeds
+    const room = window._lkRoom;
+    if (!room) return;
+
+    // Clear existing video from both seat containers
+    const _vContA = document.getElementById('video-' + seatA);
+    const _vContB = document.getElementById('video-' + seatB);
+    if (_vContA) _vContA.querySelectorAll('.lk-video, video').forEach(v => { v.srcObject = null; v.remove(); });
+    if (_vContB) _vContB.querySelectorAll('.lk-video, video').forEach(v => { v.srcObject = null; v.remove(); });
+
+    // Re-attach each participant's video to the swapped seat
+    const allParticipants = [...(room.remoteParticipants ? room.remoteParticipants.values() : [])];
+    if (room.localParticipant) allParticipants.push(room.localParticipant);
+
+    allParticipants.forEach((participant) => {
+        const identity = participant.identity;
+        const _baseId = identity.includes('~') ? identity.split('~')[0] : identity;
+        // Determine which seat this participant should NOW be in
+        let newSeat = null;
+        if (_baseId === identityA || identity === identityA) newSeat = seatB;
+        else if (_baseId === identityB || identity === identityB) newSeat = seatB === seatA ? seatB : seatA;
+        if (!newSeat) return;
+        // Correct the second case: identityB → seatA
+        if (_baseId === identityB || identity === identityB) newSeat = seatA;
+
+        const isLocal = participant === room.localParticipant;
+        participant.trackPublications.forEach((pub) => {
+            if (pub.kind !== LivekitClient.Track.Kind.Video) return;
+            if (!pub.track) return;
+            if (!isLocal && !pub.isSubscribed) return;
+            setTimeout(() => {
+                _lkAttachVideo(pub.track, newSeat, true, 0, isLocal);
+                console.log('🔄 Re-attached video for', identity, '→ seat', newSeat);
+            }, 200);
+        });
+    });
+
+    // Reset _avControlsSetup flags on all prod seat elements so setupAVControls
+    // fires once for the new seat after the swap
+    ['A','B','C','D'].forEach(l => {
+        const _sel = document.getElementById('seat-' + l);
+        if (_sel) _sel._avControlsSetup = false;
+    });
+
+    // Call setupAVControls for this user's new seat so buttons show correctly
+    const _cuSwap = window.currentUser;
+    if (_cuSwap && _cuSwap.seat && typeof window.setupAVControls === 'function') {
+        setTimeout(() => window.setupAVControls(_cuSwap.seat), 300);
     }
 }
 
@@ -4621,6 +6655,13 @@ function _applyDisplaySwap(seatA, seatB, nameA, nameB, identityA, identityB) {
 const LIVEKIT_TOKEN_URL = 'https://us-central1-subversion-the-traitors.cloudfunctions.net/livekitToken';
 const LIVEKIT_WS_URL    = 'wss://subversion-the-traitors-h0coqxjc.livekit.cloud';
 
+// ── Mobile font size helper ─────────────────────────────────
+// Returns appropriate name font size based on screen width.
+// Used for inline style assignments that would override CSS media queries.
+function _nameFontSize() {
+    return window.innerWidth <= 600 ? '0.5rem' : '1.2rem';
+}
+
 // ── State ─────────────────────────────────────────────────────
 window._lkRoom         = null;   // active LiveKit Room instance
 window._lkGameRoom     = null;   // current game room name (e.g. "main")
@@ -4638,25 +6679,64 @@ function _lkCurrentUser() {
 // Identity is the player's display name; we look it up in Firebase
 async function _lkIdentityToSeat(identity, isMainRoom, attempt) {
     attempt = attempt || 0;
+
+    // Fast path: scan gameState.players cache before hitting Firebase.
+    // gameState.players is kept up-to-date by the players.on('value') listener.
+    // Strip tab suffix (e.g. 'Hostie~abc123' → 'Hostie') before name matching
+    const _baseName = identity.includes('~') ? identity.split('~')[0] : identity;
+
+    // If there's an active display swap, redirect video to the swapped seat
+    if (isMainRoom && window._activeDisplaySwap) {
+        const _sw = window._activeDisplaySwap;
+        if (_baseName === _sw.identityA || _baseName === _sw.nameA) return _sw.seatB;
+        if (_baseName === _sw.identityB || _baseName === _sw.nameB) return _sw.seatA;
+    }
+
+
+    if (gameState && gameState.players) {
+        let cachedSeat = null;
+        for (const pid in gameState.players) {
+            const p = gameState.players[pid];
+            if (p.name !== _baseName) continue;
+            if (isMainRoom) {
+                const s = p.seat;
+                if (s !== null && s !== undefined) {
+                    if (typeof s === 'string' && isNaN(s)) { cachedSeat = s; break; }
+                    else if (!cachedSeat) cachedSeat = s;
+                }
+            } else {
+                if (p.roomSeat) { cachedSeat = p.roomSeat; break; }
+            }
+        }
+        if (cachedSeat) return cachedSeat; // resolved without any network call
+    }
+
     return new Promise((resolve) => {
         database.ref('players')
             .orderByChild('name')
-            .equalTo(identity)
+            .equalTo(_baseName)  // _baseName already has suffix stripped
             .once('value', (snap) => {
                 let seat = null;
                 snap.forEach((child) => {
                     const p = child.val();
-                    // For main room: use main seat number
-                    // For other rooms: use roomSeat ONLY — never fall back to
-                    // main seat number since room-video-N uses room seat numbers (1-5)
-                    seat = isMainRoom ? (p.seat || null) : (p.roomSeat || null);
+                    if (isMainRoom) {
+                        const s = p.seat;
+                        if (s !== null && s !== undefined) {
+                            if (typeof s === 'string' && isNaN(s)) {
+                                seat = s;
+                            } else if (!seat || typeof seat === 'number' || !isNaN(seat)) {
+                                seat = s;
+                            }
+                        }
+                    } else {
+                        seat = p.roomSeat || null;
+                    }
                 });
-                if (!seat && attempt < 8) {
-                    // Seat not assigned yet (player hasn't claimed one) — retry
-                    // Up to 8 times × 500ms = 4 seconds
+                if (!seat && attempt < 6) {
+                    // Seat not assigned yet — retry up to 6 times × 300ms = 1.8s
                     setTimeout(() => {
                         _lkIdentityToSeat(identity, isMainRoom, attempt + 1).then(resolve);
-                    }, 500);
+                    }, 300);
                 } else {
                     resolve(seat);
                 }
@@ -4665,7 +6745,7 @@ async function _lkIdentityToSeat(identity, isMainRoom, attempt) {
 }
 
 // Attach a video track to a seat's video-N div
-function _lkAttachVideo(track, seatNumber, isMainRoom, attempt, isLocal) {
+function _lkAttachVideo(track, seatNumber, isMainRoom, attempt, isLocal, identity) {
     attempt = attempt || 0; isLocal = !!isLocal;
     const divId = isMainRoom ? `video-${seatNumber}` : `room-video-${seatNumber}`;
     const container = document.getElementById(divId);
@@ -4673,16 +6753,35 @@ function _lkAttachVideo(track, seatNumber, isMainRoom, attempt, isLocal) {
         if (!isMainRoom && attempt < 20) {
             // room-video-N not ready yet (overlay not open / seats not generated)
             // retry up to 20 times × 300ms = 6 seconds
-            setTimeout(() => _lkAttachVideo(track, seatNumber, isMainRoom, attempt + 1), 300);
+            setTimeout(() => {
+                // If video was attached by another path during the wait, skip
+                const _rc = document.getElementById(divId);
+                if (_rc && _rc.querySelector('.lk-video') &&
+                    (!identity || _rc.dataset.lkIdentity === identity)) return;
+                _lkAttachVideo(track, seatNumber, isMainRoom, attempt + 1, isLocal, identity);
+            }, 300);
         } else {
             console.warn('📹 No container found for seat:', seatNumber, divId);
         }
         return;
     }
 
-    // Remove any existing video element we put there
+    // Guard against wrong-identity video attachment.
+    // If this seat already has a feed from the SAME identity, skip entirely
+    // to avoid the remove→attach cycle that causes flickering.
     const old = container.querySelector('.lk-video');
-    if (old) old.remove();
+    if (old && identity) {
+        const existingOwner = container.dataset.lkIdentity;
+        if (existingOwner === identity) {
+            // Same person, same seat — already attached, nothing to do.
+            return;
+        }
+        if (existingOwner && existingOwner !== identity) {
+            console.log(`📹 Seat ${seatNumber} already owned by ${existingOwner}, skipping ${identity}`);
+            return;
+        }
+    }
+    if (old) { old.srcObject = null; old.remove(); }
 
     // Create and style the video element
     const videoEl = track.attach();
@@ -4707,7 +6806,56 @@ function _lkAttachVideo(track, seatNumber, isMainRoom, attempt, isLocal) {
     container.style.borderRadius = '50%';
 
     container.appendChild(videoEl);
+    if (identity) container.dataset.lkIdentity = identity; // track who owns this seat
+    // Remove disconnect icon for this seat — video is live again
+    if (isMainRoom) _hideDisconnectIcon(seatNumber);
     console.log('📹 Attached video to:', divId);
+}
+
+// Track which main-room seats are LiveKit-disconnected
+// (player record still in Firebase but browser closed / refreshing)
+window._lkDisconnectedSeats = window._lkDisconnectedSeats || new Set();
+
+function _showDisconnectIcon(seatNumber, isMainRoom) {
+    if (!isMainRoom) return; // only main room seats show the icon
+    window._lkDisconnectedSeats.add(seatNumber);
+    const seatEl = document.getElementById('seat-' + seatNumber);
+    if (!seatEl) return;
+    if (seatEl.querySelector('.disconnect-icon')) return; // already showing
+    const icon = document.createElement('div');
+    icon.className = 'disconnect-icon';
+    icon.title = 'Player disconnected';
+    icon.style.cssText = [
+        'position:absolute',
+        'top:50%',
+        'left:50%',
+        'transform:translate(-50%,-50%)',
+        'width:40%',
+        'height:40%',
+        'border-radius:50%',
+        'background:rgba(0,0,0,0.55)',
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+        'z-index:20',
+        'pointer-events:none',
+    ].join(';');
+    // Broken-link / disconnected SVG icon
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:65%;height:65%;opacity:0.9;">'
+        + '<path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>'
+        + '<path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>'
+        + '<line x1="2" y1="2" x2="22" y2="22"/>'
+        + '</svg>';
+    seatEl.appendChild(icon);
+    console.log('🔌 Disconnect icon shown for seat', seatNumber);
+}
+
+function _hideDisconnectIcon(seatNumber) {
+    window._lkDisconnectedSeats.delete(seatNumber);
+    const seatEl = document.getElementById('seat-' + seatNumber);
+    if (!seatEl) return;
+    const icon = seatEl.querySelector('.disconnect-icon');
+    if (icon) { icon.remove(); console.log('🔌 Disconnect icon removed for seat', seatNumber); }
 }
 
 // Detach all video from a seat
@@ -4720,9 +6868,21 @@ function _lkDetachSeat(seatNumber, isMainRoom) {
         old.srcObject = null;
         old.remove();
     }
+    // Clear identity marker so the next player can claim this seat
+    delete container.dataset.lkIdentity;
 }
 
 // ── Core: join a LiveKit room ─────────────────────────────────
+// Per-tab LiveKit identity suffix — prevents two tabs with same display name
+// from sharing a LiveKit identity and causing duplicate feeds.
+if (!window._lkTabSuffix) {
+    window._lkTabSuffix = sessionStorage.getItem('_lkTabSuffix');
+    if (!window._lkTabSuffix) {
+        window._lkTabSuffix = Math.random().toString(36).substr(2, 6);
+        sessionStorage.setItem('_lkTabSuffix', window._lkTabSuffix);
+    }
+}
+
 window.joinLiveKitRoom = async function(gameRoom) {
     // Check user and name FIRST before touching any state flags
     const user = _lkCurrentUser();
@@ -4744,44 +6904,287 @@ window.joinLiveKitRoom = async function(gameRoom) {
         return;
     }
 
-    // Disconnect any existing room first
-    await disconnectLiveKit();
+    // Build identity first so we can start token fetch immediately
+    const _lkIdentity = user.name + '~' + (window._lkTabSuffix || 'x');
+    console.log('📹 Joining LiveKit room:', gameRoom, '| identity:', _lkIdentity);
+
+    // Snapshot mute state from the LIVE room BEFORE disconnect.
+    // room.disconnect() causes LiveKit SDK to internally mute local tracks,
+    // so reading track.isMuted after disconnect gives wrong values.
+    // The current publication's isMuted is accurate right now.
+    if (window._lkRoom && window._lkRoom.localParticipant) {
+        const _snapMicPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+        const _snapCamPub = window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+        window._lkPreSwitchMicMuted = _snapMicPub ? _snapMicPub.isMuted : false;
+        window._lkPreSwitchCamMuted = _snapCamPub ? _snapCamPub.isMuted : false;
+        console.log('📸 Pre-switch mute snapshot: mic', window._lkPreSwitchMicMuted ? 'muted' : 'live', '| cam', window._lkPreSwitchCamMuted ? 'muted' : 'live');
+    } else {
+        // No existing room — not a room switch
+        window._lkPreSwitchMicMuted = null;
+        window._lkPreSwitchCamMuted = null;
+    }
+    // Breakfast re-join: player was muted during night/breakfast, now returning unmuted.
+    // Override the snapshot so join treats this as a fresh (unmuted) first join.
+    if (window._breakfastReJoin) {
+        window._lkPreSwitchMicMuted = null;
+        window._lkPreSwitchCamMuted = null;
+        window._breakfastReJoin = false;
+        console.log('🍳 Breakfast re-join: snapshot overridden → tracks will be live');
+    }
+
+    // 1. Start token fetch and disconnect IN PARALLEL.
+    //    Token fetch is a network round-trip (~100-400ms).
+    //    Disconnect is also async. Running them together saves that time.
+    const tokenUrl = `${LIVEKIT_TOKEN_URL}?room=${encodeURIComponent(gameRoom)}&identity=${encodeURIComponent(_lkIdentity)}`;
+    console.log('📹 Fetching token from:', tokenUrl);
+    const [, tokenResp] = await Promise.all([
+        disconnectLiveKit(),
+        fetch(tokenUrl),
+    ]);
 
     window._lkConnecting = true;
     window._lkGameRoom = gameRoom;
     const isMainRoom = (gameRoom === 'main');
 
-    console.log('📹 Joining LiveKit room:', gameRoom, '| identity:', user.name);
-
     try {
-        // 1. Fetch a signed token from the Cloud Function
-        const tokenUrl = `${LIVEKIT_TOKEN_URL}?room=${encodeURIComponent(gameRoom)}&identity=${encodeURIComponent(user.name)}`;
-        console.log('📹 Fetching token from:', tokenUrl);
-        const resp = await fetch(tokenUrl);
-        if (!resp.ok) {
-            const errText = await resp.text().catch(() => 'no body');
-            throw new Error(`Token fetch failed: ${resp.status} — ${errText}`);
+        if (!tokenResp.ok) {
+            const errText = await tokenResp.text().catch(() => 'no body');
+            throw new Error(`Token fetch failed: ${tokenResp.status} — ${errText}`);
         }
-        const data = await resp.json();
+        const data = await tokenResp.json();
         console.log('📹 Token received for room:', data.room);
         const token = data.token;
 
         // 2. Create Room and set up event listeners BEFORE connecting
+        // Determine if this participant is host/prod (higher quality) or player (economy)
+        const _lkIsHostOrProd = _lkCurrentUser() &&
+            (_lkCurrentUser().role === 'host' || _lkCurrentUser().isProdMember);
+
         const room = new LivekitClient.Room({
             adaptiveStream:    true,  // auto quality based on network
-            dynacast:          true,  // only send video to participants who need it
+            dynacast:          true,  // only send video to subscribers who need it
+            // Economy video for regular players — host/prod get higher quality
             videoCaptureDefaults: {
+                // All participants capture at 360p — matches encode target cleanly
                 resolution: LivekitClient.VideoPresets.h360.resolution,
             },
+            videoPublishDefaults: {
+                videoEncoding: _lkIsHostOrProd
+                    ? { maxBitrate: 800_000, maxFramerate: 30 }  // host/prod: natural quality
+                    : { maxBitrate: 600_000, maxFramerate: 30 }, // players: natural, smooth
+                simulcast: false,
+            }
         });
 
         window._lkRoom = room;
+
+        // ── Audio level bars ───────────────────────────────────
+        // ActiveSpeakersChanged fires whenever speaking participants change.
+        // Each speaker has a .audioLevel (0-1). We scale the bar height by that level.
+        // Seats not in the speakers array get their bars collapsed to zero.
+        // ── Audio ring — Web Audio API AnalyserNode approach ──────────
+        // Uses the actual PCM waveform data from each participant's MediaStream
+        // for true real-time amplitude. This responds to every syllable and
+        // cadence change, unlike LiveKit's smoothed audioLevel property.
+        //
+        // Flow per remote participant:
+        //   track.mediaStream → AudioContext.createMediaStreamSource()
+        //                     → AnalyserNode (fftSize 256, no smoothing)
+        //   rAF: getByteTimeDomainData() → RMS amplitude → ring scale
+        //
+        // For local participant we tap the mic MediaStreamTrack directly.
+
+        // Shared AudioContext — one per room, reused across all participants
+        window._ringAudioCtx = window._ringAudioCtx || null;
+        function _getRingAudioCtx() {
+            if (!window._ringAudioCtx || window._ringAudioCtx.state === 'closed') {
+                window._ringAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (window._ringAudioCtx.state === 'suspended') {
+                window._ringAudioCtx.resume().catch(() => {});
+            }
+            return window._ringAudioCtx;
+        }
+
+        // identity → { analyser, dataArray } for remote participants
+        // seat     → { analyser, dataArray } for local participant
+        const _ringAnalysers = {}; // keyed by identity string
+        let   _localRingAnalyser = null;
+
+        // Attach an AnalyserNode to a MediaStream and store under the given key.
+        // A bandpass filter (200Hz–3500Hz) isolates human voice frequencies,
+        // rejecting desk thumps (<200Hz) and high-frequency noise (>3500Hz).
+        function _attachRingAnalyser(key, mediaStream) {
+            try {
+                const ctx    = _getRingAudioCtx();
+                const source = ctx.createMediaStreamSource(mediaStream);
+
+                // Highpass at 200Hz — cuts desk bumps, keyboard thuds, AC rumble
+                const _hp = ctx.createBiquadFilter();
+                _hp.type            = 'highpass';
+                _hp.frequency.value = 200;
+                _hp.Q.value         = 0.7;
+
+                // Lowpass at 3500Hz — cuts paper rustling, high-freq noise
+                const _lp = ctx.createBiquadFilter();
+                _lp.type            = 'lowpass';
+                _lp.frequency.value = 3500;
+                _lp.Q.value         = 0.7;
+
+                const analyser = ctx.createAnalyser();
+                analyser.fftSize             = 256;
+                analyser.smoothingTimeConstant = 0; // raw, unsmoothed — we smooth in JS
+
+                // Chain: source → highpass → lowpass → analyser
+                source.connect(_hp);
+                _hp.connect(_lp);
+                _lp.connect(analyser);
+                // Do NOT connect to destination — analysis only, no playback
+
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                _ringAnalysers[key] = { analyser, dataArray };
+            } catch(e) {
+                console.warn('🔊 Ring analyser attach failed:', key, e);
+            }
+        }
+
+        // Compute RMS amplitude (0-1) from a Uint8Array of time-domain samples
+        // Samples are 0-255 centred at 128 (silence = all 128s)
+        function _computeRMS(dataArray) {
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                const v = (dataArray[i] - 128) / 128; // normalise to -1…+1
+                sum += v * v;
+            }
+            return Math.sqrt(sum / dataArray.length);
+        }
+
+        // rAF loop state
+        const _ringSmooth = {}; // seat → exponentially smoothed amplitude
+        let   _ringRafId  = null;
+        const _RING_SEATS = ['A','B','C','D'];
+        for (let _ri = 1; _ri <= 24; _ri++) _RING_SEATS.push(_ri);
+
+        // identity → seat cache (populated lazily from gameState)
+        const _identityToSeatCache = {};
+
+        function _ringTick() {
+            _ringRafId = requestAnimationFrame(_ringTick);
+
+            // Populate identity→seat cache from gameState
+            room.remoteParticipants.forEach((p) => {
+                // Always re-check seat mapping — gameState may not have been ready earlier
+                const _base = p.identity.includes('~') ? p.identity.split('~')[0] : p.identity;
+                if (_identityToSeatCache[p.identity] == null && gameState && gameState.players) {
+                    for (const pid in gameState.players) {
+                        const _pp = gameState.players[pid];
+                        if (_pp && _pp.name === _base) {
+                            _identityToSeatCache[p.identity] = isMainRoom ? _pp.seat : _pp.roomSeat;
+                            break;
+                        }
+                    }
+                }
+
+                // Attach analyser if not yet attached — try mediaStreamTrack (LiveKit API)
+                if (!_ringAnalysers[p.identity]) {
+                    p.trackPublications.forEach((pub) => {
+                        if (pub.kind === LivekitClient.Track.Kind.Audio && pub.track) {
+                            const _mst = pub.track.mediaStreamTrack || (pub.track.mediaStream && pub.track.mediaStream.getAudioTracks()[0]);
+                            if (_mst) {
+                                _attachRingAnalyser(p.identity, new MediaStream([_mst]));
+                            }
+                        }
+                    });
+                }
+            });
+
+            // Local participant: attach analyser once
+            if (!_localRingAnalyser && room.localParticipant) {
+                room.localParticipant.trackPublications.forEach((pub) => {
+                    if (pub.kind === LivekitClient.Track.Kind.Audio && pub.track && pub.track.mediaStream) {
+                        try {
+                            const _mstLocal = pub.track.mediaStreamTrack || (pub.track.mediaStream && pub.track.mediaStream.getAudioTracks()[0]);
+                            if (!_mstLocal) return;
+                            const ctx      = _getRingAudioCtx();
+                            const source   = ctx.createMediaStreamSource(new MediaStream([_mstLocal]));
+                            const _lhp = ctx.createBiquadFilter();
+                            _lhp.type = 'highpass'; _lhp.frequency.value = 200; _lhp.Q.value = 0.7;
+                            const _llp = ctx.createBiquadFilter();
+                            _llp.type = 'lowpass';  _llp.frequency.value = 3500; _llp.Q.value = 0.7;
+                            const analyser = ctx.createAnalyser();
+                            analyser.fftSize             = 256;
+                            analyser.smoothingTimeConstant = 0;
+                            source.connect(_lhp); _lhp.connect(_llp); _llp.connect(analyser);
+                            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                            _localRingAnalyser = { analyser, dataArray };
+                        } catch(e) { /* ignore */ }
+                    }
+                });
+            }
+
+            const _localSeat = window.currentUser && (isMainRoom ? window.currentUser.seat : window.currentUser.roomSeat);
+
+            // Per-seat amplitude → ring scale
+            for (const _bs of _RING_SEATS) {
+                let _rawRMS = 0;
+
+                // Check remote participants
+                room.remoteParticipants.forEach((p) => {
+                    if (String(_identityToSeatCache[p.identity]) === String(_bs)) {
+                        const _an = _ringAnalysers[p.identity];
+                        if (_an) {
+                            _an.analyser.getByteTimeDomainData(_an.dataArray);
+                            _rawRMS = Math.max(_rawRMS, _computeRMS(_an.dataArray));
+                        }
+                    }
+                });
+
+                // Check local participant
+                if (String(_localSeat) === String(_bs) && _localRingAnalyser) {
+                    _localRingAnalyser.analyser.getByteTimeDomainData(_localRingAnalyser.dataArray);
+                    _rawRMS = Math.max(_rawRMS, _computeRMS(_localRingAnalyser.dataArray));
+                }
+
+                // Noise floor: ignore filtered RMS below threshold.
+                // Cuts residual breath noise, background hiss, faint bumps.
+                const _FLOOR = 0.012;
+                if (_rawRMS < _FLOOR) _rawRMS = 0;
+
+                // Asymmetric smoothing: fast attack (0.55), slow decay (0.12)
+                const _prev  = _ringSmooth[_bs] || 0;
+                const _alpha = _rawRMS > _prev ? 0.55 : 0.12;
+                _ringSmooth[_bs] = _prev + (_rawRMS - _prev) * _alpha;
+
+                // Map to visual scale and opacity
+                // RMS from speech is typically 0.01-0.15; amplify to fill 0-1 range
+                const _amplified = Math.min(1, _ringSmooth[_bs] * 12);
+                const _scale     = 1 + _amplified * 0.4;   // 1.0 → 1.4 (reduced from 1.7)
+                const _opacity   = _amplified * 0.9;
+
+                const _ring = document.getElementById('aring-' + _bs);
+                if (_ring) {
+                    _ring.style.transform = `translate(-50%, -50%) scale(${_scale.toFixed(3)})`;
+                    _ring.style.opacity   = _opacity.toFixed(3);
+                }
+            }
+        }
+        _ringTick();
+
+        // Cancel loop and clean up analysers on disconnect
+        room.on(LivekitClient.RoomEvent.Disconnected, () => {
+            if (_ringRafId) { cancelAnimationFrame(_ringRafId); _ringRafId = null; }
+            Object.values(_ringAnalysers).forEach(a => { try { a.analyser.disconnect(); } catch(e){} });
+            Object.keys(_ringAnalysers).forEach(k => delete _ringAnalysers[k]);
+            _localRingAnalyser = null;
+        });
 
         // ── Remote participant joined ──────────────────────────
         room.on(LivekitClient.RoomEvent.ParticipantConnected, async (participant) => {
             console.log('📹 Participant connected:', participant.identity);
             const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
             if (!seat) return;
+            // Remove disconnect icon — this participant is back
+            _hideDisconnectIcon(seat);
 
             // Subscribe to their tracks
             participant.on(LivekitClient.ParticipantEvent.TrackSubscribed, (track) => {
@@ -4794,23 +7197,81 @@ window.joinLiveKitRoom = async function(gameRoom) {
                     return;
                 }
                 if (track.kind === LivekitClient.Track.Kind.Video) {
-                    _lkAttachVideo(track, seat, isMainRoom);
+                    _lkAttachVideo(track, seat, isMainRoom, 0, false, participant.identity);
                 }
             });
 
             // Handle tracks already published before we subscribed
             participant.trackPublications.forEach((pub) => {
                 if (pub.track && pub.kind === LivekitClient.Track.Kind.Video) {
-                    _lkAttachVideo(pub.track, seat, isMainRoom);
+                    _lkAttachVideo(pub.track, seat, isMainRoom, 0, false, participant.identity);
                 }
             });
         });
 
         // ── Remote participant left ────────────────────────────
-        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, async (participant) => {
+        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
             console.log('📹 Participant disconnected:', participant.identity);
-            const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
-            if (seat) _lkDetachSeat(seat, isMainRoom);
+            // Sync-only lookup — no retries, same reason as TrackUnsubscribed
+            const _baseName = participant.identity.includes('~')
+                ? participant.identity.split('~')[0] : participant.identity;
+            let seat = null;
+            let _playerData = null;
+            if (gameState && gameState.players) {
+                for (const pid in gameState.players) {
+                    const p = gameState.players[pid];
+                    if (p.name !== _baseName) continue;
+                    seat = isMainRoom ? p.seat : p.roomSeat;
+                    _playerData = p;
+                    if (seat) break;
+                }
+            }
+            // Respect active display swap — video is in the swapped seat, not Firebase seat
+            if (seat && isMainRoom && window._activeDisplaySwap) {
+                const _swD = window._activeDisplaySwap;
+                if (String(seat) === String(_swD.seatA) &&
+                    (_baseName === _swD.identityA || _baseName === _swD.nameA)) {
+                    seat = _swD.seatB;
+                } else if (String(seat) === String(_swD.seatB) &&
+                    (_baseName === _swD.identityB || _baseName === _swD.nameB)) {
+                    seat = _swD.seatA;
+                }
+            }
+            if (seat) {
+                _lkDetachSeat(seat, isMainRoom);
+                // Check Firebase after a short delay to let room change propagate.
+                // If the player moved to a breakout room, their Firebase room field
+                // may not have updated yet when ParticipantDisconnected fires.
+                const _disconnSeat = seat;
+                const _disconnBaseName = _baseName;
+                const _checkBreakout = (delay, showIfNot) => {
+                    setTimeout(() => {
+                        database.ref('players').once('value', (_dSnap) => {
+                            let _inBreakout = false;
+                            let _playerRef = null;
+                            _dSnap.forEach((_dc) => {
+                                const _dp = _dc.val();
+                                if (!_dp || _dp.name !== _disconnBaseName) return;
+                                _playerRef = _dc.key;
+                                const _room = _dp.room || '';
+                                if (_room !== 'main' && _room !== 'waiting' && _room !== '') {
+                                    _inBreakout = true;
+                                }
+                            });
+                            if (_inBreakout) {
+                                console.log('📹 Skip disconnect icon —', _disconnBaseName, 'in breakout');
+                                _hideDisconnectIcon(_disconnSeat);
+                            } else if (showIfNot) {
+                                _showDisconnectIcon(_disconnSeat, isMainRoom);
+                            }
+                        });
+                    }, delay);
+                };
+                // Wait 3s before showing the icon — if the player moved to a breakout room,
+                // their Firebase room field will have updated by then and we skip the icon.
+                // This prevents the icon flashing briefly whenever anyone changes rooms.
+                _checkBreakout(3000, true); // only show icon if STILL not in breakout after 3s
+            }
         });
 
         // ── Track subscribed (covers participants already in room) ──
@@ -4825,13 +7286,50 @@ window.joinLiveKitRoom = async function(gameRoom) {
             }
             if (track.kind !== LivekitClient.Track.Kind.Video) return;
             const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
-            if (seat) _lkAttachVideo(track, seat, isMainRoom);
+            if (seat) _lkAttachVideo(track, seat, isMainRoom, 0, false, participant.identity);
         });
 
         // ── Track unsubscribed ─────────────────────────────────
-        room.on(LivekitClient.RoomEvent.TrackUnsubscribed, async (_track, _pub, participant) => {
-            const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
+        // IMPORTANT: Do NOT retry here. Retrying for a departing player risks
+        // resolving their NEW seat in a NEW room after they've left, then
+        // incorrectly clearing another player's video in that new room.
+        // We only detach if we can resolve the seat synchronously right now.
+        room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (_track, _pub, participant) => {
+            const _baseName = participant.identity.includes('~')
+                ? participant.identity.split('~')[0] : participant.identity;
+            let seat = null;
+            if (gameState && gameState.players) {
+                for (const pid in gameState.players) {
+                    const p = gameState.players[pid];
+                    if (p.name !== _baseName) continue;
+                    seat = isMainRoom ? p.seat : p.roomSeat;
+                    if (seat) break;
+                }
+            }
+            // Only detach if resolved — no retries for departing players
             if (seat) _lkDetachSeat(seat, isMainRoom);
+        });
+
+        // ── Participant (re)connected — catch any tracks already subscribed ──
+        room.on(LivekitClient.RoomEvent.ParticipantConnected, async (participant) => {
+            console.log('📹 Participant connected:', participant.identity);
+            const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
+            if (!seat) return;
+            participant.trackPublications.forEach((pub) => {
+                if (pub.kind === LivekitClient.Track.Kind.Audio && pub.track && pub.isSubscribed) {
+                    const audioEl = pub.track.attach();
+                    audioEl.style.display = 'none';
+                    audioEl.setAttribute('data-lk', '1');
+                    document.body.appendChild(audioEl);
+                    console.log('🔊 Audio attached for:', participant.identity);
+                }
+                if (pub.kind === LivekitClient.Track.Kind.Video && pub.track && pub.isSubscribed) {
+                    const divId = isMainRoom ? ('video-' + seat) : ('room-video-' + seat);
+                    const container = document.getElementById(divId);
+                    if (!container || container.querySelector('.lk-video')) return;
+                    _lkAttachVideo(pub.track, seat, isMainRoom, 0, false, participant.identity);
+                }
+            });
         });
 
         // ── Disconnected (network drop, etc.) ─────────────────
@@ -4854,6 +7352,25 @@ window.joinLiveKitRoom = async function(gameRoom) {
         if (_user && _user.seat && typeof window.setupAVControls === 'function') {
             window.setupAVControls(_user.seat);
         }
+        // Sync mobile AV bar to actual track state after connect
+        setTimeout(() => {
+            const _micPubCheck = room.localParticipant &&
+                room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+            const _camPubCheck = room.localParticipant &&
+                room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+            const _micMuted = _micPubCheck ? _micPubCheck.isMuted : false;
+            const _camMuted = _camPubCheck ? _camPubCheck.isMuted : false;
+            const _mobMicSync = document.getElementById('mobile-mic-btn');
+            const _mobCamSync = document.getElementById('mobile-cam-btn');
+            if (_mobMicSync) {
+                _mobMicSync.style.background = _micMuted ? 'rgba(180,30,30,0.9)' : 'rgba(40,40,40,0.9)';
+                _mobMicSync.style.borderColor = _micMuted ? 'rgba(255,80,80,0.8)' : 'rgba(255,255,255,0.5)';
+            }
+            if (_mobCamSync) {
+                _mobCamSync.style.background = _camMuted ? 'rgba(180,30,30,0.9)' : 'rgba(40,40,40,0.9)';
+                _mobCamSync.style.borderColor = _camMuted ? 'rgba(255,80,80,0.8)' : 'rgba(255,255,255,0.5)';
+            }
+        }, 800); // after tracks are published and mute state is stable
 
         // ── Unlock AudioContext (browser autoplay policy) ──────────────
         // Browsers block audio until a user gesture. room.startAudio() resumes it.
@@ -4876,20 +7393,103 @@ window.joinLiveKitRoom = async function(gameRoom) {
         _tryStartAudio();
 
         // 4. Publish own camera + mic
-        const tracks = await LivekitClient.createLocalTracks({
-            audio: true,
-            video: {
-                resolution: LivekitClient.VideoPresets.h360.resolution,
-                facingMode: 'user',
-            },
-        });
-
+        // Always create fresh tracks — reusing tracks across rooms doesn't work
+        // because room.disconnect() internally stops the MediaStreamTrack,
+        // making it unrecoverable (readyState='ended').
+        // SVTr3Prod observers are audio-only — no video track, ever.
+        const _isObserverUser = user && (user.isObserver || user.role === 'observer');
+        const tracks = await LivekitClient.createLocalTracks(
+            _isObserverUser
+                ? { audio: true }  // observer: mic only, no camera
+                : {
+                    audio: true,
+                    video: {
+                        resolution: LivekitClient.VideoPresets.h360.resolution,
+                        facingMode: 'user',
+                    },
+                }
+        );
         window._lkLocalTracks = tracks;
+        console.log('📹 Created', tracks.length, 'local tracks');
+
+        // Pre-mute at the MediaStreamTrack (hardware) level BEFORE publishing.
+        // This prevents any audio/video from reaching the new room during the
+        // publish handshake (~200-500ms) for players who were muted.
+        // The snapshot was taken from the live room BEFORE disconnect, so it's accurate.
+        const _preMuteMic = window._lkPreSwitchMicMuted === true;
+        const _preMuteCam = window._lkPreSwitchCamMuted === true;
+        if (_preMuteMic || _preMuteCam) {
+            for (const _t of tracks) {
+                if (_preMuteMic && _t.kind === LivekitClient.Track.Kind.Audio) {
+                    _t.mute(); // disables MediaStreamTrack.enabled — hardware silence
+                }
+                if (_preMuteCam && _t.kind === LivekitClient.Track.Kind.Video) {
+                    _t.mute(); // disables MediaStreamTrack.enabled — black frame
+                }
+            }
+            console.log('🔇 Pre-muted tracks before publish: mic', _preMuteMic, '| cam', _preMuteCam);
+        }
+
         // LiveKit JS SDK uses publishTrack (singular) per track
         for (const track of tracks) {
             await room.localParticipant.publishTrack(track);
         }
         console.log('✅ Local tracks published:', tracks.length, 'tracks');
+
+        // ── Apply host force-mute/camera-off state immediately after publishing ──
+        // Re-read Firebase state in case Mute All / Cameras Off was active before join.
+        if (currentUser.role === 'player') {
+            database.ref('game/muteAllPlayers').once('value', (muteSnap) => {
+                if (muteSnap.val()) {
+                    const _mp = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                    if (_mp && !_mp.isMuted) _mp.mute();
+                    database.ref('players/' + currentUser.id + '/audioMuted').set(true);
+                    console.log('🔇 Force-muted on join (muteAll was active)');
+                }
+            });
+            database.ref('game/camerasOffPlayers').once('value', (camSnap) => {
+                if (camSnap.val()) {
+                    const _cp = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+                    if (_cp && !_cp.isMuted) _cp.mute();
+                    database.ref('players/' + currentUser.id + '/videoMuted').set(true);
+                    console.log('🔇 Force-disabled camera on join (camerasOff was active)');
+                }
+            });
+        }
+
+        // ── Apply correct mute state after publishing ─────────────────
+        const _hasSeat = window.currentUser && (window.currentUser.seat || window.currentUser.roomSeat);
+        const _isHostOrProd = window.currentUser && (window.currentUser.role === 'host' || window.currentUser.isProdMember);
+
+        // Use pre-switch snapshot if this is a room switch (set before disconnect).
+        // On first join, snapshot is null — fall through to seat-based mute guard.
+        const _isRoomSwitch = window._lkPreSwitchMicMuted !== null;
+        if (_isRoomSwitch) {
+            const _micPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+            const _camPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+            console.log('🎤 Restoring mute state: mic', window._lkPreSwitchMicMuted ? 'muted' : 'live', '| cam', window._lkPreSwitchCamMuted ? 'muted' : 'live');
+            if (_micPub) { if (window._lkPreSwitchMicMuted) _micPub.mute(); else _micPub.unmute(); }
+            if (_camPub) { if (window._lkPreSwitchCamMuted) _camPub.mute(); else _camPub.unmute(); }
+            // Clear snapshot so next join is treated as first-join
+            window._lkPreSwitchMicMuted = null;
+            window._lkPreSwitchCamMuted = null;
+        } else {
+            // First join: mute mic if no seat yet.
+            // This applies to players, unseated prod members, and prod observers.
+            // The main host (seat A) is always exempt — they are never force-muted here.
+            const _isMainHost = window.currentUser && window.currentUser.seat === 'A';
+            if (!_hasSeat && !_isMainHost) {
+                const _micPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                const _camPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+                if (_micPub) { _micPub.mute(); }
+                if (_camPub) { _camPub.mute(); }
+                // Write muted state so icons reflect reality
+                if (window.currentUser && window.currentUser.id) {
+                    database.ref('players/' + window.currentUser.id + '/audioMuted').set(true);
+                }
+                console.log('🔇 Tracks muted until seat is claimed (no seat yet)');
+            }
+        }
 
         // 7. Watch for participants claiming seats AFTER we're already connected
         // This fires when a remote player's seat field is written to Firebase
@@ -4899,69 +7499,111 @@ window.joinLiveKitRoom = async function(gameRoom) {
         }
         // Debounce the seat watcher — rapid Firebase fires are batched into one scan
         let _seatWatcherTimer = null;
+        // Reusable scan function — attaches video for any remote participant
+        // whose container now exists but hasn't had video attached yet.
+        async function _scanAndAttachRoomVideo() {
+            room.remoteParticipants.forEach(async (participant) => {
+                const seat = await _lkIdentityToSeat(participant.identity, isMainRoom, 0);
+                if (!seat) return;
+                const divId = isMainRoom ? ('video-' + seat) : ('room-video-' + seat);
+                const container = document.getElementById(divId);
+                if (!container || container.querySelector('.lk-video')) return;
+                participant.trackPublications.forEach((pub) => {
+                    if (pub.kind === LivekitClient.Track.Kind.Video && pub.track && pub.isSubscribed) {
+                        _lkAttachVideo(pub.track, seat, isMainRoom, 0, false, participant.identity);
+                        console.log('📹 Scan attached video for', participant.identity, '→', divId);
+                    }
+                });
+            });
+        }
+
         window._lkSeatWatcher = database.ref('players').on('value', () => {
             if (_seatWatcherTimer) return; // already queued
             _seatWatcherTimer = setTimeout(() => {
                 _seatWatcherTimer = null;
-                // Re-scan all remote participants to find any who now have a seat
-                // but haven't had their video attached yet
-                room.remoteParticipants.forEach(async (participant) => {
-                    const seat = await _lkIdentityToSeat(participant.identity, isMainRoom, 0);
-                    if (!seat) return;
-                    const divId = isMainRoom ? ('video-' + seat) : ('room-video-' + seat);
-                    const container = document.getElementById(divId);
-                    if (!container || container.querySelector('.lk-video')) return; // already attached
-                    participant.trackPublications.forEach((pub) => {
-                        if (pub.kind === LivekitClient.Track.Kind.Video && pub.track && pub.isSubscribed) {
-                            _lkAttachVideo(pub.track, seat, isMainRoom, 0);
-                            console.log('📹 Seat-watcher attached video for', participant.identity, '→', divId);
-                        }
-                    });
-                });
-            }, 2000); // 2s debounce — batch rapid Firebase changes
+                _scanAndAttachRoomVideo();
+            }, 200);
         });
+
+        // Extra scan after 1.5s for breakout rooms where overlay DOM renders late
+        setTimeout(_scanAndAttachRoomVideo, 1500);
+        setTimeout(_scanAndAttachRoomVideo, 3000); // second pass for slow connections
 
         // For breakout rooms: scan already-connected participants and attach video
         // (they may have connected before us so their TrackSubscribed already fired)
-        if (!isMainRoom) {
-            setTimeout(() => {
-                room.remoteParticipants.forEach(async (participant) => {
-                    const seat = await _lkIdentityToSeat(participant.identity, false);
-                    if (!seat) return;
-                    participant.trackPublications.forEach((pub) => {
-                        if (pub.kind === LivekitClient.Track.Kind.Video && pub.track && pub.isSubscribed) {
-                            _lkAttachVideo(pub.track, seat, false, 0);
-                            console.log('📹 Late-attach room video:', participant.identity, '→ room-video-' + seat);
-                        }
-                    });
+        // Late-attach for BOTH main room and breakout — catches already-connected
+        // participants whose TrackSubscribed fired before our seat was known
+        setTimeout(() => {
+            room.remoteParticipants.forEach(async (participant) => {
+                const seat = await _lkIdentityToSeat(participant.identity, isMainRoom);
+                if (!seat) return;
+                const divId = isMainRoom ? ('video-' + seat) : ('room-video-' + seat);
+                const container = document.getElementById(divId);
+                // Only attach if container exists and video not already there
+                if (!container || container.querySelector('.lk-video')) return;
+                participant.trackPublications.forEach((pub) => {
+                    if (pub.kind === LivekitClient.Track.Kind.Video && pub.track && pub.isSubscribed) {
+                        _lkAttachVideo(pub.track, seat, isMainRoom, 0, false, participant.identity);
+                        console.log('📹 Late-attach video:', participant.identity, '→', divId);
+                    }
                 });
-            }, 500);
-        }
+            });
+        }, 150);
 
-        // Restore mute state from Firebase so it carries across rooms
-        if (user.id) {
+        // Restore mute state from Firebase on first join only.
+        // Room switches use the pre-switch snapshot instead (applied above).
+        // Observers manage their own mute via the floating mic button — skip them.
+        if (user.id && !_isRoomSwitch) {
             database.ref('players/' + user.id).once('value', (snap) => {
                 const pData = snap.val() || {};
-                if (pData.audioMuted) {
-                    const micPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
-                    if (micPub && !micPub.isMuted) {
-                        micPub.mute();
-                        console.log('🎤 Restored muted state from Firebase');
+                // Don't auto-mute observers from Firebase — their mic state is
+                // managed explicitly by the floating mic button on host.html.
+                const _skipMuteRestore = pData.isObserver || pData.isProdMember;
+                if (pData.audioMuted && !_skipMuteRestore) {
+                    if (typeof window._applyMutedState === 'function') {
+                        window._applyMutedState(true);
+                    } else {
+                        const micPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                        if (micPub && !micPub.isMuted) { micPub.mute(); }
                     }
+                    console.log('🎤 Restored muted state from Firebase (first join)');
                 }
                 if (pData.videoMuted) {
                     const camPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
                     if (camPub && !camPub.isMuted) {
                         camPub.mute();
-                        console.log('📹 Restored video-off state from Firebase');
+                        console.log('📹 Restored video-off state from Firebase (first join)');
                     }
                 }
+                // Breakfast phase: player just accepted invitation — force-unmute.
+                // nightMuted was true during waiting; breakfast accept set it null.
+                // Multiple async paths (nightMuted listener, pre-mute guard) could
+                // leave tracks muted despite Firebase showing audioMuted=false.
+                // This is the authoritative unmute for breakfast re-entry.
+                const _phaseNow = window._currentPhase || sessionStorage.getItem('currentPhase') || '';
+                if (_phaseNow === 'breakfast' && !pData.nightMuted && !pData.audioMuted) {
+                    const _micP = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                    const _camP = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+                    if (_micP && _micP.isMuted) { _micP.unmute(); console.log('🍳 Breakfast join: force-unmuted mic'); }
+                    if (_camP && _camP.isMuted) { _camP.unmute(); console.log('🍳 Breakfast join: force-unmuted cam'); }
+                }
             });
+        } else {
+            console.log('🎤 Room switch: mute state restored from pre-switch snapshot, skipping Firebase');
         }
 
         // 5. Attach own video to own seat
         // For non-main rooms roomSeat may not be assigned yet — retry until it is
+        // Generation counter — incremented on each joinLiveKitRoom call.
+        // _attachOwnVideo checks its captured generation before retrying;
+        // if another join has started, the old loop stops silently.
+        if (!window._lkAttachGeneration) window._lkAttachGeneration = 0;
+        window._lkAttachGeneration++;
+        const _myGeneration = window._lkAttachGeneration;
+
         const _attachOwnVideo = (attempt) => {
+            // Stop retrying if a newer joinLiveKitRoom call has started
+            if (window._lkAttachGeneration !== _myGeneration) return;
             attempt = attempt || 0;
             const u      = _lkCurrentUser();
             const mySeat = isMainRoom
@@ -4970,6 +7612,11 @@ window.joinLiveKitRoom = async function(gameRoom) {
             console.log('🪑 _attachOwnVideo attempt — isMainRoom:', isMainRoom, '| seat:', u && u.seat, '| roomSeat:', u && u.roomSeat, '| mySeat:', mySeat);
 
             if (!mySeat) {
+                // Observers and unseated prod members never get a seat — skip immediately.
+                if (u && (u.isObserver || (u.isProdMember && !u.seat))) {
+                    console.log('🪑 Unseated observer/prod — no seat to attach video to, skipping');
+                    return;
+                }
                 // Also check Firebase directly in case currentUser.roomSeat not updated yet
                 if (!isMainRoom && u && u.id) {
                     // Host/prod members don't get roomSeat assigned — skip gracefully
@@ -4985,12 +7632,16 @@ window.joinLiveKitRoom = async function(gameRoom) {
                             console.log('🪑 Got roomSeat from Firebase:', dbRoomSeat);
                             _attachOwnVideo();
                         } else {
-                            setTimeout(_attachOwnVideo, 500);
+                            setTimeout(() => {
+                                if (window._lkAttachGeneration === _myGeneration) _attachOwnVideo();
+                            }, 100);
                         }
                     });
                 } else {
                     if (attempt < 80) { // max 40s wait
-                        setTimeout(() => _attachOwnVideo(attempt + 1), 500);
+                        setTimeout(() => {
+                            if (window._lkAttachGeneration === _myGeneration) _attachOwnVideo(attempt + 1);
+                        }, 100);
                     } else {
                         console.log('🪑 _attachOwnVideo: gave up waiting for seat after 40s');
                     }
@@ -5075,23 +7726,54 @@ window.disconnectLiveKit = async function() {
 
 // Called by PhaseManager when entering Night phase
 window.enterNightPhase = function() {
-    console.log('🌙 Entering Night — disconnecting LiveKit (cameras off)');
-    disconnectLiveKit();
+    console.log('🌙 Entering Night — disconnecting players from LiveKit');
+    // Players must be fully disconnected during night — they cannot hear or see anyone.
+    // The room watcher will handle re-connection when phase changes back.
+    const _cu = window.currentUser;
+    // Prod members keep their media connection during night — only regular players disconnect
+    if (_cu && _cu.role === 'player' && !_cu.isProdMember) {
+        // Disconnect from LiveKit so no audio/video passes through
+        if (typeof disconnectLiveKit === 'function') disconnectLiveKit();
+        // Move to waiting room in Firebase so the room watcher stays disconnected
+        if (_cu.id) {
+            database.ref('players/' + _cu.id + '/room').set('waiting');
+            _cu.room = 'waiting';
+        }
+    }
 };
 
 window.exitNight = function() {
-    console.log('🌙 Exiting Night phase');
-    // Room re-join is handled by the room watcher below
+    console.log('🌙 Exiting Night phase — restoring players to main room');
+    const _cu = window.currentUser;
+    if (_cu && _cu.role === 'player' && _cu.id) {
+        // Restore player to main room — room watcher will reconnect LiveKit
+        database.ref('players/' + _cu.id + '/room').set('main');
+        _cu.room = 'main';
+    }
 };
 
 // Called by PhaseManager when entering Breakfast phase
 window.enterBreakfastPhase = function() {
-    console.log('🍳 Entering Breakfast — disconnecting LiveKit (cameras off)');
-    disconnectLiveKit();
+    console.log('🍳 Entering Breakfast — disconnecting players from LiveKit');
+    const _cu2 = window.currentUser;
+    // Prod members keep their media connection during breakfast
+    if (_cu2 && _cu2.role === 'player' && !_cu2.isProdMember) {
+        if (typeof disconnectLiveKit === 'function') disconnectLiveKit();
+        if (_cu2.id) {
+            database.ref('players/' + _cu2.id + '/room').set('waiting');
+            _cu2.room = 'waiting';
+        }
+    }
 };
 
 window.exitBreakfast = function() {
-    console.log('🍳 Exiting Breakfast phase');
+    console.log('🍳 Exiting Breakfast phase — restoring players to main room');
+    window._breakfastSeatVisible = false;
+    const _cu3 = window.currentUser;
+    if (_cu3 && _cu3.role === 'player' && _cu3.id) {
+        database.ref('players/' + _cu3.id + '/room').set('main');
+        _cu3.room = 'main';
+    }
 };
 
 // ── Room change watcher ───────────────────────────────────────
@@ -5112,25 +7794,66 @@ window.exitBreakfast = function() {
         database.ref('players/' + uid + '/room').on('value', (snap) => {
             const room  = snap.val();
             const phase = sessionStorage.getItem('currentPhase');
-            const blocked = (phase === 'night' || phase === 'breakfast');
+            const isBreakoutRoom = room && room !== 'main' && room !== 'waiting';
 
             console.log('📹 Room changed to:', room, '| phase:', phase);
 
-            if (!room || room === 'waiting' || blocked) {
+            // Always clear roomSeat from memory on any room change.
+            // The new room's assignNewRoomSeat will set the correct value.
+            if (window.currentUser) window.currentUser.roomSeat = null;
+            // Also clear from gameState.players cache so _lkIdentityToSeat
+            // doesn't return a stale roomSeat before Firebase propagates.
+            const _myId = window.currentUser && window.currentUser.id;
+            if (_myId && gameState && gameState.players && gameState.players[_myId]) {
+                gameState.players[_myId].roomSeat = null;
+            }
+
+            // Observers with null room default to 'main' — their record may not
+            // be written yet. Don't disconnect on null for observers.
+            const _u2 = _lkCurrentUser();
+            const _isObs = _u2 && (_u2.isObserver || _u2.role === 'observer');
+            const _effectiveRoom = (!room && _isObs) ? 'main' : room;
+            // Night: all players must be disconnected — no exceptions.
+            // Breakfast: disconnect players who are in waiting (not yet invited).
+            //            Players who have accepted the invite and have a seat CAN connect.
+            const _overlayPhase = phase === 'night' || phase === 'breakfast';
+            const _isNight = phase === 'night';
+            const _invitedToBreakout = _overlayPhase &&
+                room && room !== 'main' && room !== 'waiting';
+            // A seated player in breakfast has accepted their invite — allow LiveKit
+            const _u4 = _lkCurrentUser();
+            const _hasSeatNow = _u4 && _u4.seat;
+            const _breakfastSeated = (phase === 'breakfast') && _hasSeatNow &&
+                _effectiveRoom === 'main';
+            if (!_effectiveRoom || _effectiveRoom === 'waiting' ||
+                (_isNight && !_invitedToBreakout) ||
+                (phase === 'breakfast' && !_breakfastSeated && !_invitedToBreakout)) {
                 disconnectLiveKit();
                 return;
             }
+            // Use effective room from here on
+            const room2 = _effectiveRoom;
 
             // Only join if user has a name (fully registered)
             const u = _lkCurrentUser();
             const placeholderName = !u || !u.name || ['New Host', 'New Player'].includes(u.name);
             if (placeholderName) {
                 // Name not set yet — wait a moment and retry
-                setTimeout(() => joinLiveKitRoom(room), 1000);
+                setTimeout(() => joinLiveKitRoom(room2), 1000);
                 return;
             }
 
-            joinLiveKitRoom(room);
+            // Only block main room join if player has no seat AND not an overlay phase
+            // AND not an observer/prod-member (they join muted without a seat).
+            const _u3 = _lkCurrentUser();
+            const _isProdOrObs = _u3 && (_u3.isProdMember || _u3.isObserver || _u3.role === 'observer');
+            if (room2 === 'main' && (!u || !u.seat) && !_overlayPhase && !_isProdOrObs) {
+                console.log('📹 Player in main room but no seat yet — waiting for seat before joining LiveKit');
+                disconnectLiveKit();
+                return;
+            }
+
+            joinLiveKitRoom(room2);
         });
     };
 
@@ -5178,38 +7901,110 @@ window.exitBreakfast = function() {
 
 
 // Position AV controls just below the seat label, attached visually but not inside it
-function _positionAVControls(seatNumber) {
-    const seat = document.getElementById('seat-' + seatNumber);
-    const label = document.getElementById('seat-label-' + seatNumber);
-    const controls = document.getElementById('av-controls-' + seatNumber);
-    if (!seat || !label || !controls || controls.style.display === 'none') return;
-
-    // Use getBoundingClientRect to find label bottom relative to seat top
-    const seatRect  = seat.getBoundingClientRect();
-    const labelRect = label.getBoundingClientRect();
-    const labelBottomRelative = (labelRect.bottom - seatRect.top);
-    controls.style.top = (labelBottomRelative + 3) + 'px';
-}
+// _positionAVControls removed — buttons now positioned via CSS as 'shoulders' inside seat-label
 
 // Re-position all visible AV controls (called after resize)
-function _repositionAllAVControls() {
-    document.querySelectorAll('.seat-av-controls').forEach(el => {
-        if (el.style.display !== 'none') {
-            const id = el.id.replace('av-controls-', '');
-            _positionAVControls(parseInt(id));
-        }
-    });
-}
+// _repositionAllAVControls removed
 
 // ── AV Controls: show buttons on own seat, icons on all seats ─────────────────
+// Re-apply AV icon state after any DOM rebuild (resize, phase change, room change).
+// Called whenever seat HTML is regenerated so icons aren't stuck at display:none.
+window._refreshAVIcons = function() {
+    database.ref('players').once('value', (snap) => {
+        const myId = window.currentUser && window.currentUser.id;
+        const micState = {};
+        const camState = {};
+        const mySeats  = {};
+        // Pre-populate our own seat from currentUser
+        const _mySeat = window.currentUser && (window.currentUser.seat || window.currentUser.roomSeat);
+        if (_mySeat) mySeats[_mySeat] = true;
+
+        snap.forEach((child) => {
+            const p = child.val();
+            if (!p || !p.seat) return;
+            let s = p.seat;
+            if ((p.isHost || p.isProdMember) && typeof s === 'number') {
+                s = p.isHost ? 'A' : (p.prodLetter || s);
+            }
+            micState[s] = !!p.audioMuted;
+            camState[s] = !!p.videoMuted;
+            if (myId && (child.key === myId || p.id === myId)) mySeats[s] = true;
+        });
+        // Main room seats
+        const _allSeats = ['A']; // 'A' = main host seat
+        for (let s = 1; s <= 25; s++) _allSeats.push(s);
+        ['B','C','D'].forEach(l => _allSeats.push(l));
+        for (const s of _allSeats) {
+            const micIcon = document.getElementById('mic-off-' + s);
+            const camIcon = document.getElementById('cam-off-' + s);
+            const micBtn  = document.getElementById('mic-btn-' + s);
+            const camBtn  = document.getElementById('cam-btn-'  + s);
+            if (micIcon) micIcon.style.display = micState[s] ? 'flex' : 'none';
+            if (camIcon) camIcon.style.display = camState[s] ? 'flex' : 'none';
+            if (micBtn)  micBtn.classList.toggle('av-muted', !!(micState[s] && mySeats[s]));
+            if (camBtn)  camBtn.classList.toggle('av-muted', !!(camState[s] && mySeats[s]));
+        }
+        // Reset ALL room seat AV icons first so departed players leave no traces
+        for (let _rs = 1; _rs <= 8; _rs++) {
+            const _rMicOff = document.getElementById('room-mic-off-' + _rs);
+            const _rCamOff = document.getElementById('room-cam-off-' + _rs);
+            if (_rMicOff) _rMicOff.style.display = 'none';
+            if (_rCamOff) _rCamOff.style.display = 'none';
+        }
+        // Room seats — only for players in the room currently shown in the overlay.
+        const _myRoom = window.hostCurrentRoom && window.hostCurrentRoom !== 'main'
+            ? window.hostCurrentRoom
+            : (window.currentUser && window.currentUser.room);
+        snap.forEach((child) => {
+            const rp = child.val();
+            if (!rp || !rp.roomSeat || !rp.seat) return;
+            if (!_myRoom || rp.room !== _myRoom) return; // wrong room — skip
+            const rs = rp.roomSeat;
+            const _rMicOff = document.getElementById('room-mic-off-' + rs);
+            const _rCamOff = document.getElementById('room-cam-off-' + rs);
+            if (_rMicOff) _rMicOff.style.display = !!rp.audioMuted ? 'flex' : 'none';
+            if (_rCamOff) _rCamOff.style.display = !!rp.videoMuted ? 'flex' : 'none';
+        });
+    });
+};
+
 window.setupAVControls = function(seatNumber) {
     console.log('🎛️ setupAVControls called for seat:', seatNumber, '| currentUser:', window.currentUser && window.currentUser.id);
-    // Show control buttons only on our own seat
-    const controls = document.getElementById('av-controls-' + seatNumber);
-    if (controls) {
-        controls.style.display = 'flex';
-        setTimeout(() => _positionAVControls(seatNumber), 50);
-    }
+    // Hide ALL mic/cam buttons across every seat (A + 1-25 + B-J).
+    // This clears any previously-shown buttons from a prior role (e.g. was host-A, now prod-C).
+    const _allSeatIds = ['A','B','C','D'];
+    for (let _s = 1; _s <= 25; _s++) _allSeatIds.push(_s);
+    _allSeatIds.forEach((_s) => {
+        if (String(_s) === String(seatNumber)) return; // skip our own seat
+        const _mb = document.getElementById('mic-btn-' + _s);
+        const _cb = document.getElementById('cam-btn-' + _s);
+        if (_mb) _mb.style.display = 'none';
+        if (_cb) _cb.style.display = 'none';
+    });
+    // Show control buttons on our own seat.
+    // Try main room IDs first, then breakout room IDs.
+    const _micBtn = document.getElementById('mic-btn-' + seatNumber)
+                 || document.getElementById('room-mic-btn-' + seatNumber);
+    const _camBtn = document.getElementById('cam-btn-' + seatNumber)
+                 || document.getElementById('room-cam-btn-' + seatNumber);
+    if (_micBtn) _micBtn.style.display = 'flex';
+    if (_camBtn) _camBtn.style.display = 'flex';
+
+    // Elevate the player's own seat above all others so the seat-label
+    // (containing AV buttons) is never covered by adjacent seat elements.
+    // Each seat is a stacking context (z-index:50); without this boost,
+    // seats created later in DOM (lower rows) paint over earlier rows' labels.
+    const _allSeatEls = ['A','B','C','D'];
+    for (let _z = 1; _z <= 25; _z++) _allSeatEls.push(_z);
+    _allSeatEls.forEach((_s) => {
+        const _se = document.getElementById('seat-' + _s);
+        if (!_se) return;
+        if (String(_s) === String(seatNumber)) {
+            _se.style.zIndex = '200'; // own seat above all others
+        } else {
+            _se.style.zIndex = ''; // let CSS z-index:50 apply for other seats
+        }
+    });
 
     // Only one global AV listener at a time — detach previous before adding
     if (window._avIconsListener) {
@@ -5217,36 +8012,42 @@ window.setupAVControls = function(seatNumber) {
         window._avIconsListener = null;
     }
 
+    // Capture seatNumber in closure — identifies our seat even before currentUser is set
+    const _mySeatNumber = seatNumber;
+
     window._avIconsListener = database.ref('players').on('value', (snap) => {
         // Incremental update — build desired state first, then apply atomically.
-        // Avoids the reset-all → Firebase-read → redraw race condition.
         const myId     = window.currentUser && window.currentUser.id;
         const micState = {};   // seat → bool (muted)
         const camState = {};   // seat → bool (muted)
         const mySeats  = {};   // seat → bool (belongs to me)
+        // Always mark our own seat as ours (works even if currentUser not yet set)
+        mySeats[_mySeatNumber] = true;
 
         snap.forEach((child) => {
             const p = child.val();
             if (!p || !p.seat) return;
-            const s = p.seat;
+            // Sanitize: if host/prod have a corrupt numeric seat, use their correct letter
+            let s = p.seat;
+            if ((p.isHost || p.isProdMember) && typeof s === 'number') {
+                s = p.isHost ? 'A' : (p.prodLetter || s);
+            }
             micState[s] = !!p.audioMuted;
             camState[s] = !!p.videoMuted;
-            // Main host: child.key='host'; prod members: child.key='prod-B' etc.
-            const _isMainHost = window.currentUser && window.currentUser.role === 'host' && window.currentUser.id === 'host';
-            const _meKey = _isMainHost ? 'host' : myId;
-            if (child.key === _meKey || child.key === myId || p.id === myId) mySeats[s] = true;
-            if (p.audioMuted || p.videoMuted) {
-                console.log('🔔 AV icon — key:', child.key, 'seat:', s,
-                    'audio:', !!p.audioMuted, 'video:', !!p.videoMuted,
-                    'isMe:', !!(child.key === myId || p.id === myId));
-            }
+            // Also mark any additional seats this user owns (e.g. room seat)
+            if (myId && (child.key === myId || p.id === myId)) mySeats[s] = true;
+            // Main host: always owns seat A regardless of id field
+            const _isMainHostKey = child.key === 'host' || (p.isHost && !p.isProdMember);
+            const _iAmMainHost = myId && (myId === 'host' || 
+                (window.currentUser && window.currentUser.isHost && !window.currentUser.isProdMember));
+            if (_isMainHostKey && _iAmMainHost) mySeats[s] = true;
         });
 
         // Apply state to every seat that has DOM elements
         // Numeric seats (1-25) plus prod letter seats (B-J)
-        const _allSeats = [];
+        const _allSeats = ['A']; // 'A' = main host seat
         for (let s = 1; s <= 25; s++) _allSeats.push(s);
-        ['B','C','D','E','F','G','H','I','J'].forEach(l => _allSeats.push(l));
+        ['B','C','D'].forEach(l => _allSeats.push(l));
         for (const s of _allSeats) {
             const micIcon = document.getElementById('mic-off-' + s);
             const camIcon = document.getElementById('cam-off-' + s);
@@ -5257,16 +8058,126 @@ window.setupAVControls = function(seatNumber) {
             if (micBtn)  micBtn.classList.toggle('av-muted',  !!(micState[s] && mySeats[s]));
             if (camBtn)  camBtn.classList.toggle('av-muted',  !!(camState[s] && mySeats[s]));
         }
+
+        // Update room seat AV icons for ALL players in breakout rooms.
+        // Reset status icons only — not the toggle buttons (those are managed by setupAVControls).
+        for (let _rs = 1; _rs <= 8; _rs++) {
+            const _rMicOff = document.getElementById('room-mic-off-' + _rs);
+            const _rCamOff = document.getElementById('room-cam-off-' + _rs);
+            const _rMicBtn = document.getElementById('room-mic-btn-' + _rs);
+            const _rCamBtn = document.getElementById('room-cam-btn-' + _rs);
+            if (_rMicOff) _rMicOff.style.display = 'none';
+            if (_rCamOff) _rCamOff.style.display = 'none';
+            // Only reset the av-muted class — don't hide the buttons
+            if (_rMicBtn) _rMicBtn.classList.remove('av-muted');
+            if (_rCamBtn) _rCamBtn.classList.remove('av-muted');
+        }
+        // Scan all players for roomSeat assignments and update their room icons.
+        // CRITICAL: only apply for players in the SAME room as the overlay currently shows.
+        // Use hostCurrentRoom for the host (they watch rooms without entering them in currentUser),
+        // fall back to currentUser.room for players.
+        const _myCurrentRoom = window.hostCurrentRoom && window.hostCurrentRoom !== 'main'
+            ? window.hostCurrentRoom
+            : (window.currentUser && window.currentUser.room);
+        snap.forEach((child) => {
+            const rp = child.val();
+            if (!rp || !rp.roomSeat || !rp.seat) return;
+            if (!_myCurrentRoom || rp.room !== _myCurrentRoom) return; // wrong room
+            const rs = rp.roomSeat; // room seat number (1-5)
+            const ms = rp.seat;    // main seat (for mute state lookup)
+            const _rMicOff = document.getElementById('room-mic-off-' + rs);
+            const _rCamOff = document.getElementById('room-cam-off-' + rs);
+            const _rMicBtn = document.getElementById('room-mic-btn-' + rs);
+            const _rCamBtn = document.getElementById('room-cam-btn-' + rs);
+            const _rMicMuted = !!rp.audioMuted;
+            const _rCamMuted = !!rp.videoMuted;
+            if (_rMicOff) _rMicOff.style.display = _rMicMuted ? 'flex' : 'none';
+            if (_rCamOff) _rCamOff.style.display = _rCamMuted ? 'flex' : 'none';
+            if (_rMicBtn) _rMicBtn.classList.toggle('av-muted', _rMicMuted);
+            if (_rCamBtn) _rCamBtn.classList.toggle('av-muted', _rCamMuted);
+            const _isMyRoomSeat = (window.currentUser && window.currentUser.roomSeat == rs
+                && window.currentUser.seat == ms);
+            // Show/hide shoulder buttons for local player's room seat
+            const _rMicBtnShow = document.getElementById('room-mic-btn-' + rs);
+            const _rCamBtnShow = document.getElementById('room-cam-btn-' + rs);
+            if (_rMicBtnShow) _rMicBtnShow.style.display = _isMyRoomSeat ? 'flex' : 'none';
+            if (_rCamBtnShow) _rCamBtnShow.style.display = _isMyRoomSeat ? 'flex' : 'none';
+        });
+    });
+};
+
+
+// Direct rooms-tab AV icon update for host/prod (no Firebase round-trip needed)
+window._updateRoomsTabAVIcon = function(playerName, field, muted) {
+    const color  = muted ? '#ff4444' : 'rgba(255,255,255,0.8)';
+    const slash  = muted
+        ? "<line x1='3' y1='3' x2='21' y2='21' stroke='#ff4444' stroke-width='2'/>"
+        : '';
+    // Mic path template (for rebuild)
+    const micPath = "<path d='M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z'/>" +
+        "<path d='M19 10v2a7 7 0 0 1-14 0v-2'/>" +
+        "<line x1='12' y1='19' x2='12' y2='23'/>" +
+        "<line x1='8' y1='23' x2='16' y2='23'/>";
+    const camPath = "<polygon points='23 7 16 12 23 17 23 7'/>" +
+        "<rect x='1' y='5' width='15' height='14' rx='2' ry='2'/>";
+
+    // Guard: empty playerName would match every row
+    if (!playerName) return;
+    document.querySelectorAll('.room-players').forEach(el => {
+        el.querySelectorAll('div[data-player-name]').forEach(row => {
+            // Match exactly by data attribute — avoids substring false-positives
+            if (row.dataset.playerName !== playerName) return;
+            // Rebuild the SVG icons in this row
+            const svgs = row.querySelectorAll('svg');
+            if (svgs.length < 2) return;
+            const isMicField = field === 'audioMuted';
+            const svgIndex   = isMicField ? 0 : 1;
+            const innerPath  = isMicField ? micPath : camPath;
+            svgs[svgIndex].setAttribute('stroke', color);
+            // Replace inner content to add/remove slash
+            svgs[svgIndex].innerHTML = innerPath + slash;
+        });
     });
 };
 
 window.toggleMic = function() {
     const user = window.currentUser;
-    if (!user) return;
+    if (!user) { console.warn('🎤 toggleMic: no currentUser'); return; }
+    // Block players from unmuting during night phase, or breakfast before seated
+    if (user.role === 'player') {
+        const _ph = (window._currentPhase || '').toLowerCase();
+        const _micPubCheck = window._lkRoom && window._lkRoom.state === 'connected' &&
+            window._lkRoom.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
+        const _currentlyMuted = _micPubCheck && _micPubCheck.isMuted;
+        const _tryingToUnmute = _currentlyMuted; // they're muted and pressing toggle = trying to unmute
+        if (_tryingToUnmute) {
+            if (_ph === 'night') {
+                console.log('🎤 toggleMic blocked: night phase');
+                return;
+            }
+            if (_ph === 'breakfast' && !user.seat) {
+                console.log('🎤 toggleMic blocked: breakfast, not yet seated');
+                return;
+            }
+        }
+    }
     const room = window._lkRoom;
-    if (!room) return;
+    if (!room || room.state !== 'connected') {
+        console.warn('🎤 toggleMic: LiveKit not connected, state:', room && room.state);
+        // For observers: also try toggling via Firebase only (no LiveKit track yet)
+        if (user.isObserver || user.role === 'observer') {
+            const _obsNowMuted = !!(user._localMuted);
+            user._localMuted = !_obsNowMuted;
+            database.ref('players/' + user.id + '/audioMuted').set(!_obsNowMuted);
+            window._updateRoomsTabAVIcon(user.name || '', 'audioMuted', !_obsNowMuted);
+            // Update floating mic button if present
+            const _floatBtn = document.getElementById('obs-mic-btn');
+            if (_floatBtn) _floatBtn.classList.toggle('av-muted', !_obsNowMuted);
+        }
+        return;
+    }
     const micPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Microphone);
-    if (!micPub) return;
+    if (!micPub) { console.warn('🎤 toggleMic: no mic track — published:', [...room.localParticipant.trackPublications.keys()]); return; }
     const nowMuted = micPub.isMuted;
     if (nowMuted) {
         micPub.unmute();
@@ -5274,25 +8185,44 @@ window.toggleMic = function() {
         micPub.mute();
     }
     const newMuted = !nowMuted;
-    // Host record is always at players/host regardless of currentUser.id
-    // Main host uses 'host' path; prod members use their own id (prod-B etc)
-    const _avPlayerId = (user.role === 'host' && user.id === 'host') ? 'host' : user.id;
+    // Host record: main host always writes to 'players/host' path.
+    // Detect main host by isHost flag or by id='host' or id starting with 'host-' but NOT 'prod-'.
+    const _isMainHost = user.isHost || user.id === 'host' || 
+        (user.role === 'host' && user.id && !user.id.startsWith('prod-') && !user.isProdMember);
+    const _avPlayerId = _isMainHost ? 'host' : user.id;
     database.ref('players/' + _avPlayerId + '/audioMuted').set(newMuted);
     const seat = user.seat;
     const btn = document.getElementById('mic-btn-' + seat);
-    if (btn) btn.classList.toggle('av-muted', newMuted);
+    if (btn) { btn.classList.toggle('av-muted', newMuted); btn.style.display = 'flex'; }
+    else { console.warn('🎤 toggleMic: mic-btn-' + seat + ' not found in DOM'); }
     const icon = document.getElementById('mic-off-' + seat);
     if (icon) icon.style.display = newMuted ? 'flex' : 'none';
+    else { console.warn('🎤 toggleMic: mic-off-' + seat + ' not found in DOM'); }
+    // Also update room seat icons if in breakout
+    const _rSeat = user.roomSeat;
+    if (_rSeat) {
+        const rBtn = document.getElementById('room-mic-btn-' + _rSeat);
+        if (rBtn) rBtn.classList.toggle('av-muted', newMuted);
+        const rIcon = document.getElementById('room-mic-off-' + _rSeat);
+        if (rIcon) rIcon.style.display = newMuted ? 'flex' : 'none';
+    }
+    // Directly update rooms tab for host/prod (bypasses Firebase timing)
+    if (user.role === 'host' || user.isProdMember || user.role === 'observer') {
+        window._updateRoomsTabAVIcon(user.name || '', 'audioMuted', newMuted);
+    }
+    // Update floating observer mic button if present
+    const _fBtn = document.getElementById('obs-mic-btn');
+    if (_fBtn) _fBtn.classList.toggle('av-muted', newMuted);
     console.log('🎤 Mic toggled:', newMuted ? 'muted' : 'unmuted');
 };
 
 window.toggleCam = function() {
     const user = window.currentUser;
-    if (!user) return;
+    if (!user) { console.warn('📹 toggleCam: no currentUser'); return; }
     const room = window._lkRoom;
-    if (!room) return;
+    if (!room || room.state !== 'connected') { console.warn('📹 toggleCam: LiveKit not connected, state:', room && room.state); return; }
     const camPub = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
-    if (!camPub) return;
+    if (!camPub) { console.warn('📹 toggleCam: no cam track — published:', [...room.localParticipant.trackPublications.keys()]); return; }
     const nowMuted = camPub.isMuted;
     if (nowMuted) {
         camPub.unmute();
@@ -5300,16 +8230,38 @@ window.toggleCam = function() {
         camPub.mute();
     }
     const newMuted = !nowMuted;
-    const _avPlayerIdCam = (user.role === 'host' && user.id === 'host') ? 'host' : user.id;
+    const _isMainHostCam = user.isHost || user.id === 'host' || 
+        (user.role === 'host' && user.id && !user.id.startsWith('prod-') && !user.isProdMember);
+    const _avPlayerIdCam = _isMainHostCam ? 'host' : user.id;
     database.ref('players/' + _avPlayerIdCam + '/videoMuted').set(newMuted);
     const seat = user.seat;
     const btn = document.getElementById('cam-btn-' + seat);
-    if (btn) btn.classList.toggle('av-muted', newMuted);
+    if (btn) { btn.classList.toggle('av-muted', newMuted); btn.style.display = 'flex'; }
+    else { console.warn('📹 toggleCam: cam-btn-' + seat + ' not found in DOM'); }
     const icon = document.getElementById('cam-off-' + seat);
     if (icon) icon.style.display = newMuted ? 'flex' : 'none';
+    else { console.warn('📹 toggleCam: cam-off-' + seat + ' not found in DOM'); }
     // Hide/show the local video element
     const videoDiv = document.getElementById('video-' + seat);
     if (videoDiv) videoDiv.style.opacity = newMuted ? '0' : '1';
+    // Also update room seat icons if in breakout
+    const _rSeatCam = user.roomSeat;
+    if (_rSeatCam) {
+        const rBtnC = document.getElementById('room-cam-btn-' + _rSeatCam);
+        if (rBtnC) rBtnC.classList.toggle('av-muted', newMuted);
+        const rIconC = document.getElementById('room-cam-off-' + _rSeatCam);
+        if (rIconC) rIconC.style.display = newMuted ? 'flex' : 'none';
+    }
+    // Directly update rooms tab for host/prod
+    if (user.role === 'host' || user.isProdMember) {
+        window._updateRoomsTabAVIcon(user.name || 'Unknown', 'videoMuted', newMuted);
+    }
+    // Update mobile AV bar cam button
+    const _mobCamBtn = document.getElementById('mobile-cam-btn');
+    if (_mobCamBtn) {
+        _mobCamBtn.style.background = newMuted ? 'rgba(180,30,30,0.9)' : 'rgba(40,40,40,0.9)';
+        _mobCamBtn.style.borderColor = newMuted ? 'rgba(255,80,80,0.8)' : 'rgba(255,255,255,0.5)';
+    }
     console.log('📹 Camera toggled:', newMuted ? 'off' : 'on');
 };
 
@@ -5539,7 +8491,12 @@ database.ref('game/endGame/smokeVote').on('value', (snap) => {
         if (votes[pid] === 'end')    e++;
         else if (votes[pid] === 'banish') b++;
     });
-    t.innerHTML = `<span style="color:#4169E1">End: ${e}</span> &nbsp;|&nbsp; <span style="color:#DC143C">Banish: ${b}</span> &nbsp;|&nbsp; Locked: ${tot}`;
+    // In viewer mode: hide the tally display
+    if (localStorage.getItem('viewerModeEnabled') === 'true' && !data.revealActive) {
+        t.textContent = 'Smoke vote in progress...';
+    } else if (!data.revealActive) {
+        t.innerHTML = `<span style="color:#4169E1">End: ${e}</span> &nbsp;|&nbsp; <span style="color:#DC143C">Banish: ${b}</span> &nbsp;|&nbsp; Locked: ${tot}`;
+    }
 
     if (currentUser.role === 'host' && tot > 0 && !data.revealActive) {
         database.ref('players').once('value', (pSnap) => {
@@ -5558,6 +8515,7 @@ database.ref('game/endGame/smokeVote').on('value', (snap) => {
 database.ref('game/endGame/smokeReveal').on('value', (snap) => {
     const reveal = snap.val();
     if (!reveal || Date.now() - reveal.timestamp > 10000) return;
+    window._endGameRevealActive = true; // allow viewer mode to show name box reveals
     const color = reveal.color || '#4169E1';
 
     document.getElementById('endgame-smoke-reveal-text')?.remove();
@@ -5629,6 +8587,11 @@ function clearBanishmentVotes() {
         database.ref('game/phaseTitle').set('End Game');
         database.ref('game/endGame/clearNameTagsSignal').set(Date.now());
         _clearBanishFlags();
+        // Clear yellow/gold banishment reveal glows from all seats
+        document.querySelectorAll('.video-seat').forEach(s => {
+            s.style.boxShadow = '';
+            s.style.border    = '';
+        });
         ['endgame-reveal-banish-btn', 'endgame-reveal-banish-tie-btn'].forEach((id) => {
             const b = document.getElementById(id);
             if (b) b.disabled = true;
@@ -5738,6 +8701,7 @@ function startBanishRevealQueue(firstPlayerId, voteKey) {
 
             database.ref('game/endGame/' + voteKey).update({ revealQueue: queue, revealIndex: 0 });
             database.ref('game/endGame/' + voteKey + '/currentRevealer').set(firstPlayerId);
+            database.ref('players/' + firstPlayerId + '/endGameReadyToRevealBanish').set(true);
             database.ref('game/phaseTitle').set(firstName + ' voted for...');
         });
     });
@@ -5759,6 +8723,7 @@ function nextBanishRevealer(voteKey) {
         const nid = data.revealQueue[ni];
         database.ref('game/endGame/' + voteKey).update({ revealIndex: ni });
         database.ref('game/endGame/' + voteKey + '/currentRevealer').set(nid);
+        database.ref('players/' + nid + '/endGameReadyToRevealBanish').set(true);
         database.ref('players/' + nid).once('value', (s) => {
             database.ref('game/phaseTitle').set((s.val()?.name || 'Next') + ' voted for...');
         });
@@ -5766,6 +8731,14 @@ function nextBanishRevealer(voteKey) {
 }
 
 function listenEndGameBanishTally(voteKey, elId) {
+    // Guard: each voteKey gets exactly one persistent listener.
+    // If this function is somehow called twice for the same key, skip the second registration.
+    if (!window._banishTallyListeners) window._banishTallyListeners = {};
+    if (window._banishTallyListeners[voteKey]) {
+        console.log('⚠️ listenEndGameBanishTally: listener already registered for', voteKey, '— skipping duplicate');
+        return;
+    }
+    window._banishTallyListeners[voteKey] = true;
     database.ref('game/endGame/' + voteKey).on('value', (snap) => {
         const data = snap.val();
         const el   = document.getElementById(elId);
@@ -5798,7 +8771,16 @@ function listenEndGameBanishTally(voteKey, elId) {
                     </div>`)
                 .join('');
 
-            if (currentUser.role === 'host' && !data.revealed) {
+            // Track reveal state for _isRevealPhase
+        window._endGameRevealActive = !!(data && data.revealed);
+
+        // In viewer mode: hide the tally (let reveals show individually on name boxes)
+        if (localStorage.getItem('viewerModeEnabled') === 'true' && !data.revealed) {
+            el.textContent = 'Banishment vote in progress...';
+            return; // don't show tally or name tags while voting
+        }
+
+        if (currentUser.role === 'host' && !data.revealed) {
                 pSnap.forEach((child) => {
                     const p  = child.val();
                     if (!p.seat || !locked[child.key]) return;
@@ -5825,16 +8807,35 @@ listenEndGameBanishTally('banishmentTie', 'endgame-banish-tie-tally');
                     btn.style.display = rSnap.val() ? 'none' : 'block';
                 });
         } else {
-            btn.style.display = 'none';
+            // Only hide if this player's btn was shown by a previous voteKey listener
+            if (btn.style.display === 'block') {
+                // Check the OTHER key before hiding — don't hide if other key is our turn
+                const otherKey = voteKey === 'banishment' ? 'banishmentTie' : 'banishment';
+                database.ref('game/endGame/' + otherKey + '/currentRevealer').once('value', (os) => {
+                    if (os.val() !== currentUser.id) btn.style.display = 'none';
+                });
+            }
         }
     });
 });
+
+// Belt-and-suspenders: also listen to per-player ready flag for banish reveal
+if (currentUser && currentUser.role === 'player') {
+    database.ref('players/' + currentUser.id + '/endGameReadyToRevealBanish').on('value', (snap) => {
+        const btn = document.getElementById('endgame-banish-reveal-btn');
+        if (!btn) return;
+        if (snap.val() === true) btn.style.display = 'block';
+    });
+}
 
 // Banishment reveal big text
 ['banishment', 'banishmentTie'].forEach((voteKey) => {
     database.ref('game/endGame/' + voteKey + '/revealedVotes').on('child_added', (snap) => {
         const data = snap.val();
         if (!data || Date.now() - (data.timestamp || 0) > 10000) return;
+
+        // Ensure reveal flag is set so viewer mode allows name-box display
+        window._endGameRevealActive = true;
 
         if (data.seat && data.votedFor && typeof showVoteOnNameTag === 'function') {
             showVoteOnNameTag(data.seat, data.votedFor, false);
@@ -5859,6 +8860,21 @@ listenEndGameBanishTally('banishmentTie', 'endgame-banish-tie-tally');
         setTimeout(() => { el.remove(); }, 3500);
 
         if (data.name) database.ref('game/phaseTitle').set(data.name + ' voted for...');
+
+        // Gold glow on the current revealer's seat
+        if (data.seat) {
+            document.querySelectorAll('.video-seat').forEach(s => {
+                s.style.boxShadow = '';
+                const circle = s.querySelector('circle');
+                if (circle) circle.setAttribute('stroke', '#00FF00');
+            });
+            const _glowSeat = document.getElementById('seat-' + data.seat);
+            if (_glowSeat) {
+                _glowSeat.style.boxShadow = '0 0 40px 15px rgba(255, 215, 0, 1)';
+                const _glowCircle = _glowSeat.querySelector('circle');
+                if (_glowCircle) _glowCircle.setAttribute('stroke', '#FFD700');
+            }
+        }
 
         if (currentUser.role === 'host') {
             database.ref('game/endGame/' + voteKey).once('value', (vSnap) => {
@@ -6175,10 +9191,22 @@ function _displayWinners(roles) {
 window.addEventListener('load', () => {
     window.performSmokeReveal = function() {
         const btn = document.getElementById('endgame-smoke-reveal-btn');
-        if (!btn || btn.style.display !== 'block') return;
-        btn.style.display = 'none';
-        database.ref('game/endGame/smokeVote/votes/' + currentUser.id).once('value', (snap) => {
-            const choice = snap.val();
+        if (btn) btn.style.display = 'none'; // hide immediately to prevent double-tap
+        // Check this player's vote in Firebase (more reliable than btn.style check)
+        database.ref('game/endGame/smokeVote').once('value', (smokeSnap) => {
+            const smokeData = smokeSnap.val();
+            if (!smokeData || !smokeData.revealActive) {
+                if (btn) btn.style.display = 'block'; // restore if not in reveal
+                return;
+            }
+            // Check it's actually this player's turn
+            const isMyTurn = smokeData.currentRevealerId === currentUser.id;
+            const voteData = (smokeData.votes || {})[currentUser.id];
+            if (!isMyTurn && !voteData) {
+                if (btn) btn.style.display = 'block';
+                return;
+            }
+            const choice = voteData || null;
             const color  = choice === 'end' ? '#4169E1' : '#DC143C';
             database.ref('game/endGame/smokeReveal').set({
                 playerId:      currentUser.id,
@@ -6195,24 +9223,30 @@ window.addEventListener('load', () => {
 
     window.performBanishmentReveal = function() {
         const btn = document.getElementById('endgame-banish-reveal-btn');
-        if (!btn || btn.style.display !== 'block') return;
-        btn.style.display = 'none';
+        if (btn) btn.style.display = 'none'; // hide immediately to prevent double-tap
         const tryKey = (voteKey) => {
-            database.ref('game/endGame/' + voteKey + '/currentRevealer').once('value', (crSnap) => {
-                if (crSnap.val() !== currentUser.id) return;
-                database.ref('game/endGame/' + voteKey + '/votes/' + currentUser.id).once('value', (vSnap) => {
-                    const votedSeat = vSnap.val();
-                    if (!votedSeat) return;
-                    const seatNum = parseInt(votedSeat, 10);
-                    database.ref('players').once('value', (pSnap) => {
-                        const players      = pSnap.val() || {};
-                        const targetPlayer = Object.values(players).find((p) => p.seat === seatNum);
-                        const votedFor     = targetPlayer ? targetPlayer.name : ('Seat ' + seatNum);
-                        database.ref('game/endGame/' + voteKey + '/revealedVotes/' + currentUser.id).set({
-                            seat: currentUser.seat, name: currentUser.name, votedFor, timestamp: Date.now(),
-                        });
-                        database.ref('game/endGame/' + voteKey + '/alreadyRevealed/' + currentUser.id).set(true);
+            database.ref('game/endGame/' + voteKey).once('value', (snap) => {
+                const data = snap.val();
+                if (!data || !data.revealed) return; // not in reveal phase
+                const votedSeat = (data.votes || {})[currentUser.id];
+                if (!votedSeat) return; // this player didn't vote in this round
+                const alreadyRevealed = (data.alreadyRevealed || {})[currentUser.id];
+                if (alreadyRevealed) return; // already revealed
+                // Check it is actually this player's turn
+                if (data.currentRevealer !== currentUser.id) {
+                    if (btn) btn.style.display = 'block'; // restore — not our turn yet
+                    return;
+                }
+                const seatNum = parseInt(votedSeat, 10);
+                database.ref('players').once('value', (pSnap) => {
+                    const players      = pSnap.val() || {};
+                    const targetPlayer = Object.values(players).find((p) => p.seat === seatNum);
+                    const votedFor     = targetPlayer ? targetPlayer.name : ('Seat ' + seatNum);
+                    database.ref('game/endGame/' + voteKey + '/revealedVotes/' + currentUser.id).set({
+                        seat: currentUser.seat, name: currentUser.name, votedFor, timestamp: Date.now(),
                     });
+                    database.ref('game/endGame/' + voteKey + '/alreadyRevealed/' + currentUser.id).set(true);
+                    database.ref('players/' + currentUser.id + '/endGameReadyToRevealBanish').set(false);
                 });
             });
         };
@@ -6221,7 +9255,11 @@ window.addEventListener('load', () => {
     };
 });
 
-// Winners listener
+// Winners listener — PHASE TITLE BAR update.
+// NOTE: This is intentionally a SECOND .on('value') listener on game/endGame/winners.
+// The first listener (near "END GAME — WINNERS DISPLAY") handles the full-screen overlay.
+// This one handles the phase title bar (#phase-name) and the inline names display
+// (#endgame-winners-names-display). Both must exist — they update different DOM elements.
 database.ref('game/endGame/winners').on('value', (snap) => {
     const d       = snap.val();
     const phaseEl = document.getElementById('phase-name');
@@ -6254,9 +9292,22 @@ database.ref('game/endGame/winners').on('value', (snap) => {
 });
 
 // Phase title listener
+// Clear the HTML default immediately so it never flashes 'Waiting to Start'
+(function() {
+    const _pn = document.getElementById('phase-name');
+    if (_pn && _pn.textContent === 'Waiting to Start') _pn.textContent = '';
+})();
+
 database.ref('game/phaseTitle').on('value', (snap) => {
     const t = snap.val();
     if (!t) return;
+    // Don't apply end-game phaseTitles ('End Game', 'X voted for...') when
+    // the current phase is lobby/voting — that's stale data from a prior session.
+    const _phNow = window._currentPhase || sessionStorage.getItem('currentPhase') || '';
+    const _isEndGameTitle = t === 'End Game' || t.includes('voted for') || t.includes('revealing their');
+    const _isEndGamePhase = _phNow.startsWith('end') || _phNow.includes('banish') ||
+                            _phNow.includes('smoke') || _phNow.includes('role-reveal');
+    if (_isEndGameTitle && !_isEndGamePhase) return; // stale — ignore
     database.ref('game/endGame/winners').once('value', (wSnap) => {
         if (wSnap.val()) return;
         const el = document.getElementById('phase-name');

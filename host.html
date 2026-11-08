@@ -2,16 +2,49 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Host - Subversion: The Traitors</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+
+    <!-- Floating mic button for SVTr3Prod observers (no seat = no seat mic button) -->
+    <div id="obs-mic-btn" onclick="window.toggleMic && window.toggleMic()"
+         title="Toggle Microphone (M)"
+         style="display:none; position:fixed; top:30px; z-index:1500; cursor:pointer;
+                width:80px; height:80px; transition:filter 0.2s;">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"
+             style="width:100%;height:100%;overflow:visible;">
+            <circle cx="40" cy="40" r="38" fill="rgba(255,255,255,0.15)"
+                    stroke="rgba(255,255,255,0.4)" stroke-width="2" id="obs-mic-circle"/>
+            <defs>
+                <path id="obsMicTopArc" d="M 10,44 A 30,30 0 0,1 70,44"/>
+                <path id="obsMicBotArc" d="M 10,44 A 30,30 0 0,0 70,44"/>
+            </defs>
+            <text font-size="11" font-weight="bold" fill="white" font-family="Arial,sans-serif" letter-spacing="1">
+                <textPath href="#obsMicTopArc" startOffset="50%" text-anchor="middle" dy="3">MIC</textPath>
+            </text>
+            <!-- Mic SVG icon in centre -->
+            <svg x="22" y="18" viewBox="0 0 24 24" fill="white" width="36" height="36" id="obs-mic-icon">
+                <path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+            <text font-size="11" font-weight="bold" fill="white" font-family="Arial,sans-serif" letter-spacing="1">
+                <textPath href="#obsMicBotArc" startOffset="50%" text-anchor="middle" dy="-3">ON/OFF</textPath>
+            </text>
+        </svg>
+    </div>
+
     <div class="game-interface">
         <!-- Timer/Phase Display (floating, centered with Host seat) -->
         <div class="timer-phase-display" id="timer-phase-display">
-            <div class="phase-name" id="phase-name">Waiting to Start</div>
+            <div class="phase-name" id="phase-name"></div>
             <div class="timer" id="timer" style="display: none;">00:00</div>
+        </div>
+
+        <!-- Breakout room name — top-left corner, shown when in a breakout room -->
+        <div id="breakout-room-label" style="display:none; position:fixed; top:20px; left:20px; text-align:left; z-index:9999; pointer-events:none;">
+            <div id="breakout-room-name" style="font-size:2.8rem; font-weight:bold; color:#FFD700; letter-spacing:1px; text-shadow:1px 1px 3px rgba(0,0,0,0.8);"></div>
+            <div id="prod-in-room-display" style="font-size:1.4rem; font-weight:bold; color:#FFD700; margin-top:2px; min-height:1.1em; text-shadow:1px 1px 3px rgba(0,0,0,0.8);"></div>
         </div>
 
         <!-- Main Content Area -->
@@ -19,20 +52,20 @@
             <!-- Video Circle -->
             <div class="video-circle-container">
                 <!-- Host Seat - Double size, centered in player area -->
-                <div class="video-seat host" id="seat-A">
+                <div class="video-seat host" id="seat-A" style="visibility:hidden">
                     <div id="video-A"></div>
                     <div class="seat-label" id="seat-label-A">
+                        <button class="av-btn mic-btn" id="mic-btn-A" title="Toggle Mic (M)" onclick="event.stopPropagation(); window.toggleMic && window.toggleMic()"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
+                        <button class="av-btn cam-btn" id="cam-btn-A" title="Toggle Camera (V)" onclick="event.stopPropagation(); window.toggleCam && window.toggleCam()"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></button>
                         <span class="player-name" id="name-A">Host</span>
                         <span class="player-pronouns" id="pronouns-A"></span>
                     </div>
-                    <div class="seat-av-controls" id="av-controls-A" style="display:none">
-                        <button class="av-btn mic-btn" id="mic-btn-A" title="Toggle Mic (M)" onclick="event.stopPropagation(); window.toggleMic && window.toggleMic()"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
-                        <button class="av-btn cam-btn" id="cam-btn-A" title="Toggle Camera (V)" onclick="event.stopPropagation(); window.toggleCam && window.toggleCam()"><svg viewBox="0 0 24 24" fill="white" width="14" height="14"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></button>
-                    </div>
+                    <div class="seat-av-controls" id="av-controls-A" style="display:none"></div>
                     <div class="av-status-icons" id="av-status-A">
                         <span class="av-icon mic-off-icon" id="mic-off-A" style="display:none"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></span>
                         <span class="av-icon cam-off-icon" id="cam-off-A" style="display:none"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></span>
                     </div>
+                    <div class="audio-ring" id="aring-A"></div>
                 </div>
             
                 <div class="video-circle" id="video-circle">
@@ -43,8 +76,8 @@
             <div id="room-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 150; pointer-events: none;">
                 <!-- Dark backdrop that blurs main roundtable -->
                 <div id="room-backdrop" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px);"></div>
-                <!-- Room name display -->
-                <div id="room-name-display" style="position: absolute; top: 30px; left: 50%; transform: translateX(-50%); font-size: 2.5rem; font-weight: bold; color: #FFD700; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); z-index: 10; pointer-events: none;"></div>
+                <!-- Room name display — hidden; room name now shown in #breakout-room-label (top-left) -->
+                <div id="room-name-display" style="display:none;"></div>
                 <!-- Room seats container -->
                 <div id="room-seats-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
             </div>
@@ -57,7 +90,6 @@
                     <button class="tab-button" onclick="switchTab('rooms')">Rooms</button>
                     <button class="tab-button" onclick="switchTab('vote-count')">Vote Count</button>
                     <button class="tab-button" onclick="switchTab('waiting-room')">Waiting Room</button>
-                    <button class="tab-button" onclick="switchTab('turret')">Turret</button>
                     <button class="tab-button" onclick="switchTab('end-game-tab')" style="background:linear-gradient(135deg,#8B0000,#DC143C);color:white;">End Game</button>
                 </div>
                 
@@ -80,7 +112,7 @@
                             <h4>General</h4>
                             
                             <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                                <button onclick="showTimerModal()" class="control-button" style="flex: 1;">Set Timer</button>
+                                <button onclick="const _tm=document.getElementById('timer-modal');_tm.classList.add('visible');_tm.style.display='flex';" class="control-button" style="flex: 1;">Set Timer</button>
                                 <button onclick="startTimer()" class="control-button" style="flex: 1;" id="start-timer-btn">Start Timer</button>
                             </div>
                             
@@ -92,6 +124,23 @@
                             <div style="display: flex; gap: 10px;">
                                 <button onclick="muteAllPlayers()" class="control-button" style="flex: 1;" id="mute-all-btn">Mute All</button>
                                 <button onclick="disableAllCameras()" class="control-button" style="flex: 1;" id="cameras-off-btn">Cameras Off</button>
+                            </div>
+
+
+                            <!-- Per-player mute controls (collapsible) -->
+                            <div style="width:100%;height:1px;background:rgba(255,255,255,0.15);margin:12px 0;"></div>
+                            <div onclick="toggleIndividualMute()"
+                                 style="display:flex;justify-content:space-between;align-items:center;
+                                        margin-bottom:6px;cursor:pointer;user-select:none;"
+                                 title="Click to expand/collapse">
+                                <span style="font-size:0.8rem;color:#aaa;font-weight:600;letter-spacing:0.05em;">INDIVIDUAL MUTE</span>
+                                <span id="individual-mute-chevron"
+                                      style="font-size:0.7rem;color:#666;transition:transform 0.2s;">▲</span>
+                            </div>
+                            <div id="per-player-mute-list"
+                                 style="max-height:220px;overflow-y:auto;display:flex;
+                                        flex-direction:column;gap:4px;">
+                                <div style="color:#555;font-size:0.8rem;">No players seated</div>
                             </div>
 
                             <!-- Roundtable Gong -->
@@ -135,32 +184,19 @@
                             </button>
                         </div>
 
-                        <!-- Announcements -->
-                        <div class="control-section">
-                            <h4>Announcements</h4>
-                            <textarea id="announcement-text" placeholder="Type announcement here..." 
-                                      style="width: 100%; height: 80px; padding: 10px; 
-                                             background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
-                                             border-radius: 5px; color: white; font-family: inherit; resize: vertical;"></textarea>
-                            <button onclick="sendAnnouncement()" class="control-button primary" style="width: 100%; margin-top: 10px;">
-                                Send Announcement
-                            </button>
-                        </div>
-
-                        <!-- Production Seats -->
-                        <div class="control-section">
-                            <h4>Production Seats</h4>
-                            <p style="font-size: 0.85rem; color: #bbb; margin-bottom: 10px;">
-                                Add a seat before each additional production member opens host.html. They will claim the next available seat.
-                            </p>
-                            <div id="prod-seats-list" style="margin-bottom:10px;"></div>
-                            <div style="display:flex; gap:8px;">
-                                <button onclick="addProdSeat()" class="control-button" style="flex:1; background:#1a6e1a;">
-                                    ➕ Add Seat
-                                </button>
-                                <button onclick="removeProdSeat()" class="control-button" style="flex:1; background:#6e1a1a;">
-                                    ➖ Remove Seat
-                                </button>
+                        <!-- HAND RAISE QUEUE -->
+                        <div class="control-section" id="hand-queue-section" style="margin-top: 20px;">
+                            <h4 style="margin-bottom: 10px;">✋ Hand Queue</h4>
+                            <div id="hand-queue-list" style="
+                                min-height: 40px;
+                                background: rgba(255,255,255,0.04);
+                                border: 1px solid rgba(255,255,255,0.12);
+                                border-radius: 8px;
+                                padding: 10px;
+                                font-size: 0.9rem;
+                                color: #bbb;
+                            ">
+                                <div id="hand-queue-empty" style="color:#555; font-style:italic;">No hands raised</div>
                             </div>
                         </div>
 
@@ -176,49 +212,49 @@
                     <div class="tab-content" id="rooms">
                         <h3>Travel to Room</h3>
                         <div class="room-list">
-                            <div class="room-item" onclick="hostJoinRoom('main')" id="host-room-item-main">
+                            <div class="room-item" onclick="joinMyRoom('main')" id="host-room-item-main">
                                 <div class="room-name">
                                     <span>Main Roundtable</span>
                                     <span class="room-count" id="host-count-main">0/24</span>
                                 </div>
                                 <div class="room-players" id="players-main"></div>
                             </div>
-                            <div class="room-item" onclick="hostJoinRoom('kitchen')" id="host-room-item-kitchen">
+                            <div class="room-item" onclick="joinMyRoom('kitchen')" id="host-room-item-kitchen">
                                 <div class="room-name">
                                     <span>Kitchen</span>
                                     <span class="room-count" id="host-count-kitchen">0/5</span>
                                 </div>
                                 <div class="room-players" id="players-kitchen"></div>
                             </div>
-                            <div class="room-item" onclick="hostJoinRoom('library')" id="host-room-item-library">
+                            <div class="room-item" onclick="joinMyRoom('library')" id="host-room-item-library">
                                 <div class="room-name">
                                     <span>Library</span>
                                     <span class="room-count" id="host-count-library">0/5</span>
                                 </div>
                                 <div class="room-players" id="players-library"></div>
                             </div>
-                            <div class="room-item" onclick="hostJoinRoom('living')" id="host-room-item-living">
+                            <div class="room-item" onclick="joinMyRoom('living')" id="host-room-item-living">
                                 <div class="room-name">
                                     <span>Living Room</span>
                                     <span class="room-count" id="host-count-living">0/5</span>
                                 </div>
                                 <div class="room-players" id="players-living"></div>
                             </div>
-                            <div class="room-item" onclick="hostJoinRoom('courtyard')" id="host-room-item-courtyard">
+                            <div class="room-item" onclick="joinMyRoom('courtyard')" id="host-room-item-courtyard">
                                 <div class="room-name">
                                     <span>Courtyard</span>
                                     <span class="room-count" id="host-count-courtyard">0/5</span>
                                 </div>
                                 <div class="room-players" id="players-courtyard"></div>
                             </div>
-                            <div class="room-item" onclick="hostJoinRoom('bathroom')" id="host-room-item-bathroom">
+                            <div class="room-item" onclick="joinMyRoom('bathroom')" id="host-room-item-bathroom">
                                 <div class="room-name">
                                     <span>Bathroom</span>
                                     <span class="room-count" id="host-count-bathroom">0/3</span>
                                 </div>
                                 <div class="room-players" id="players-bathroom"></div>
                             </div>
-                            <div class="room-item" onclick="hostJoinRoom('gym')" id="host-room-item-gym">
+                            <div class="room-item" onclick="joinMyRoom('gym')" id="host-room-item-gym">
                                 <div class="room-name">
                                     <span>Gym</span>
                                     <span class="room-count" id="host-count-gym">0/5</span>
@@ -289,7 +325,20 @@
                     <!-- Vote Count Tab -->
                     <div class="tab-content" id="vote-count">
                         <h3>Voting Controls</h3>
-                        
+
+                        <!-- Timer controls duplicated here so host can time the vote -->
+                        <div class="control-section">
+                            <h4>Timer</h4>
+                            <div style="display: flex; gap: 10px; margin-bottom: 6px;">
+                                <button onclick="const _tm=document.getElementById('timer-modal');_tm.classList.add('visible');_tm.style.display='flex';" class="control-button" style="flex: 1;">Set Timer</button>
+                                <button onclick="startTimer()" class="control-button" style="flex: 1;">Start Timer</button>
+                            </div>
+                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <button onclick="pauseTimer()" class="control-button" style="flex: 1;">Pause Timer</button>
+                                <button onclick="cancelTimer()" class="control-button" style="flex: 1;">Cancel Timer</button>
+                            </div>
+                        </div>
+
                         <div class="control-section">
                             <h4>Voting Phase</h4>
                             <button onclick="startVoting()" class="control-button primary" style="width: 100%; margin-bottom: 10px;">
@@ -367,6 +416,9 @@
                             <button onclick="enableCircleOfTruthSelection()" class="control-button primary" style="width: 100%; margin-bottom: 10px;">
                                 Select Player for Circle of Truth
                             </button>
+                            <button onclick="endCircleOfTruth()" class="control-button" style="width: 100%; margin-bottom: 10px; background: linear-gradient(135deg, #4a1a1a, #8B0000);">
+                                End Circle of Truth
+                            </button>
                             <div id="circle-of-truth-status" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 5px;">
                                 <p style="margin: 0; color: #999;">No player selected</p>
                             </div>
@@ -374,40 +426,13 @@
                     </div>
     
                     <!-- Waiting Room Tab -->
-                    <div class="tab-content" id="waiting-room">
+                    <div class="tab-content" id="waiting-room" style="flex-direction:column; height:calc(100vh - 120px);">
                         <h3>Waiting Room</h3>
-                        <div id="lobby-list" style="max-height: 400px; overflow-y: auto;">
+                        <div id="lobby-list" style="flex:1; overflow-y:auto; min-height:0;">
                             <div style="color: #666;">No players in waiting room</div>
                         </div>
                     </div>
 
-                    <!-- Turret Tab -->
-                    <div class="tab-content" id="turret">
-                        <h3>The Turret</h3>
-
-                        <button onclick="showTurretInviteModal()" class="control-button primary" style="width: 100%; margin-bottom: 15px;">
-                            Invite Players to Turret
-                        </button>
-
-                        <p style="font-size: 0.85rem; color: #bbb; margin-bottom: 15px;">
-                            Players in the Turret cannot be seen or heard by other players
-                        </p>
-
-                        <!-- Room display — same format as Rooms tab -->
-                        <div class="room-item" onclick="hostJoinRoom('turret')" id="host-room-item-turret" style="margin-bottom: 10px; cursor: pointer;">
-                            <div class="room-name">
-                                <span>The Turret</span>
-                                <span class="room-count" id="host-count-turret">0/5</span>
-                            </div>
-                            <div class="room-players" id="players-turret"></div>
-                        </div>
-
-                        <div class="control-section" style="margin-top: 20px;">
-                            <button onclick="sendTurretPlayersToWaiting()" class="control-button danger" style="width: 100%;">
-                                Send All to Waiting Room
-                            </button>
-                        </div>
-                    </div>
 
                     <!-- End Game Tab -->
                     <div class="tab-content" id="end-game-tab">
@@ -585,10 +610,20 @@
     
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     
     <!-- Firebase Config -->
-    <script src="firebase-config.js"></script>
+    <script src="firebase-config.js">
+    </script>
+    <script>
+        // Anonymous auth — required for Firebase security rules.
+        // Players never see this; it happens silently in the background.
+        firebase.auth().signInAnonymously()
+            .then(() => { console.log("🔐 Firebase: signed in anonymously"); })
+            .catch((err) => { console.warn("🔐 Firebase auth error:", err.code, err.message); });
+    </script></script>
 
     <!-- Jitsi Meet API -->
     <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
@@ -631,7 +666,43 @@
         // Check if host already exists in Firebase (page refresh)
         database.ref('players/host').once('value', (hostSnapshot) => {
             const existingHost = hostSnapshot.val();
-            
+
+            // ── SVTr3Prod: observer path — skip seat-claiming entirely ───────────
+            // These users never get a seat. Send them straight to observer registration.
+            if (sessionStorage.getItem('hostType') === 'observer') {
+                console.log('🎬 SVTr3Prod password — loading as unseated observer');
+                document.body.classList.remove('player-loading');
+                document.body.classList.add('player-ready');
+                // Check if this tab already has a registered observer record
+                const _obsExisting = sessionStorage.getItem('prodObserverId');
+                if (_obsExisting) {
+                    // Refresh: re-join LiveKit and restore state
+                    const _storedName = sessionStorage.getItem('playerName') || 'Production';
+                    window.currentUser = window.currentUser || {};
+                    window.currentUser.id      = _obsExisting;
+                    window.currentUser.name    = _storedName;
+                    window.currentUser.role    = 'observer';
+                    window.currentUser.isProdMember = true;
+                    window.currentUser.isObserver   = true;
+                    window.currentUser.room    = 'main';
+                    window.currentUser.seat    = null;
+                    database.ref('players/' + _obsExisting).update({
+                        lastActive: Date.now(), status: 'active', room: 'main', id: _obsExisting
+                    });
+                    // Restore floating mic button, read muted state from Firebase
+                    database.ref('players/' + _obsExisting + '/audioMuted').once('value', (ms) => {
+                        _showObserverMicBtn(!!ms.val());
+                    });
+                    if (typeof window.joinLiveKitRoom === 'function') window.joinLiveKitRoom('main');
+                } else {
+                    // First load: show name modal then register
+                    window._submitAsProdObserver = true;
+                    const _nm = document.getElementById('host-name-pronouns-modal');
+                    if (_nm) _nm.classList.add('visible');
+                }
+                return;
+            }
+
             // Determine if THIS tab is the main host or a new production member
             const _prodLetter = sessionStorage.getItem('prodLetter');
             // _myTabId is generated once per tab (persists through refresh, not new tabs)
@@ -690,6 +761,22 @@
                 }
                 console.log('✅ Host restored:', existingHost.name);
 
+                // On host hard-refresh: if the game was in night or breakfast,
+                // push phase back to lobby so player pages leave the overlay.
+                // Also send forceReset so player UIs soft-reset and show their seats.
+                database.ref('game/phase').once('value', (_phSnap) => {
+                    const _ph = _phSnap.val();
+                    if (_ph === 'night' || _ph === 'breakfast') {
+                        console.log('🔄 Host refresh during overlay phase — resetting to lobby');
+                        database.ref('game/phase').set('lobby');
+                        database.ref('game/breakfastSeatCounter').remove();
+                    }
+                    // Always send forceReset on host hard-refresh so player pages
+                    // restore their seat visibility.
+                    database.ref('game/forceReset').set(Date.now());
+                    setTimeout(() => database.ref('game/forceReset').remove(), 800);
+                });
+
             } else if (!existingHost || !existingHost.tabId) {
                 // ── CASE 3: No main host, or host record has no tabId (post-reset) ──
                 // Treat both as unclaimed — this tab can claim the main host seat
@@ -722,14 +809,15 @@
                         status: 'active',
                         isHost: true,
                         tabId: _myTabId,
-                        lastActive: Date.now()
+                        lastActive: Date.now(),
+                        audioMuted: false,
+                        videoMuted: false,
                     });
                     // Clear stale prod seats AND prod player records
                     database.ref('prodSeats').remove();
                     database.ref('players').orderByChild('isProdMember').equalTo(true)
                         .once('value', (snap) => snap.forEach(child => child.ref.remove()));
                     console.log('🆕 New main host — seat claimed');
-                    _cleanStaleProdSeats(); // clean up any stale claimed seats from previous session
                     sessionStorage.setItem('playerSeat', 'A'); // so game.js reads seat on init
                     sessionStorage.setItem('playerName', currentUser.name);
                     document.body.classList.remove('player-loading');
@@ -765,171 +853,76 @@
 
 
         // ── Production Seat Management ──────────────────────────────────────────────
-        const PROD_LETTERS = ['B','C','D','E','F','G','H','I','J'];
-
-        function addProdSeat() {
-            _cleanStaleProdSeats();
-            database.ref('prodSeats').once('value', (snap) => {
-                const existing = snap.val() || {};
-                // Find next letter not yet reserved
-                let next = null;
-                for (const l of PROD_LETTERS) {
-                    if (!existing[l]) { next = l; break; }
-                }
-                if (!next) {
-                    alert('Maximum production seats reached (B–J).');
-                    return;
-                }
-                database.ref('prodSeats/' + next).set({ reserved: true, claimed: false });
-                console.log('🎬 Reserved prod seat:', next);
-            });
-        }
-
-        function removeProdSeat() {
-            database.ref('prodSeats').once('value', (snap) => {
-                const existing = snap.val() || {};
-                // Remove the highest unclaimed letter first
-                let toRemove = null;
-                for (let i = PROD_LETTERS.length - 1; i >= 0; i--) {
-                    const l = PROD_LETTERS[i];
-                    if (existing[l] && !existing[l].claimed) {
-                        toRemove = l;
-                        break;
-                    }
-                }
-                if (!toRemove) {
-                    alert('No unclaimed prod seats to remove.');
-                    return;
-                }
-                database.ref('prodSeats/' + toRemove).remove();
-                // Also remove player record if it somehow exists
-                database.ref('players/prod-' + toRemove).remove();
-                console.log('🎬 Removed prod seat:', toRemove);
-            });
-        }
-
-        // Live list of prod seats in the Production tab
-        database.ref('prodSeats').on('value', (snap) => {
-            const seats = snap.val() || {};
-            const list = document.getElementById('prod-seats-list');
-            if (!list) return;
-            const letters = Object.keys(seats).sort();
-            if (letters.length === 0) {
-                list.innerHTML = '<p style="color:#888; font-size:12px; font-style:italic;">No production seats added yet. Seat A is always the main host.</p>';
-                return;
-            }
-            list.innerHTML = letters.map(l => {
-                const s = seats[l];
-                const status = s.claimed
-                    ? `<span style="color:#4CAF50;">✅ Claimed by ${s.name || l}</span>`
-                    : `<span style="color:#FFD700;">⏳ Reserved — waiting for member</span>`;
-                return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.1);">
-                    <span style="color:white; font-weight:bold;">Seat ${l}</span>
-                    ${status}
-                </div>`;
-            }).join('');
-        });
-
-
-        // Clean up stale claimed prod seats (prod member closed without beforeunload)
-        function _cleanStaleProdSeats() {
-            database.ref('prodSeats').once('value', (seatSnap) => {
-                const seats = seatSnap.val() || {};
-                database.ref('players').once('value', (playerSnap) => {
-                    const players = playerSnap.val() || {};
-                    Object.entries(seats).forEach(([letter, seat]) => {
-                        if (seat.claimed) {
-                            // Check if the player record still exists
-                            const hasPlayer = Object.values(players).some(
-                                p => p.isProdMember && String(p.seat) === letter
-                            );
-                            if (!hasPlayer) {
-                                console.log('🧹 Cleaning stale claimed prod seat:', letter);
-                                database.ref('prodSeats/' + letter).update({ claimed: false, name: null });
-                            }
-                        }
-                    });
-                });
-            });
-        }
+        const PROD_LETTERS = ['B','C','D'];
 
         // ── Production Member Registration ──────────────────────────────────
+        // Show the floating mic button for SVTr3Prod observers
+        function _showObserverMicBtn(startMuted) {
+            const btn = document.getElementById('obs-mic-btn');
+            if (!btn) return;
+            // Position same as raise-hand-btn would be
+            const _isMob = window.innerWidth <= 600;
+            const leftSectionWidth = window.innerWidth * (_isMob ? 0.06 : 0.12);
+            btn.style.left = (leftSectionWidth + (_isMob ? 6 : 12)) + 'px';
+            btn.style.display = 'block';
+            btn.classList.toggle('av-muted', !!startMuted);
+            // Reposition on window resize
+            window.addEventListener('resize', () => {
+                const _m = window.innerWidth <= 600;
+                const _lw = window.innerWidth * (_m ? 0.06 : 0.12);
+                btn.style.left = (_lw + (_m ? 6 : 12)) + 'px';
+            }, { passive: true });
+        }
+        window._showObserverMicBtn = _showObserverMicBtn;
+
         window.registerAsProdMember = function() {
-            // Find next unclaimed reserved prod seat
-            database.ref('prodSeats').once('value', (snap) => {
-                const seats = snap.val() || {};
-                let claimLetter = null;
-                const _letters = ['B','C','D','E','F','G','H','I','J'];
-                for (const l of _letters) {
-                    if (seats[l] && !seats[l].claimed) {
-                        claimLetter = l;
-                        break;
-                    }
-                }
-                if (!claimLetter) {
-                    // No reserved unclaimed seats — show blocking wait screen
-                    // Keep the page in player-loading state so nothing initialises
-                    document.body.classList.add('player-loading');
-                    document.body.classList.remove('player-ready');
-                    // Hide the name modal if it crept open
-                    const _nm = document.getElementById('host-name-pronouns-modal');
-                    if (_nm) _nm.classList.remove('visible');
-                    // Show a waiting message overlay
-                    let _waitDiv = document.getElementById('prod-wait-overlay');
-                    if (!_waitDiv) {
-                        _waitDiv = document.createElement('div');
-                        _waitDiv.id = 'prod-wait-overlay';
-                        _waitDiv.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:white;font-family:sans-serif;text-align:center;padding:40px;';
-                        _waitDiv.innerHTML = '<h2 style="color:#FFD700;margin-bottom:16px;">⏳ Waiting for a Production Seat</h2>' +
-                            '<p style="color:#bbb;max-width:360px;line-height:1.6;">No production seat has been reserved yet.<br><br>Ask the <strong style="color:white;">main host</strong> to click <strong style="color:#4CAF50;">➕ Add Seat</strong> in the Production Seats section of their Game Controls tab.</p>' +
-                            '<p style="color:#888;margin-top:24px;font-size:13px;">This page will automatically claim a seat when one becomes available.</p>';
-                        document.body.appendChild(_waitDiv);
-                    }
-                    // Watch prodSeats for a new unclaimed slot — auto-claim when one appears
-                    database.ref('prodSeats').on('value', (snap) => {
-                        const seats = snap.val() || {};
-                        const available = ['B','C','D','E','F','G','H','I','J']
-                            .find(l => seats[l] && !seats[l].claimed);
-                        if (available) {
-                            database.ref('prodSeats').off('value');
-                            const _wd = document.getElementById('prod-wait-overlay');
-                            if (_wd) _wd.remove();
-                            window.registerAsProdMember();
-                        }
+            // Check which of B/C/D are already claimed in players Firebase
+            database.ref('players').orderByChild('isProdMember').equalTo(true)
+                .once('value', (snap) => {
+                    const _takenLetters = [];
+                    const _now = Date.now();
+                    snap.forEach(child => {
+                        const _p = child.val();
+                        if (!_p || !_p.seat || !['B','C','D'].includes(_p.seat)) return;
+                        // Consider a record stale if lastActive is missing or >60s old.
+                        // Stale records are from prior sessions and should not block claiming.
+                        const _age = _p.lastActive ? (_now - _p.lastActive) : Infinity;
+                        if (_age < 60000) _takenLetters.push(_p.seat);
                     });
-                    return;
-                }
-                // Atomically claim the seat using Firebase transaction
-                // This prevents two browsers from claiming the same seat simultaneously
-                database.ref('prodSeats/' + claimLetter + '/claimed').transaction(
-                    (current) => {
-                        // Only claim if currently unclaimed
-                        if (current === false || current === null || current === undefined) {
-                            return true; // claim it
-                        }
-                        return; // abort — already claimed by someone else
-                    },
-                    (error, committed) => {
-                        if (error) {
-                            console.error('Transaction error:', error);
-                            window.registerAsProdMember(); // retry
-                            return;
-                        }
-                        if (!committed) {
-                            // Seat was claimed between our read and write — try again
-                            console.log('⚡ Seat', claimLetter, 'was taken — retrying');
-                            window.registerAsProdMember();
-                            return;
-                        }
-                        // Transaction committed — we own this seat
-                        console.log('🎬 Claiming prod seat:', claimLetter);
-                        window._submitAsProdMember = true;
-                        window._pendingProdLetter = claimLetter;
-                        const modal = document.getElementById('host-name-pronouns-modal');
-                        if (modal) modal.classList.add('visible');
+                    const _freeLetter = ['B','C','D'].find(l => !_takenLetters.includes(l));
+
+                    if (!_freeLetter) {
+                        // All B/C/D taken — SVTr3Main user becomes observer
+                        console.log('🎬 All prod seats taken — loading as unseated observer');
+                        window._submitAsProdObserver = true;
+                        document.body.classList.remove('player-loading');
+                        document.body.classList.add('player-ready');
+                        const _nm2 = document.getElementById('host-name-pronouns-modal');
+                        if (_nm2) _nm2.classList.add('visible');
+                        return;
                     }
-                );
-            });
+
+                    // Claim the free letter with a tabId transaction to prevent race conditions
+                    const _claimId = 'prod-' + _freeLetter;
+                    database.ref('players/' + _claimId + '/tabId').transaction(
+                        (current) => {
+                            if (!current) return _myTabId; // claim it
+                            return; // abort — another tab just claimed it
+                        },
+                        (error, committed) => {
+                            if (!committed || error) {
+                                console.log('⚡ Seat', _freeLetter, 'race lost — retrying');
+                                window.registerAsProdMember(); // retry
+                                return;
+                            }
+                            console.log('🎬 Claiming prod seat:', _freeLetter);
+                            window._submitAsProdMember = true;
+                            window._pendingProdLetter = _freeLetter;
+                            const modal = document.getElementById('host-name-pronouns-modal');
+                            if (modal) modal.classList.add('visible');
+                        }
+                    );
+                });
         };
 
         // Called from submitHostNameAndPronouns when _submitAsProdMember is true
@@ -950,11 +943,12 @@
                 sessionStorage.setItem('playerName', name);
                 sessionStorage.removeItem('playerSeat'); // ensure stale 'A' can't persist
 
-                currentUser.id       = prodId;
-                currentUser.seat     = letter;
-                currentUser.role     = 'host';
-                currentUser.name     = name;
-                currentUser.pronouns = pronouns;
+                currentUser.id           = prodId;
+                currentUser.seat         = letter;
+                currentUser.role         = 'host';
+                currentUser.isProdMember = true;
+                currentUser.name         = name;
+                currentUser.pronouns     = pronouns;
 
                 // Register in Firebase — include tabId for refresh verification
                 const _prodTabId = sessionStorage.getItem('hostTabId');
@@ -1021,6 +1015,49 @@
             // Update session storage
             sessionStorage.setItem('playerName', trimmedName);
             
+            // If registering as an unseated prod observer (no letter seat)
+            if (window._submitAsProdObserver) {
+                window._submitAsProdObserver = false;
+                // Write a minimal Firebase record so they appear in room lists
+                const _obsId = 'prod-obs-' + Date.now();
+                const _obsTabId = sessionStorage.getItem('hostTabId');
+                sessionStorage.setItem('prodObserverId', _obsId);
+                sessionStorage.setItem('playerName', trimmedName); // persist for refresh
+                database.ref('players/' + _obsId).set({
+                    id: _obsId,
+                    name: trimmedName,
+                    pronouns: trimmedPronouns,
+                    isProdMember: true,
+                    isObserver: true,
+                    seat: null,
+                    room: 'main',
+                    status: 'active',
+                    tabId: _obsTabId,
+                    audioMuted: true,
+                    videoMuted: false,
+                    lastActive: Date.now()
+                }).then(() => {
+                    console.log('🎬 Prod observer registered (muted):', trimmedName);
+                    window.currentUser = window.currentUser || {};
+                    window.currentUser.id      = _obsId;
+                    window.currentUser.name    = trimmedName;
+                    window.currentUser.role    = 'observer'; // distinct from 'host' and 'player'
+                    window.currentUser.isProdMember = true;
+                    window.currentUser.isObserver   = true;
+                    window.currentUser.room    = 'main';
+                    window.currentUser.seat    = null;
+                    window.currentUser._localMuted = true; // starts muted
+                    sessionStorage.setItem('userRole', 'host'); // keep auth check happy
+                    // Show and position the floating mic button
+                    _showObserverMicBtn(true /* startMuted */);
+                    if (typeof window.joinLiveKitRoom === 'function') {
+                        window.joinLiveKitRoom('main');
+                    }
+                });
+                document.getElementById('host-name-pronouns-modal').classList.remove('visible');
+                return;
+            }
+
             // If registering as prod member, use that path
             if (window._submitAsProdMember) {
                 window._submitAsProdMember = false;
@@ -1078,6 +1115,11 @@
         // ============================================
         
         // Check if viewer mode is enabled on page load
+        // isProduction must be declared BEFORE initializeViewerMode() which calls
+        // enableProductionMode() which reads it. Declaring it with let here avoids
+        // the temporal dead zone crash when viewer mode is on in localStorage.
+        let isProduction = sessionStorage.getItem('isProduction') === 'true';
+
         function initializeViewerMode() {
             const viewerModeEnabled = localStorage.getItem('viewerModeEnabled') === 'true';
             const toggle = document.getElementById('viewer-mode-toggle');
@@ -1121,52 +1163,177 @@
             window.viewerModeEnabled = isEnabled;
             
             if (isEnabled) {
-                // Hide real-time vote displays
+                // Viewer mode ON: always hide tallies and name-box votes.
+                // Individual reveal name-box updates will only show during
+                // explicit reveal phases (guarded in showVoteOnNameTag).
                 hideRealtimeVoteDisplays();
             } else {
-                // Show real-time vote displays
+                // Viewer mode OFF: restore everything
                 showRealtimeVoteDisplays();
             }
         }
         
         function hideRealtimeVoteDisplays() {
-            // Wait a moment for DOM to be ready
             setTimeout(() => {
-                // Hide the "Original Count" section (real-time votes)
-                const originalCount = document.getElementById('original-count');
-                if (originalCount) {
-                    const originalCountSection = originalCount.closest('.vote-section');
-                    if (originalCountSection) {
-                        originalCountSection.style.display = 'none';
-                        console.log('👁️ Hidden: Original Count section');
+                // Hide ALL live-vote tally sections (first/second vote)
+                ['original-count', 'current-count'].forEach(id => {
+                    const el = document.getElementById(id);
+                    const section = el && el.closest('.vote-section');
+                    if (section) section.style.display = 'none';
+                });
+                const svCount = document.getElementById('second-vote-count');
+                if (svCount) svCount.style.display = 'none';
+                // Hide end-game tallies only if that vote has NOT been revealed yet.
+                // Revealed tallies (First Banishment during Second Banishment phase)
+                // should remain visible even when viewer mode is on.
+                const _smokeT = document.getElementById('smoke-vote-tally');
+                database.ref('game/endGame/smokeVote/revealActive').once('value', (ss) => {
+                    if (_smokeT && !ss.val()) _smokeT.textContent = 'Smoke vote in progress...';
+                });
+                database.ref('game/endGame/banishment/revealed').once('value', (bs) => {
+                    const _banishT = document.getElementById('endgame-banish-tally');
+                    if (_banishT && !bs.val()) _banishT.textContent = 'Banishment vote in progress...';
+                });
+                database.ref('game/endGame/banishmentTie/revealed').once('value', (bts) => {
+                    const _banishTieT = document.getElementById('endgame-banish-tie-tally');
+                    if (_banishTieT && !bts.val()) _banishTieT.textContent = 'Second Banishment vote in progress...';
+                });
+                
+                // Restore name boxes to player names (remove vote text)
+                for (let i = 1; i <= 25; i++) {
+                    const nameEl = document.getElementById('name-' + i);
+                    const pronEl = document.getElementById('pronouns-' + i);
+                    if (nameEl && nameEl.dataset.showingVote) {
+                        const player = Object.values(gameState.players || {}).find(p => p.seat === i);
+                        if (player) {
+                            // Targeted style reset — set values directly, no cssText wipe.
+                            nameEl.style.fontFamily = 'Arial, sans-serif';
+                            nameEl.style.fontSize   = '1.2rem';
+                            nameEl.style.color      = '#fff';
+                            nameEl.style.textAlign  = '';
+                            nameEl.style.visibility = 'visible';
+                            nameEl.style.display    = '';
+                            nameEl.textContent = player.name || 'Unknown';
+                            nameEl.dataset.showingVote = '';
+                            if (pronEl) {
+                                pronEl.style.visibility = 'visible';
+                                pronEl.style.display    = '';
+                                pronEl.style.color      = '';
+                                pronEl.textContent = player.pronouns || '';
+                                pronEl.style.opacity = player.pronouns ? '0.7' : '0.4';
+                                pronEl.dataset.showingVote = '';
+                            }
+                            const seatLabel = nameEl.parentElement;
+                            if (seatLabel) { seatLabel.style.background = ''; seatLabel.dataset.showingVote = ''; }
+                        }
                     }
                 }
-                
-                // Hide the "Revote Total" section (real-time revotes)  
-                const revoteTotalSection = document.getElementById('revote-section');
-                if (revoteTotalSection) {
-                    revoteTotalSection.style.display = 'none';
-                    console.log('👁️ Hidden: Revote Total section');
-                }
-                
-                console.log('👁️ Viewer Mode: Real-time vote data hidden');
+                console.log('👁️ Viewer Mode ON: tallies hidden, name boxes restored');
             }, 100);
         }
         
+        // Repopulate a tally box from Firebase when viewer mode is turned off.
+        function _restoreTallyBox(voteRef, elId, isSmokeVote) {
+            database.ref(voteRef).once('value', (snap) => {
+                const data = snap.val();
+                const el   = document.getElementById(elId);
+                if (!el || !data || !data.active) return;
+                const votes  = data.votes  || {};
+                const locked = data.locked || {};
+                if (isSmokeVote) {
+                    // Smoke vote: End vs Banish counts
+                    let e = 0, b = 0, tot = 0;
+                    Object.keys(locked).forEach((pid) => {
+                        if (!locked[pid]) return;
+                        tot++;
+                        if (votes[pid] === 'end') e++;
+                        else if (votes[pid] === 'banish') b++;
+                    });
+                    if (tot > 0) el.innerHTML = `<span style="color:#4169E1">End: ${e}</span> &nbsp;|&nbsp; <span style="color:#DC143C">Banish: ${b}</span> &nbsp;|&nbsp; Locked: ${tot}`;
+                } else {
+                    // Banishment: vote counts by player seat
+                    const counts = {};
+                    Object.keys(locked).forEach((pid) => {
+                        if (!locked[pid] || !votes[pid]) return;
+                        counts[votes[pid]] = (counts[votes[pid]] || 0) + 1;
+                    });
+                    if (!Object.keys(counts).length) return;
+                    database.ref('players').once('value', (pSnap) => {
+                        const s2n = {};
+                        pSnap.forEach((child) => { const p = child.val(); if (p.seat) s2n[p.seat] = p.name; });
+                        el.innerHTML = Object.entries(counts)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([s, c]) => `<div style="display:flex;justify-content:space-between;padding:3px 0;"><span>${s2n[s] || 'Seat '+s}</span><span style="color:#DC143C;font-weight:bold;">${c} vote${c!==1?'s':''}</span></div>`)
+                            .join('');
+                    });
+                }
+            });
+        }
+
         function showRealtimeVoteDisplays() {
-            // Show the "Original Count" section
-            const originalCountSection = document.querySelector('#original-count')?.closest('.vote-section');
-            if (originalCountSection) {
-                originalCountSection.style.display = '';
+            // In viewer mode: NEVER restore tally sections — only name-box reveals
+            const _vmOn = window.viewerModeEnabled;
+            if (!_vmOn) {
+                // Restore tally sections only when viewer mode is off
+                ['original-count', 'current-count'].forEach(id => {
+                    const el = document.getElementById(id);
+                    const section = el && el.closest('.vote-section');
+                    if (section) section.style.display = '';
+                });
+                // Only show second-vote-count if it has content
+                const svCount = document.getElementById('second-vote-count');
+                const svList = document.getElementById('revote-tally-list');
+                if (svCount && svList && svList.querySelector('div[style*="background"]')) {
+                    svCount.style.display = 'block';
+                }
             }
             
-            // Show the "Revote Total" section
-            const revoteTotalSection = document.getElementById('revote-section');
-            if (revoteTotalSection) {
-                revoteTotalSection.style.display = '';
-            }
-            
-            console.log('👁️ Normal Mode: Real-time vote data visible');
+            // Re-display current votes on name boxes for whichever phase is active
+            database.ref('game/phase').once('value', (phSnap) => {
+                const phase = phSnap.val() || '';
+                database.ref('players').once('value', (pSnap) => {
+                    const players = pSnap.val() || {};
+                    const s2n = {}; // seat → name map
+                    Object.values(players).forEach(p => { if (p.seat) s2n[p.seat] = p.name; });
+
+                    const _restoreVotes = (voteRef) => {
+                        database.ref(voteRef + '/votes').once('value', (vSnap) => {
+                            const votes = vSnap.val();
+                            if (!votes) return;
+                            database.ref(voteRef + '/locked').once('value', (lSnap) => {
+                                const locked = lSnap.val() || {};
+                                Object.entries(votes).forEach(([voterId, votedFor]) => {
+                                    if (!locked[voterId]) return;
+                                    const voter = players[voterId];
+                                    if (!voter || !voter.seat) return;
+                                    const targetName = typeof votedFor === 'number'
+                                        ? (s2n[votedFor] || 'Seat ' + votedFor)
+                                        : (votedFor === 'end' ? 'End' : votedFor === 'banish' ? 'Banish' : s2n[votedFor] || String(votedFor));
+                                    if (typeof showVoteOnNameTag === 'function') {
+                                        showVoteOnNameTag(voter.seat, targetName, false);
+                                    }
+                                });
+                            });
+                        });
+                    };
+
+                    if (phase === 'first-vote' || phase === 'first-vote-reveal') {
+                        _restoreVotes('game/firstVote');
+                    } else if (phase === 'second-vote' || phase === 'second-vote-reveal') {
+                        _restoreVotes('game/secondVote');
+                    } else if (phase === 'end-game' || phase.startsWith('end')) {
+                        // Restore smoke vote, banishment, and banishment tie votes on name boxes
+                        _restoreVotes('game/endGame/smokeVote');
+                        _restoreVotes('game/endGame/banishment');
+                        _restoreVotes('game/endGame/banishmentTie');
+                        // Also repopulate the tally display boxes
+                        _restoreTallyBox('game/endGame/smokeVote', 'smoke-vote-tally', true);
+                        _restoreTallyBox('game/endGame/banishment', 'endgame-banish-tally', false);
+                        _restoreTallyBox('game/endGame/banishmentTie', 'endgame-banish-tie-tally', false);
+                    }
+                });
+            });
+            console.log('👁️ Viewer Mode OFF: tallies restored, votes re-displayed');
         }
         
         function enableProductionMode() {
@@ -1283,7 +1450,7 @@
         });
 
         // Initialize host interface
-        let isProduction = sessionStorage.getItem('isProduction') === 'true';
+        // (isProduction declared earlier, near initializeViewerMode which uses it)
         
         function updateHostModeDisplay() {
             const display = document.getElementById('host-mode-display');
@@ -1394,7 +1561,7 @@
         }
 
         function closeTimerModal() {
-            document.getElementById('timer-modal').classList.remove('visible');
+            const _ctm=document.getElementById('timer-modal');_ctm.classList.remove('visible');_ctm.style.display='';
         }
 
         function showTimerModal() {
@@ -1402,7 +1569,9 @@
 }
 
 function closeTimerModal() {
-    document.getElementById('timer-modal').classList.remove('visible');
+    const _ctm=document.getElementById('timer-modal');
+    _ctm.classList.remove('visible');
+    _ctm.style.display='';
 }
 
 function confirmTimer() {
@@ -1425,6 +1594,18 @@ function confirmTimer() {
         isRunning: false
     });
     
+    // Also update display directly — don't wait for Firebase listener
+    const _timerEl = document.getElementById('timer');
+    const _phaseEl = document.getElementById('phase-name');
+    if (_timerEl) {
+        const _m = Math.floor(totalSeconds / 60);
+        const _s = totalSeconds % 60;
+        _timerEl.textContent = `${String(_m).padStart(2,'0')}:${String(_s).padStart(2,'0')}`;
+        _timerEl.style.display = 'block';
+        _timerEl.style.visibility = 'visible';
+    }
+    if (_phaseEl && label) _phaseEl.textContent = label;
+    
     console.log('Timer set:', totalSeconds, 'seconds');
     closeTimerModal();
 }
@@ -1432,8 +1613,8 @@ function confirmTimer() {
 function startTimer() {
     database.ref('game/timer').once('value', (snapshot) => {
         const timer = snapshot.val();
-        if (!timer || timer.totalSeconds === 0) {
-            alert('Please set a timer first');
+        if (!timer || !timer.totalSeconds) {
+            alert('Please set a timer duration first using "Set Timer"');
             return;
         }
         
@@ -1493,12 +1674,16 @@ function cancelTimer() {
                     document.getElementById('phase-name').textContent = phaseNames[phase];
                     
                     // Special handling for night phase
+                    // NOTE: game.js handlePhaseChange already runs the authoritative
+                    // night loop (with isProdMember guard). This legacy loop is kept
+                    // for compatibility but must exclude prod members and observers.
                     if (phase === 'night') {
-                        // Move all non-host players to waiting room
+                        // Move all non-host, non-prod players to waiting room
                         database.ref('players').once('value', (snapshot) => {
                             snapshot.forEach((childSnapshot) => {
                                 const player = childSnapshot.val();
-                                if (!player.isHost) {
+                                // Exclude: main host, prod seat members, observers
+                                if (!player.isHost && !player.isProdMember && !player.isObserver) {
                                     database.ref('players/' + childSnapshot.key + '/room').set('waiting');
                                 }
                             });
@@ -1515,9 +1700,14 @@ function cancelTimer() {
                             const updates = {};
                             
                             for (let playerId in players) {
-                                if (!players[playerId].isHost) {
+                                const _bp = players[playerId];
+                                // Exclude: main host, prod seat members, observers
+                                if (!_bp.isHost && !_bp.isProdMember && !_bp.isObserver) {
                                     updates[playerId + '/room'] = 'waiting';
                                     updates[playerId + '/seat'] = null;
+                                    updates[playerId + '/roomSeat'] = null;  // clear breakout seat
+                                    updates[playerId + '/invitedTo'] = null; // clear any pending invite
+                                    updates[playerId + '/invitationCount'] = null;
                                 }
                             }
                             
@@ -1843,6 +2033,12 @@ function cancelTimer() {
             modal.style.display = 'none';
             modal.classList.remove('visible');
             
+            // Apply red glow to tiebreaker winner (Circle of Truth target)
+            database.ref('game/tiebreakerWinner').once('value', function(snap) {
+                const winner = snap.val();
+                if (winner && winner.seat) applyCircleOfTruthTargetGlow(winner.seat);
+            });
+            
             // Clear wheel data from Firebase
             database.ref('game/tiebreakerWheel').set({
                 active: false
@@ -1856,11 +2052,16 @@ function cancelTimer() {
             
             console.log('🔄 Resetting all votes');
             
-            // Clear all vote-related data in Firebase
+            // Clear ALL vote-related data in Firebase
             database.ref('game/firstVote').remove();
             database.ref('game/secondVote').remove();
+            // Signal all clients to clear their vote tally displays
+            database.ref('game/clearTallies').set(Date.now());
+            setTimeout(() => database.ref('game/clearTallies').remove(), 3000);
             database.ref('game/secondVoteReveal').remove();
             database.ref('game/revealedVoteDisplay').remove();
+            database.ref('game/firstVoteReveal').remove();
+            database.ref('game/autoVoteDisplay').remove();
             database.ref('game/tiebreakerWheel').remove();
             database.ref('game/tiebreakerWinner').remove();
             database.ref('game/firstVoteEndedAnimation').remove();
@@ -1881,10 +2082,32 @@ function cancelTimer() {
                 revoteRevealCount.innerHTML = '<div style="color: #666;">No votes revealed yet</div>';
             }
             
-            // Hide second vote sections
+            // Clear original (locked) first-vote tally
+            const origCount = document.getElementById('original-count');
+            if (origCount) {
+                origCount.innerHTML = '<div style="color: #666;">No votes cast yet</div>';
+            }
+
+            // Clear current vote count
+            const currentCount = document.getElementById('current-count');
+            if (currentCount) {
+                currentCount.innerHTML = '<div style="color: #666;">No votes cast yet</div>';
+            }
+
+            // Hide second vote sections and clear their content
             const revoteSection = document.getElementById('revote-section');
             if (revoteSection) {
                 revoteSection.style.display = 'none';
+            }
+
+            const secondVoteCountSection = document.getElementById('second-vote-count');
+            if (secondVoteCountSection) {
+                secondVoteCountSection.style.display = 'none';
+            }
+
+            const revoteTallyList = document.getElementById('revote-tally-list');
+            if (revoteTallyList) {
+                revoteTallyList.innerHTML = '<div style="color: #666;">No revotes cast yet</div>';
             }
             
             const revoteRevealSection = document.getElementById('revote-reveal-section');
@@ -1916,8 +2139,46 @@ function cancelTimer() {
                 });
             });
             
-            // Reset phase to lobby
-            database.ref('game/phase').set('lobby');
+            // Restore name tags to player names (clear any vote text shown on them)
+            database.ref('players').once('value', (pSnap) => {
+                pSnap.forEach((child) => {
+                    const p = child.val();
+                    if (!p || !p.seat) return;
+                    const nameEl = document.getElementById('name-' + p.seat);
+                    const pronEl = document.getElementById('pronouns-' + p.seat);
+                    const seatEl = document.getElementById('seat-' + p.seat);
+                    if (nameEl) {
+                        nameEl.style.cssText       = '';
+                        nameEl.textContent         = p.name || 'Unknown';
+                        nameEl.style.color         = '#fff';
+                        nameEl.style.fontSize      = '1.2rem';
+                        nameEl.style.fontFamily    = 'Arial, sans-serif';
+                        nameEl.style.visibility    = 'visible';
+                        nameEl.dataset.showingVote = '';
+                    }
+                    if (pronEl) {
+                        pronEl.style.cssText       = '';
+                        pronEl.textContent         = p.pronouns || '';
+                        pronEl.style.visibility    = 'visible';
+                        pronEl.style.display       = 'block';
+                        pronEl.style.opacity       = p.pronouns ? '0.7' : '0.4';
+                        pronEl.dataset.showingVote = '';
+                    }
+                    const seatLabel = nameEl ? nameEl.parentElement : null;
+                    if (seatLabel) {
+                        seatLabel.style.cssText     = '';
+                        seatLabel.style.background  = '';
+                        seatLabel.dataset.showingVote = '';
+                    }
+                    if (seatEl) {
+                        seatEl.style.boxShadow = '';
+                        seatEl.classList.remove('yellow-glow', 'purple-glow');
+                    }
+                });
+            });
+
+            // Return to deliberation phase (ready for another vote)
+            database.ref('game/phase').set('deliberation');
             
             // Remove Next Player button if it exists
             const nextBtn = document.getElementById('next-player-btn');
@@ -1929,50 +2190,58 @@ function cancelTimer() {
             database.ref('game/circleOfTruth').remove();
             database.ref('game/roleReveal').remove();
             
+            // Signal all clients to restore name boxes
+            database.ref('game/votesReset').set(Date.now());
+            setTimeout(() => database.ref('game/votesReset').remove(), 3000);
+
             console.log('✅ All votes reset');
         }
 
         // Make accessible to game.js
         window.autoVoteNonVoters = function() {
-            database.ref('game/firstVote').once('value', (votingSnapshot) => {
-                const voting = votingSnapshot.val();
-                if (!voting || !voting.active) return;
-                
-                database.ref('players').once('value', (playersSnapshot) => {
-                    const players = playersSnapshot.val();
-                    const votes = voting.votes || {};
-                    
-                    // Get all valid voting targets (players with seats, not host)
-                    const validTargets = Object.keys(players)
-                        .filter(pid => {
-                            const p = players[pid];
-                            return !p.isHost && p.seat;
-                        })
-                        .map(pid => players[pid].seat);
-                    
-                    // Find players who haven't voted
-                    Object.keys(players).forEach(playerId => {
-                        const player = players[playerId];
-                        
-                        // Skip host and players without seats
-                        if (player.isHost || !player.seat) return;
-                        
-                        // If player hasn't voted, auto-vote for THEMSELVES (penalty)
-                        if (!votes[playerId]) {
-                            console.log('Auto-voting for', player.name, '- voting for self (seat', player.seat, ')');
-                            database.ref('game/firstVote/votes/' + playerId).set(player.seat);
-                            
-                            // Show self-vote on their name tag
-                            database.ref('players/' + playerId).once('value', (snap) => {
-                                const player = snap.val();
-                                if (player && player.name) {
-                                    database.ref('game/autoVoteDisplay/' + playerId).set({
-                                        seat: player.seat,
-                                        name: player.name
-                                    });
-                                }
+            // Detect first-vote vs second-vote
+            database.ref('game/phase').once('value', (phaseSnap) => {
+                const phase = phaseSnap.val();
+                const isSecondVote = (phase === 'second-vote');
+                const votePath = isSecondVote ? 'game/secondVote' : 'game/firstVote';
+
+                database.ref(votePath).once('value', (votingSnapshot) => {
+                    const voting = votingSnapshot.val();
+                    if (!voting || !voting.active) return;
+
+                    // For second-vote, only auto-vote players in the tied seats
+                    const tiedSeats = isSecondVote ? (voting.tiedSeats || []) : null;
+
+                    database.ref('players').once('value', (playersSnapshot) => {
+                        const players = playersSnapshot.val() || {};
+                        const votes   = voting.votes || {};
+
+                        Object.keys(players).forEach(playerId => {
+                            const player = players[playerId];
+                            // Skip host and players without seats
+                            if (player.isHost || !player.seat) return;
+                            // For second-vote, only auto-vote players who are in the tied seats
+                            if (isSecondVote && tiedSeats.length > 0 && !tiedSeats.includes(player.seat)) return;
+                            // Skip players who already voted
+                            if (votes[playerId]) return;
+
+                            console.log('⏰ Auto-voting (self) for', player.name, 'seat', player.seat, '| phase:', phase);
+
+                            const updates = {};
+                            updates[votePath + '/votes/'  + playerId] = player.seat;
+                            updates[votePath + '/locked/' + playerId] = true;
+                            // First vote also writes originalVotes for tally listeners
+                            if (!isSecondVote) {
+                                updates['game/firstVote/originalVotes/' + playerId] = player.seat;
+                            }
+                            database.ref().update(updates);
+
+                            // Push self-vote display to the player's own screen
+                            database.ref('game/autoVoteDisplay/' + playerId).set({
+                                seat: player.seat,
+                                name: player.name   // voting for themselves
                             });
-                        }
+                        });
                     });
                 });
             });
@@ -2080,6 +2349,91 @@ function cancelTimer() {
             }
         }
 
+        // ── Per-player individual mute controls ─────────────────────────────
+        function toggleIndividualMute() {
+            const list     = document.getElementById('per-player-mute-list');
+            const chevron  = document.getElementById('individual-mute-chevron');
+            if (!list) return;
+            const isOpen = list.style.display !== 'none';
+            list.style.display    = isOpen ? 'none' : 'flex';
+            chevron.textContent   = isOpen ? '▼' : '▲';
+        }
+
+        function _mutePlayerMic(playerId, currentlyMuted) {
+            const newMuted = !currentlyMuted;
+            // hostForcedMic is watched by the player's game.js and directly
+            // mutes/unmutes their LiveKit mic track, separate from their own toggle.
+            database.ref('players/' + playerId + '/hostForcedMic').set(newMuted);
+            // Also update audioMuted so the mic-off icon reflects reality
+            database.ref('players/' + playerId + '/audioMuted').set(newMuted);
+        }
+        window._mutePlayerMic = _mutePlayerMic;
+
+        function _mutePlayerCam(playerId, currentlyMuted) {
+            const newMuted = !currentlyMuted;
+            database.ref('players/' + playerId + '/hostForcedCam').set(newMuted);
+            database.ref('players/' + playerId + '/videoMuted').set(newMuted);
+        }
+        window._mutePlayerCam = _mutePlayerCam;
+
+        // Rebuild the per-player mute list whenever players change
+        database.ref('players').on('value', (snap) => {
+            const list = document.getElementById('per-player-mute-list');
+            if (!list) return;
+            const players = snap.val() || {};
+            // Collect seated non-host players, sorted by seat number
+            const seated = Object.entries(players)
+                .filter(([, p]) => p.seat && !p.isHost && !p.isProdMember &&
+                    p.name && p.name !== 'New Player' && p.status === 'active')
+                .sort(([, a], [, b]) => (a.seat > b.seat ? 1 : -1));
+            if (!seated.length) {
+                list.innerHTML = '<div style="color:#555;font-size:0.8rem;">No players seated</div>';
+                return;
+            }
+            list.innerHTML = seated.map(([id, p]) => {
+                const micMuted = !!p.audioMuted;
+                const camMuted = !!p.videoMuted;
+                const micCol   = micMuted ? '#c0392b' : 'rgba(255,255,255,0.15)';
+                const camCol   = camMuted ? '#c0392b' : 'rgba(255,255,255,0.15)';
+                const micTip   = micMuted ? 'Unmute mic' : 'Mute mic';
+                const camTip   = camMuted ? 'Unmute camera' : 'Mute camera';
+                return `
+                <div style="display:flex;align-items:center;gap:6px;
+                            padding:5px 6px;border-radius:4px;
+                            background:rgba(255,255,255,0.05);">
+                    <span style="flex:1;font-size:0.82rem;color:#ddd;
+                                white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                          title="Seat ${p.seat}">${p.name}</span>
+                    <button title="${micTip}"
+                            onclick="window._mutePlayerMic('${id}', ${micMuted})"
+                            style="width:28px;height:28px;border-radius:4px;border:none;
+                                   cursor:pointer;background:${micCol};
+                                   display:flex;align-items:center;justify-content:center;">
+                        <svg width='14' height='14' viewBox='0 0 24 24' fill='none'
+                             stroke='white' stroke-width='2'>
+                            ${micMuted
+                                ? "<line x1='1' y1='1' x2='23' y2='23'/><path d='M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6'/><path d='M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23'/><line x1='12' y1='19' x2='12' y2='23'/><line x1='8' y1='23' x2='16' y2='23'/>"
+                                : "<path d='M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z'/><path d='M19 10v2a7 7 0 0 1-14 0v-2'/><line x1='12' y1='19' x2='12' y2='23'/><line x1='8' y1='23' x2='16' y2='23'/>"
+                            }
+                        </svg>
+                    </button>
+                    <button title="${camTip}"
+                            onclick="window._mutePlayerCam('${id}', ${camMuted})"
+                            style="width:28px;height:28px;border-radius:4px;border:none;
+                                   cursor:pointer;background:${camCol};
+                                   display:flex;align-items:center;justify-content:center;">
+                        <svg width='14' height='14' viewBox='0 0 24 24' fill='none'
+                             stroke='white' stroke-width='2'>
+                            ${camMuted
+                                ? "<line x1='1' y1='1' x2='23' y2='23'/><path d='M15.05 5H19a2 2 0 0 1 2 2v8.9M22.49 16.37L17 12.01V7'/><path d='M1 5H3.9l.61.61M10 5H7'/><path d='M11.04 10.55A3 3 0 0 0 9 12.9V15a3 3 0 0 0 3 3h2c.35 0 .68-.07 1-.18'/>"
+                                : "<polygon points='23 7 16 12 23 17 23 7'/><rect x='1' y='5' width='15' height='14' rx='2' ry='2'/>"
+                            }
+                        </svg>
+                    </button>
+                </div>`;
+            }).join('');
+        });
+
         // Auto-mute new seated players when mute-all is active
         database.ref('players').on('child_changed', (snapshot) => {
             const player = snapshot.val();
@@ -2180,7 +2534,7 @@ function cancelTimer() {
                     players.push({ id: playerId, name: player.name, seat: player.seat });
                 }
             }
-            players.sort((a, b) => a.name.localeCompare(b.name));
+            players.sort((a, b) => a.seat - b.seat); // seat order
             
             // Create player selection buttons in 3 columns
             let playerButtons = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0;">';
@@ -2211,18 +2565,25 @@ function cancelTimer() {
                 ${playerButtons}
                 <div id="revealer-options" style="display: none; margin-top: 30px; border-top: 2px solid #444; padding-top: 20px;">
                     <h3 style="color: #FFD700; margin-bottom: 15px;">Reveal Order</h3>
-                    <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
-                        <button class="order-btn" data-order="ascending" style="padding: 12px 20px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 1rem; min-width: 140px;">
-                            Ascending<br><small>(lowest seat first)</small>
+                    <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
+                        <button class="order-btn" data-order="ascending" style="padding: 12px 16px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 0.95rem; min-width: 130px;">
+                            Ascending<br><small>(Seat 1 → last)</small>
                         </button>
-                        <button class="order-btn" data-order="descending" style="padding: 12px 20px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 1rem; min-width: 140px;">
-                            Descending<br><small>(highest seat first)</small>
+                        <button class="order-btn" data-order="descending" style="padding: 12px 16px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 0.95rem; min-width: 130px;">
+                            Descending<br><small>(last seat → 1)</small>
                         </button>
-                        <button class="order-btn" data-order="random" style="padding: 12px 20px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 1rem; min-width: 140px;">
-                            Random<br><small>(shuffled)</small>
+                        <button class="order-btn" data-order="alpha-asc" style="padding: 12px 16px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 0.95rem; min-width: 130px;">
+                            A → Z<br><small>(alphabetical)</small>
+                        </button>
+                        <button class="order-btn" data-order="alpha-desc" style="padding: 12px 16px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 0.95rem; min-width: 130px;">
+                            Z → A<br><small>(reverse alpha)</small>
                         </button>
                     </div>
-                    <p id="selected-revealer" style="color: #FFD700; margin-bottom: 15px; font-weight: bold; font-size: 1.1rem;"></p>
+                    <p id="selected-revealer" style="color: #FFD700; margin-bottom: 10px; font-weight: bold; font-size: 1.1rem;"></p>
+                    <div id="reveal-order-preview" style="display:none; background:rgba(255,255,255,0.05); border:1px solid #444; border-radius:8px; padding:10px 16px; margin-bottom:14px; text-align:left; font-size:0.9rem; color:#ccc; max-height:160px; overflow-y:auto;">
+                        <div style="color:#FFD700; font-weight:bold; margin-bottom:6px;">Reveal order:</div>
+                        <div id="reveal-order-list"></div>
+                    </div>
                     <button id="begin-reveal-btn" style="padding: 15px 40px; background: #666; color: #999; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: not-allowed; opacity: 0.5; margin-top: 10px;">
                         Begin Vote Reveal
                     </button>
@@ -2383,7 +2744,7 @@ function cancelTimer() {
                     `;
                     
                     // Sort players alphabetically
-                    const players = votingPlayers.slice().sort((a, b) => a.name.localeCompare(b.name));
+                    const players = votingPlayers.slice().sort((a, b) => a.seat - b.seat); // seat order
                     
                     // Create player selection buttons in 3 columns (matching original)
                     let playerButtons = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0;">';
@@ -2414,18 +2775,25 @@ function cancelTimer() {
                         ${playerButtons}
                         <div id="revote-revealer-options" style="display: none; margin-top: 30px; border-top: 2px solid #444; padding-top: 20px;">
                             <h3 style="color: #FFD700; margin-bottom: 15px;">Reveal Order</h3>
-                            <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
-                                <button class="revote-order-btn" data-order="ascending" style="padding: 12px 20px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 1rem; min-width: 140px;">
-                                    Ascending<br><small>(lowest seat first)</small>
+                            <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
+                                <button class="revote-order-btn" data-order="ascending" style="padding: 12px 16px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 0.95rem; min-width: 130px;">
+                                    Ascending<br><small>(Seat 1 → last)</small>
                                 </button>
-                                <button class="revote-order-btn" data-order="descending" style="padding: 12px 20px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 1rem; min-width: 140px;">
-                                    Descending<br><small>(highest seat first)</small>
+                                <button class="revote-order-btn" data-order="descending" style="padding: 12px 16px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 0.95rem; min-width: 130px;">
+                                    Descending<br><small>(last seat → 1)</small>
                                 </button>
-                                <button class="revote-order-btn" data-order="random" style="padding: 12px 20px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 1rem; min-width: 140px;">
-                                    Random<br><small>(shuffled)</small>
+                                <button class="revote-order-btn" data-order="alpha-asc" style="padding: 12px 16px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 0.95rem; min-width: 130px;">
+                                    A → Z<br><small>(alphabetical)</small>
+                                </button>
+                                <button class="revote-order-btn" data-order="alpha-desc" style="padding: 12px 16px; background: #444; color: white; border: 2px solid #666; border-radius: 6px; cursor: pointer; font-size: 0.95rem; min-width: 130px;">
+                                    Z → A<br><small>(reverse alpha)</small>
                                 </button>
                             </div>
-                            <p id="revote-selected-revealer" style="color: #FFD700; margin-bottom: 15px; font-weight: bold; font-size: 1.1rem;"></p>
+                            <p id="revote-selected-revealer" style="color: #FFD700; margin-bottom: 10px; font-weight: bold; font-size: 1.1rem;"></p>
+                            <div id="revote-order-preview" style="display:none; background:rgba(255,255,255,0.05); border:1px solid #444; border-radius:8px; padding:10px 16px; margin-bottom:14px; text-align:left; font-size:0.9rem; color:#ccc; max-height:160px; overflow-y:auto;">
+                                <div style="color:#FFD700; font-weight:bold; margin-bottom:6px;">Reveal order:</div>
+                                <div id="revote-order-list"></div>
+                            </div>
                             <button id="revote-begin-reveal-btn" style="padding: 15px 40px; background: #666; color: #999; border: none; border-radius: 8px; font-size: 1.2rem; font-weight: bold; cursor: not-allowed; opacity: 0.5; margin-top: 10px;">
                                 Begin Revote Reveal
                             </button>
@@ -2449,16 +2817,48 @@ function cancelTimer() {
                     function updateRevoteModalUI() {
                         const selectedText = document.getElementById('revote-selected-revealer');
                         const beginBtn = document.getElementById('revote-begin-reveal-btn');
-                        
-                        if (window.secondVoteRevealConfig.firstPlayer && window.secondVoteRevealConfig.order) {
-                            selectedText.textContent = `${window.secondVoteRevealConfig.firstPlayerName} will reveal first (${window.secondVoteRevealConfig.order})`;
+                        const previewDiv = document.getElementById('revote-order-preview');
+                        const previewList = document.getElementById('revote-order-list');
+                        const config = window.secondVoteRevealConfig;
+                        const orderLabels = { ascending:'ascending by seat', descending:'descending by seat',
+                                              'alpha-asc':'A → Z', 'alpha-desc':'Z → A' };
+
+                        if (config.firstPlayer && config.order) {
+                            selectedText.textContent = `${config.firstPlayerName} will reveal first (${orderLabels[config.order] || config.order})`;
                             beginBtn.style.background = '#8A2BE2';
                             beginBtn.style.color = 'white';
                             beginBtn.style.cursor = 'pointer';
                             beginBtn.style.opacity = '1';
                             beginBtn.disabled = false;
-                        } else if (window.secondVoteRevealConfig.firstPlayer) {
-                            selectedText.textContent = `${window.secondVoteRevealConfig.firstPlayerName} selected - choose reveal order`;
+
+                            // Build preview
+                            const _sorted = players.slice().sort((a,b) => a.seat - b.seat);
+                            const _start = _sorted.find(p => p.seat === config.firstPlayer);
+                            if (_start && previewDiv && previewList) {
+                                let _ordered = [];
+                                const _si = _sorted.indexOf(_start);
+                                if (config.order === 'ascending') {
+                                    _ordered = [..._sorted.slice(_si), ..._sorted.slice(0, _si)];
+                                } else if (config.order === 'descending') {
+                                    const _rev = [..._sorted].reverse();
+                                    const _ri = _rev.indexOf(_start);
+                                    _ordered = [..._rev.slice(_ri), ..._rev.slice(0, _ri)];
+                                } else if (config.order === 'alpha-asc') {
+                                    const _rvAsc = _sorted.slice().sort((a,b) => (a.name||'').localeCompare(b.name||''));
+                                    const _rvAi = _rvAsc.findIndex(p => p.seat === config.firstPlayer);
+                                    _ordered = [..._rvAsc.slice(_rvAi), ..._rvAsc.slice(0, _rvAi)];
+                                } else if (config.order === 'alpha-desc') {
+                                    const _rvDesc = _sorted.slice().sort((a,b) => (b.name||'').localeCompare(a.name||''));
+                                    const _rvDi = _rvDesc.findIndex(p => p.seat === config.firstPlayer);
+                                    _ordered = [..._rvDesc.slice(_rvDi), ..._rvDesc.slice(0, _rvDi)];
+                                }
+                                previewList.innerHTML = _ordered.map((p,i) =>
+                                    `<div style="padding:2px 0;color:${i===0?'#FFD700':'#ccc'};">${i+1}. ${p.name} (Seat ${p.seat})</div>`
+                                ).join('');
+                                previewDiv.style.display = 'block';
+                            }
+                        } else if (config.firstPlayer) {
+                            selectedText.textContent = `${config.firstPlayerName} selected — choose reveal order`;
                             beginBtn.style.background = '#666';
                             beginBtn.style.cursor = 'not-allowed';
                             beginBtn.disabled = true;
@@ -2548,21 +2948,25 @@ function cancelTimer() {
             
             if (order === 'ascending') {
                 revealOrder.sort((a, b) => a.seat - b.seat);
+                // Move first player to front with wrap-around
+                const _asc_i = revealOrder.findIndex(p => p.seat === firstSeat);
+                if (_asc_i > 0) revealOrder = [...revealOrder.slice(_asc_i), ...revealOrder.slice(0, _asc_i)];
             } else if (order === 'descending') {
                 revealOrder.sort((a, b) => b.seat - a.seat);
-            } else if (order === 'random') {
-                for (let i = revealOrder.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [revealOrder[i], revealOrder[j]] = [revealOrder[j], revealOrder[i]];
-                }
+                const _desc_i = revealOrder.findIndex(p => p.seat === firstSeat);
+                if (_desc_i > 0) revealOrder = [...revealOrder.slice(_desc_i), ...revealOrder.slice(0, _desc_i)];
+            } else if (order === 'alpha-asc') {
+                // Wrap-around A→Z: sort alpha, find start position, slice+concat
+                revealOrder.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                const _aa_i = revealOrder.findIndex(p => p.seat === firstSeat);
+                if (_aa_i > 0) revealOrder = [...revealOrder.slice(_aa_i), ...revealOrder.slice(0, _aa_i)];
+            } else if (order === 'alpha-desc') {
+                // Wrap-around Z→A: sort reverse-alpha, find start position, slice+concat
+                revealOrder.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+                const _ad_i = revealOrder.findIndex(p => p.seat === firstSeat);
+                if (_ad_i > 0) revealOrder = [...revealOrder.slice(_ad_i), ...revealOrder.slice(0, _ad_i)];
             }
-            
-            // Move first player to front
-            const firstPlayerIndex = revealOrder.findIndex(p => p.seat === firstSeat);
-            if (firstPlayerIndex > 0) {
-                const firstPlayer = revealOrder.splice(firstPlayerIndex, 1)[0];
-                revealOrder.unshift(firstPlayer);
-            }
+            // Note: 'random' removed — no longer an option
             
             console.log('📋 Revote reveal order:', revealOrder.map(p => `${p.name} (${p.seat})`));
             
@@ -2621,25 +3025,53 @@ function cancelTimer() {
             const config = window.voteRevealConfig;
             const beginBtn = document.getElementById('begin-reveal-btn');
             const revealerText = document.getElementById('selected-revealer');
-            
-            console.log('🔄 Updating modal UI:', config);
-            
+            const previewDiv = document.getElementById('reveal-order-preview');
+            const previewList = document.getElementById('reveal-order-list');
+
+            const orderLabels = { ascending:'ascending by seat', descending:'descending by seat',
+                                  'alpha-asc':'A → Z', 'alpha-desc':'Z → A' };
+
             if (config.firstPlayer && config.order) {
-                // Both selected - enable button
                 beginBtn.disabled = false;
                 beginBtn.style.background = '#DC143C';
                 beginBtn.style.color = 'white';
                 beginBtn.style.opacity = '1';
                 beginBtn.style.cursor = 'pointer';
-                
-                const orderText = config.order === 'ascending' ? 'ascending order' : 
-                                config.order === 'descending' ? 'descending order' : 'random order';
-                revealerText.textContent = `Starting with ${config.firstPlayerName}, then ${orderText}`;
-                
-                console.log('✅ Modal ready - button enabled');
+                revealerText.textContent = `Starting with ${config.firstPlayerName}, then ${orderLabels[config.order] || config.order}`;
+
+                // Build preview order
+                const _allP = [];
+                for (let pid in gameState.players) {
+                    const p = gameState.players[pid];
+                    if (p.status === 'active' && !p.isHost && p.seat) _allP.push({...p, id:pid});
+                }
+                _allP.sort((a,b) => a.seat - b.seat);
+                const _start = _allP.find(p => p.seat === config.firstPlayer);
+                if (_start && previewDiv && previewList) {
+                    let _ordered = [];
+                    const _si = _allP.indexOf(_start);
+                    if (config.order === 'ascending') {
+                        _ordered = [..._allP.slice(_si), ..._allP.slice(0, _si)];
+                    } else if (config.order === 'descending') {
+                        const _rev = [..._allP].reverse();
+                        const _ri = _rev.indexOf(_start);
+                        _ordered = [..._rev.slice(_ri), ..._rev.slice(0, _ri)];
+                    } else if (config.order === 'alpha-asc') {
+                        const _asc = _allP.slice().sort((a,b) => (a.name||'').localeCompare(b.name||''));
+                        const _ai = _asc.findIndex(p => p.seat === config.firstPlayer);
+                        _ordered = [..._asc.slice(_ai), ..._asc.slice(0, _ai)];
+                    } else if (config.order === 'alpha-desc') {
+                        const _desc = _allP.slice().sort((a,b) => (b.name||'').localeCompare(a.name||''));
+                        const _di = _desc.findIndex(p => p.seat === config.firstPlayer);
+                        _ordered = [..._desc.slice(_di), ..._desc.slice(0, _di)];
+                    }
+                    previewList.innerHTML = _ordered.map((p,i) =>
+                        `<div style="padding:2px 0;color:${i===0?'#FFD700':'#ccc'};">${i+1}. ${p.name} (Seat ${p.seat})</div>`
+                    ).join('');
+                    previewDiv.style.display = 'block';
+                }
             } else if (config.firstPlayer) {
-                // Player selected, waiting for order
-                revealerText.textContent = `First revealer: ${config.firstPlayerName} - Now select reveal order`;
+                revealerText.textContent = `First revealer: ${config.firstPlayerName} — Now select reveal order`;
             }
         }
 
@@ -2813,6 +3245,16 @@ function cancelTimer() {
                     ...reversed.slice(revStartIndex),
                     ...reversed.slice(0, revStartIndex)
                 ];
+            } else if (config.order === 'alpha-asc') {
+                // Wrap-around A→Z: sort all players alpha, find start position, wrap from there
+                const _alphaAsc = allVotingPlayers.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                const _aIdx = _alphaAsc.findIndex(p => p.seat === config.firstPlayer);
+                revealOrder = [..._alphaAsc.slice(_aIdx), ..._alphaAsc.slice(0, _aIdx)];
+            } else if (config.order === 'alpha-desc') {
+                // Wrap-around Z→A: sort all players reverse alpha, find start position, wrap from there
+                const _alphaDesc = allVotingPlayers.slice().sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+                const _dIdx = _alphaDesc.findIndex(p => p.seat === config.firstPlayer);
+                revealOrder = [..._alphaDesc.slice(_dIdx), ..._alphaDesc.slice(0, _dIdx)];
             } else if (config.order === 'random') {
                 // First player, then shuffle rest
                 const others = allVotingPlayers.filter(p => p.id !== config.firstPlayer);
@@ -3026,8 +3468,10 @@ function cancelTimer() {
                         database.ref('game/secondVoteReveal').update({
                             currentIndex: nextIndex
                         });
-                        
-                        database.ref('game/firstVote/currentRevealer').set(nextPlayerId);
+                        // NOTE: Do NOT write game/firstVote/currentRevealer here.
+                        // That fires the votingListener on player pages, which hides
+                        // the reveal button for the correct player.
+                        // The revote reveal uses its own currentIndex in secondVoteReveal.
                         
                         console.log(`➡️ Advanced to next player: ${nextPlayerId}`);
                         
@@ -3087,6 +3531,10 @@ function cancelTimer() {
                                         } else {
                                             // No tie - go to Circle of Truth
                                             console.log('✅ No tie - proceeding to Circle of Truth');
+                                            // Apply red glow to most-voted player
+                                            const _maxV2 = Math.max.apply(null, Object.values(voteCounts));
+                                            const _topSeat2 = parseInt(Object.keys(voteCounts).find(function(s) { return voteCounts[s] === _maxV2; }));
+                                            if (_topSeat2) applyCircleOfTruthTargetGlow(_topSeat2);
                                             database.ref('game/phase').set('circle-of-truth');
                                         }
                                         
@@ -3122,14 +3570,48 @@ function cancelTimer() {
                         
                         // Check if this is the LAST player
                         if (nextIndex === data.revealOrder.length - 1) {
-                            console.log('🎯 This is the last player! Changing button to Circle of Truth');
+                            console.log('🎯 Last first-vote revealer — checking for tie after reveal');
                             
                             const nextBtn = document.getElementById('next-player-btn');
                             if (nextBtn) {
-                                nextBtn.textContent = 'Circle of Truth';
+                                nextBtn.textContent = 'Check Results';
                                 nextBtn.style.background = '#9C27B0';
                                 nextBtn.style.borderColor = '#7B1FA2';
-                                nextBtn.onclick = startCircleOfTruth;
+                                nextBtn.dataset.isFinal = 'true';
+                                nextBtn.onclick = function() {
+                                    database.ref('game/firstVote/votes').once('value', function(votesSnap) {
+                                        const votes = votesSnap.val() || {};
+                                        const voteCounts = {};
+                                        Object.values(votes).forEach(function(votedSeat) {
+                                            voteCounts[votedSeat] = (voteCounts[votedSeat] || 0) + 1;
+                                        });
+                                        const maxVotes = Math.max.apply(null, Object.values(voteCounts));
+                                        const tiedSeats = Object.keys(voteCounts)
+                                            .filter(function(s) { return voteCounts[s] === maxVotes; })
+                                            .map(Number);
+                                        console.log('🔍 First vote tie check — tied seats:', tiedSeats);
+                                        // Clean up reveal display
+                                        database.ref('game/firstVote/currentRevealer').remove();
+                                        database.ref('game/revealedVoteDisplay').remove();
+                                        const btn2 = document.getElementById('next-player-btn');
+                                        if (tiedSeats.length > 1) {
+                                            // Tie — remove button so host uses 'Begin Revote (Tie)'
+                                            console.log('⚖️ Tie! Host should click Begin Revote (Tie).');
+                                            if (btn2) btn2.remove();
+                                            database.ref('game/firstVote').update({ revealed: true, tieDetected: true });
+                                        } else {
+                                            // No tie — go to Circle of Truth
+                                            console.log('✅ No tie — going to Circle of Truth');
+                                            if (btn2) btn2.remove();
+                                            database.ref('game/firstVote').update({ active: false, revealed: false });
+                                            // Apply red glow to most-voted player
+                                            const _maxV1 = Math.max.apply(null, Object.values(voteCounts));
+                                            const _topSeat1 = parseInt(Object.keys(voteCounts).find(function(s) { return voteCounts[s] === _maxV1; }));
+                                            if (_topSeat1) applyCircleOfTruthTargetGlow(_topSeat1);
+                                            database.ref('game/phase').set('circle-of-truth');
+                                        }
+                                    });
+                                };
                             }
                         }
                     } else {
@@ -3228,7 +3710,7 @@ function cancelTimer() {
         // CONFIRMATION MODAL SYSTEM
         // ============================================
         
-        let confirmCallback = null;
+        var confirmCallback = null;  // var avoids temporal dead zone issues
 
         function showConfirmation(title, message, confirmText, callback) {
             console.log('showConfirmation called with title:', title);
@@ -3268,6 +3750,9 @@ function cancelTimer() {
                 modal.style.zIndex = '10000';   // Force on top
             }, 10);
         }
+        window.showConfirmation = showConfirmation;
+        window.applyViewerMode = applyViewerMode; // Allow game.js to call on phase change
+
 
         function confirmAction() {
             const modal = document.getElementById('confirmation-modal');
@@ -3412,10 +3897,11 @@ function cancelTimer() {
         }
 
         // Seat Removal Mode Toggle
-        let seatRemoveModeActive = false;
+        window.seatRemoveModeActive = false; // exposed on window so game.js can read it
         
         window.toggleSeatRemoveMode = function() {
-            seatRemoveModeActive = !seatRemoveModeActive;
+            window.seatRemoveModeActive = !window.seatRemoveModeActive;
+            const seatRemoveModeActive = window.seatRemoveModeActive; // local alias
             const btn = document.getElementById('remove-seat-btn');
             
             // Show/hide all X buttons
@@ -3503,8 +3989,36 @@ function cancelTimer() {
             }); // <-- This closes the seatSnapshot callback
         };
 
+        // Apply red glow to Circle of Truth target (host-only visual cue)
+        function applyCircleOfTruthTargetGlow(seatNumber) {
+            // Persist so resize can re-apply
+            window._cotTargetSeat = seatNumber;
+            // Clear any existing red target glow first
+            document.querySelectorAll('.video-seat').forEach(function(s) {
+                if (s.dataset.cotTarget) {
+                    s.style.boxShadow = '';
+                    s.style.border = '';
+                    delete s.dataset.cotTarget;
+                }
+            });
+            const seat = document.getElementById('seat-' + seatNumber);
+            if (seat) {
+                seat.style.boxShadow = '0 0 40px 15px rgba(255, 0, 0, 0.85)';
+                seat.style.border = '4px solid #ff0000';
+                seat.dataset.cotTarget = 'true';
+                console.log('🔴 Circle of Truth target glow applied to seat', seatNumber);
+            }
+        }
+
         function selectPlayerForCircleOfTruth(seatNumber, player) {
             console.log('🎯 Selected player for Circle of Truth:', player.name);
+            // Clear the red target glow — player has been confirmed
+            window._cotTargetSeat = null;
+            document.querySelectorAll('[data-cot-target]').forEach(function(s) {
+                s.style.boxShadow = '';
+                s.style.border = '';
+                delete s.dataset.cotTarget;
+            });
 
             // ✅ VALIDATE player object
             if (!player || !player.id) {
@@ -3535,10 +4049,19 @@ function cancelTimer() {
                 // Finally, grow the seat on host screen
                 const seatElement = document.getElementById(`seat-${seatNumber}`);
                 if (seatElement) {
+                    // Set all other seats to low z-index using setProperty so we
+                    // override the CSS z-index:50 !important rule.
+                    for (let _ci = 1; _ci <= 25; _ci++) {
+                        const _cs = document.getElementById('seat-' + _ci);
+                        if (_cs && _ci !== seatNumber) _cs.style.setProperty('z-index', '1', 'important');
+                    }
                     seatElement.style.transform = 'translate(-50%, -50%) scale(2.0)';
                     seatElement.style.transformOrigin = '50% 50%';
-                    seatElement.style.zIndex = '100';
+                    seatElement.style.setProperty('z-index', '1000', 'important');
                     seatElement.style.transition = 'transform 0.5s ease';
+                    // Hide the label while seat is enlarged (same as player side)
+                    const _hostCotLabel = seatElement.querySelector('.seat-label') || seatElement.querySelector('[class*="label"]');
+                    if (_hostCotLabel) _hostCotLabel.style.visibility = 'hidden';
                 }
             }).catch((error) => {
                 console.error('❌ Error in Circle of Truth setup:', error);
@@ -3550,6 +4073,41 @@ function cancelTimer() {
             // Mark seat as removable after role reveal
             database.ref('game/circleOfTruthComplete').set(false);
         }
+        window.selectPlayerForCircleOfTruth = selectPlayerForCircleOfTruth;
+
+        function endCircleOfTruth() {
+            // Immediately deactivate selection mode so seat clicks don't trigger CoT
+            window.circleOfTruthSelectionMode = false;
+            document.querySelectorAll('.video-seat').forEach(s => {
+                s.style.cursor = '';
+                s.style.outline = '';
+            });
+            // Read current CoT seat before deactivating so all clients can reset it
+            database.ref('game/circleOfTruth').once('value', (snap) => {
+                const cotData = snap.val();
+                const cotSeat = cotData && cotData.seatNumber;
+                // Write active:false (keeps seatNumber so handleCircleUpdate can reset it)
+                database.ref('game/circleOfTruth').update({ active: false });
+                // Also reset on the host's own screen immediately
+                if (cotSeat) {
+                    const seatEl = document.getElementById('seat-' + cotSeat);
+                    if (seatEl) {
+                        seatEl.style.transition = 'transform 0.5s ease';
+                        seatEl.style.transform = 'translate(-50%, -50%)';
+                        seatEl.style.removeProperty('z-index');
+                        const labelEl = seatEl.querySelector('.seat-label') || seatEl.querySelector('[class*="label"]');
+                        if (labelEl) { labelEl.style.visibility = ''; labelEl.style.transform = ''; }
+                    }
+                    // Restore all other seats' z-index — remove the important override
+                    for (let _i = 1; _i <= 25; _i++) {
+                        const _s = document.getElementById('seat-' + _i);
+                        if (_s) _s.style.removeProperty('z-index');
+                    }
+                }
+                console.log('🔄 Circle of Truth ended — seat', cotSeat, 'reset');
+            });
+        }
+        window.endCircleOfTruth = endCircleOfTruth;
 
         function kickPlayerFromSeat(seatNumber, playerId) {
             // Clear the seat
@@ -3597,7 +4155,10 @@ function cancelTimer() {
                     if (seatElement) {
                         // Add visual indicator that seat is clickable
                         seatElement.style.cursor = 'pointer';
-                        seatElement.style.border = '3px dashed rgba(138, 43, 226, 0.5)';
+                        // Don't overwrite red glow on the CoT target seat
+                        if (seatNum !== window._cotTargetSeat) {
+                            seatElement.style.border = '3px dashed rgba(138, 43, 226, 0.5)';
+                        }
                         
                         console.log(`✅ Made seat ${seatNum} clickable for ${player.name}`);
                     }
@@ -3641,6 +4202,8 @@ function cancelTimer() {
             `;
             
             modal.classList.add('visible');
+            modal.style.display = 'flex';  // Override inline display:none left by showConfirmation
+            modal.style.zIndex = '10000';
         }
 
         function selectRole(role) {
@@ -3659,14 +4222,20 @@ function cancelTimer() {
                 database.ref('players/' + circleData.playerId + '/role').set(role).then(() => {
                     console.log('✅ Role written to player:', circleData.playerId, '→', role);
                     
-                    // Close modal
-                    document.getElementById('confirmation-modal').classList.remove('visible');
-                    
+                    // Close modal and reset inline styles
+                    const _roleModal = document.getElementById('confirmation-modal');
+                    if (_roleModal) {
+                        _roleModal.classList.remove('visible');
+                        _roleModal.style.display = 'none';
+                    }
+                    // Restore modal buttons for normal confirmations
+                    const _btnContainer = _roleModal ? _roleModal.querySelector('.modal-buttons') : null;
+                    if (_btnContainer) {
+                        _btnContainer.innerHTML = '<button onclick="cancelConfirmation()" class="control-button">Cancel</button><button onclick="confirmAction()" class="control-button primary" id="confirm-btn">Confirm</button>';
+                    }
                     // Show phase title again
                     const phaseElement = document.getElementById('phase-name');
-                    if (phaseElement) {
-                        phaseElement.style.display = 'block';
-                    }
+                    if (phaseElement) phaseElement.style.display = 'block';
                 }).catch((error) => {
                     console.error('❌ Error writing role:', error);
                 });
@@ -3687,6 +4256,10 @@ function cancelTimer() {
                 timestamp: Date.now()
             });
         }
+
+        // Expose role functions globally so onclick attributes can call them
+        window.selectRole = selectRole;
+        window.revealRole = revealRole;
 
         // Clear role reveal data
         function clearRoleReveal() {
@@ -3750,23 +4323,6 @@ function cancelTimer() {
 
         // Call initialization when page loads
         initializeRoomLimitInputs();
-
-        // Announcements
-        function sendAnnouncement() {
-            const text = document.getElementById('announcement-text').value.trim();
-            if (text.length === 0) {
-                alert('Please enter an announcement');
-                return;
-            }
-            
-            database.ref('game/announcement').set({
-                text: text,
-                timestamp: Date.now()
-            });
-            
-            document.getElementById('announcement-text').value = '';
-            alert('Announcement sent to all rooms!');
-        }
 
         // Player Selection Modal
         function openSelectPlayerModal(title, callback) {
@@ -3869,39 +4425,74 @@ function cancelTimer() {
         function repopulateHostRoomSeats(roomId) {
             database.ref('players').once('value', (snapshot) => { snapshot.forEach((child) => { const player = child.val(); if (player.room === roomId && player.roomSeat) { const nameEl = document.getElementById('room-name-' + player.roomSeat); const pronounsEl = document.getElementById('room-pronouns-' + player.roomSeat); if (nameEl) nameEl.textContent = player.name || 'Empty'; if (pronounsEl && player.pronouns) pronounsEl.textContent = player.pronouns; } }); }); }
         database.ref('players').on('value', () => { if (window.hostCurrentRoom && window.hostCurrentRoom !== 'main' && window.hostCurrentRoom !== 'waiting') { repopulateHostRoomSeats(window.hostCurrentRoom); } });
-        function hostJoinRoom(roomId) { window.hostCurrentRoom = roomId; database.ref('players/host/room').set(roomId); const roomNames = { 'main': 'Main Roundtable', 'kitchen': 'Kitchen', 'library': 'Library', 'living': 'Living Room', 'courtyard': 'Courtyard', 'bathroom': 'Bathroom', 'gym': 'Gym', 'turret': 'The Turret' }; const currentRoomEl = document.getElementById('host-current-room'); if (currentRoomEl) currentRoomEl.textContent = roomNames[roomId] || roomId; if (roomId === 'main') { if (typeof window.hideRoomOverlay === 'function') window.hideRoomOverlay(); } else { database.ref('game/roomLimits/' + roomId).once('value', (snap) => { const limit = snap.val() || 5; if (typeof window.showRoomOverlay === 'function') { window.showRoomOverlay(roomId, limit); setTimeout(() => repopulateHostRoomSeats(roomId), 100); } }); } }
-
-        function updateHostRoomDisplay() {
-            // Highlight current room in gold, reset others
-            const rooms = ['main', 'kitchen', 'library', 'living', 'courtyard', 'bathroom', 'gym', 'turret'];
-            
-            database.ref('players/host/room').once('value', (snapshot) => {
-                const currentRoom = snapshot.val() || 'main';
-                
-                rooms.forEach(room => {
-                    const roomItem = document.getElementById(`host-room-item-${room}`);
-                    if (roomItem) {
-                        if (room === currentRoom) {
-                            // Current room - gold highlight
-                            roomItem.style.border = '2px solid #FFD700';
-                            roomItem.style.background = 'rgba(255, 215, 0, 0.2)';
-                        } else {
-                            // Not current room - reset
-                            roomItem.style.border = '';
-                            roomItem.style.background = '';
-                        }
+        // Dispatch: route room join to the correct handler based on who is logged in
+        function joinMyRoom(roomId) {
+            const _cu = window.currentUser;
+            if (!_cu) return;
+            // Main host: id is 'host' and not a prod member
+            const _isMainHost = (_cu.id === 'host') || 
+                               (!_cu.isProdMember && !(_cu.id && _cu.id.startsWith('prod-')));
+            if (_isMainHost) {
+                hostJoinRoom(roomId);
+                return;
+            }
+            // Prod members (B/C/D) and observers: write to their own Firebase path
+            const _prodPath = 'players/' + _cu.id + '/room';
+            window.hostCurrentRoom = roomId; // keep UI in sync
+            database.ref(_prodPath).set(roomId);
+            // Update room indicator display
+            const roomNames = { 'main': 'Main Roundtable', 'kitchen': 'Kitchen',
+                'library': 'Library', 'living': 'Living Room', 'courtyard': 'Courtyard',
+                'bathroom': 'Bathroom', 'gym': 'Gym', 'turret': 'The Turret' };
+            const currentRoomEl = document.getElementById('host-current-room');
+            if (currentRoomEl) currentRoomEl.textContent = roomNames[roomId] || roomId;
+            if (roomId === 'main') {
+                if (typeof window.hideRoomOverlay === 'function') window.hideRoomOverlay();
+            } else {
+                database.ref('game/roomLimits/' + roomId).once('value', (snap) => {
+                    const limit = snap.val() || 5;
+                    if (typeof window.showRoomOverlay === 'function') {
+                        window.showRoomOverlay(roomId, limit);
+                        setTimeout(() => repopulateHostRoomSeats(roomId), 100);
                     }
                 });
+            }
+        }
+        window.joinMyRoom = joinMyRoom;
+
+        function hostJoinRoom(roomId) { window.hostCurrentRoom = roomId; updateHostRoomDisplay(); database.ref('players/host/room').set(roomId); const roomNames = { 'main': 'Main Roundtable', 'kitchen': 'Kitchen', 'library': 'Library', 'living': 'Living Room', 'courtyard': 'Courtyard', 'bathroom': 'Bathroom', 'gym': 'Gym', 'turret': 'The Turret' }; const currentRoomEl = document.getElementById('host-current-room'); if (currentRoomEl) currentRoomEl.textContent = roomNames[roomId] || roomId; if (roomId === 'main') { if (typeof window.hideRoomOverlay === 'function') window.hideRoomOverlay(); } else { database.ref('game/roomLimits/' + roomId).once('value', (snap) => { const limit = snap.val() || 5; if (typeof window.showRoomOverlay === 'function') { window.showRoomOverlay(roomId, limit); setTimeout(() => repopulateHostRoomSeats(roomId), 100); } }); } }
+
+        function updateHostRoomDisplay() {
+            // Use window.hostCurrentRoom as source of truth — it's set by
+            // hostJoinRoom() on every room change, no Firebase round-trip needed.
+            // Falls back to Firebase read on first call before any room change.
+            const rooms = ['main', 'kitchen', 'library', 'living', 'courtyard', 'bathroom', 'gym', 'turret'];
+            const currentRoom = window.hostCurrentRoom || 'main';
+            rooms.forEach(room => {
+                const roomItem = document.getElementById(`host-room-item-${room}`);
+                if (roomItem) {
+                    if (room === currentRoom) {
+                        roomItem.style.border = '2px solid #FFD700';
+                        roomItem.style.background = 'rgba(255, 215, 0, 0.2)';
+                    } else {
+                        roomItem.style.border = '';
+                        roomItem.style.background = '';
+                    }
+                }
             });
         }
 
-        // Listen for host room changes
-        database.ref('players/host/room').on('value', () => {
+        // Listen for host room changes in Firebase (handles changes from other tabs/devices)
+        database.ref('players/host/room').on('value', (snap) => {
+            if (snap.val()) window.hostCurrentRoom = snap.val();
             updateHostRoomDisplay();
         });
 
-        // Update display on page load
-        setTimeout(() => updateHostRoomDisplay(), 500);
+        // Initialize from Firebase on page load, then update display
+        database.ref('players/host/room').once('value', (snap) => {
+            window.hostCurrentRoom = snap.val() || 'main';
+            updateHostRoomDisplay();
+        });
 
         // Clear turret
         function clearTurret() {
@@ -3970,9 +4561,12 @@ function cancelTimer() {
                     return;
                 }
 
+                // Sort alphabetically by name
+                waitingPlayers.sort((a, b) => a.name.localeCompare(b.name));
+
                 // Create clickable player list
                 let html = '';
-                waitingPlayers.forEach(player => {
+                waitingPlayers.forEach((player, idx) => {
                     const isSelected = selectedWaitingPlayers.has(player.id);
                     const isInvited = player.invitedTo === 'main';
                     
@@ -3997,8 +4591,9 @@ function cancelTimer() {
                                     display: flex;
                                     justify-content: space-between;
                                     align-items: center;">
+                            <span style="color:#888;font-size:0.75rem;min-width:20px;">${idx + 1}.</span>
                             <strong onclick="toggleWaitingPlayerSelection('${player.id}')" 
-                                    style="cursor: pointer; flex: 1;">${player.name}</strong>
+                                    style="cursor: pointer; flex: 1; margin-left: 4px;">${player.name}</strong>
                             <button onclick="inviteSinglePlayer('${player.id}')" 
                                     class="control-button ${isInvited ? '' : 'primary'}" 
                                     style="padding: 5px 10px; font-size: 0.8rem; margin-left: 10px; ${isInvited ? 'background: #FF9800;' : ''}">
@@ -4097,14 +4692,17 @@ function cancelTimer() {
 
         // Invite a single player to main room
         function inviteSinglePlayer(playerId) {
-            // Increment invitation counter to trigger listener even if already invited to same room
-            database.ref('players/' + playerId + '/invitationCount').once('value', (snap) => {
-                const currentCount = snap.val() || 0;
-                database.ref('players/' + playerId).update({
-                    invitedTo: 'main',
-                    invitationCount: currentCount + 1
-                });
-                console.log('Invited player:', playerId, 'to main room (count:', currentCount + 1, ')');
+            // Write directly — no read round-trip needed.
+            // invitationPing uses Date.now() so each click is a unique write,
+            // guaranteeing the player's Firebase listener re-fires even if
+            // invitedTo was already 'main' from a previous click.
+            database.ref('players/' + playerId).update({
+                invitedTo: 'main',
+                invitationPing: Date.now()
+            }).then(() => {
+                console.log('Invited player:', playerId, 'to main room at', Date.now());
+            }).catch(err => {
+                console.error('Invite failed for', playerId, err);
             });
         }
 
@@ -4137,7 +4735,41 @@ function cancelTimer() {
 
         // Listen for vote reveal updates
         setupHostVoteRevealListener();
-        
+
+        // Dedicated listener for Second Vote Reveal progression.
+        // setupHostVoteRevealListener watches game/firstVote which no longer changes
+        // when Next Player is clicked during the revote reveal. This listener watches
+        // game/secondVoteReveal directly so the host phase title updates on every player.
+        database.ref('game/secondVoteReveal').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (!data || !data.active) return;
+            const currentIndex = data.currentIndex || 0;
+            const revealOrder  = data.revealOrder  || [];
+            const currentId    = revealOrder[currentIndex];
+            if (!currentId) return;
+            const player = gameState.players && gameState.players[currentId];
+            if (!player) return;
+            const phaseTitle = document.getElementById('phase-name');
+            if (phaseTitle) {
+                phaseTitle.textContent = `${player.name} is revealing their vote.`;
+                console.log('✅ HOST secondVoteReveal: title →', phaseTitle.textContent);
+            }
+            // Highlight the current revealer's seat; clear all others
+            document.querySelectorAll('.video-seat').forEach(s => {
+                s.style.boxShadow = '';
+                const c = s.querySelector('circle');
+                if (c) c.setAttribute('stroke', '#00FF00');
+            });
+            if (player.seat) {
+                const seatEl = document.getElementById('seat-' + player.seat);
+                if (seatEl) {
+                    seatEl.style.boxShadow = '0 0 40px 15px rgba(255,215,0,1)';
+                    const c = seatEl.querySelector('circle');
+                    if (c) c.setAttribute('stroke', '#FFD700');
+                }
+            }
+        });
+
         // Helper function to update room displays
         function updateRoomDisplays(roomCounts, roomPlayers, rooms) {
             database.ref('game/roomLimits').once('value', (limitsSnapshot) => {
@@ -4165,9 +4797,20 @@ function cancelTimer() {
                         if (roomPlayers[room].length === 0) {
                             playersEl.innerHTML = '<div style="color: #666;">Empty</div>';
                         } else {
-                            playersEl.innerHTML = roomPlayers[room].map(name => 
-                                `<div>• ${name}</div>`
-                            ).join('');
+                            playersEl.innerHTML = `<div style='display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;'>` +
+                                roomPlayers[room].map(p => {
+                                const micColor = p.audioMuted ? '#ff4444' : 'rgba(255,255,255,0.8)';
+                                const camColor = p.videoMuted ? '#ff4444' : 'rgba(255,255,255,0.8)';
+                                const micSlash = p.audioMuted ? `<line x1='3' y1='3' x2='21' y2='21' stroke='#ff4444' stroke-width='2'/>` : '';
+                                const camSlash = p.videoMuted ? `<line x1='3' y1='3' x2='21' y2='21' stroke='#ff4444' stroke-width='2'/>` : '';
+                                const micSvg = `<svg viewBox='0 0 24 24' width='11' height='11' fill='none' stroke='${micColor}' stroke-width='2' style='display:inline;vertical-align:middle;margin-left:2px'><path d='M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z'/><path d='M19 10v2a7 7 0 0 1-14 0v-2'/><line x1='12' y1='19' x2='12' y2='23'/><line x1='8' y1='23' x2='16' y2='23'/>${micSlash}</svg>`;
+                                const camSvg = `<svg viewBox='0 0 24 24' width='11' height='11' fill='none' stroke='${camColor}' stroke-width='2' style='display:inline;vertical-align:middle;margin-left:2px'><polygon points='23 7 16 12 23 17 23 7'/><rect x='1' y='5' width='15' height='14' rx='2' ry='2'/>${camSlash}</svg>`;
+                                const _pTag = p.isProdMember ? ' <span style="color:#9370DB;font-size:0.7rem;">★</span>' : '';
+                                 // Observers have no video feed — omit cam icon
+                                 const _camIcon = p.isObserver ? '' : camSvg;
+                                 return `<div data-player-name='${p.name}' style='color:#ccc;font-size:0.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 0;'>• ${p.name}${_pTag}${micSvg}${_camIcon}</div>`;
+                            }).join('') +
+                            `</div>`;
                         }
                     }
                 }); // Close forEach
@@ -4200,11 +4843,29 @@ function cancelTimer() {
                     
                     snapshot.forEach((child) => {
                         const player = child.val();
-                        // Only count player in room if they have a seat
-                        if (player.room && roomCounts.hasOwnProperty(player.room) && player.seat) {
-                            roomCounts[player.room]++;
-                            roomPlayers[player.room].push(player.name);
+                        if (!player.room || !roomCounts.hasOwnProperty(player.room)) return;
+                        // Prod members (including main host) appear by room, not seat.
+                        // Regular players only count if they have a seat.
+                        const _isProd = !!(player.isProdMember || player.isHost);
+                        // nightMuted = player seated but hasn't accepted invite yet
+                        const _showInRoom = (_isProd ? true : !!player.seat) && !player.nightMuted;
+                        if (_showInRoom) {
+                            // Prod/host appear in the list but don't count toward the room limit
+                            if (!_isProd) roomCounts[player.room]++;
+                            roomPlayers[player.room].push({
+                                name: player.name || 'Unknown',
+                                audioMuted: !!player.audioMuted,
+                                videoMuted: !!player.videoMuted,
+                                isProdMember: _isProd,
+                                isObserver: !!player.isObserver,
+                            });
                         }
+                    });
+                    // Sort each room: regular players alphabetically, then prod alphabetically
+                    rooms.forEach(r => {
+                        const _pl = roomPlayers[r].filter(x => !x.isProdMember).sort((a,b) => a.name.localeCompare(b.name));
+                        const _pr = roomPlayers[r].filter(x =>  x.isProdMember).sort((a,b) => a.name.localeCompare(b.name));
+                        roomPlayers[r] = [..._pl, ..._pr];
                     });
                     
                     // Update counts and player lists
@@ -4228,10 +4889,29 @@ function cancelTimer() {
                         
                         snapshot.forEach((child) => {
                             const player = child.val();
-                            if (player.room && roomCounts.hasOwnProperty(player.room) && player.seat) {
-                                roomCounts[player.room]++;
-                                roomPlayers[player.room].push(player.name);
+                            if (!player.room || !roomCounts.hasOwnProperty(player.room)) return;
+                            const _isProd2 = !!(player.isProdMember || player.isHost);
+                            // Exclude night/breakfast-muted players from room display
+                            // — they're still seated but not yet 'present' in the room
+                            const _isNightMuted2 = !!player.nightMuted;
+                            const _showInRoom = (_isProd2 ? true : !!player.seat) && !_isNightMuted2;
+                            if (_showInRoom) {
+                                // Prod/host appear in the list but don't count toward the room limit
+                                if (!_isProd2) roomCounts[player.room]++;
+                                roomPlayers[player.room].push({
+                                    name: player.name || 'Unknown',
+                                    audioMuted: !!player.audioMuted,
+                                    videoMuted: !!player.videoMuted,
+                                    isProdMember: _isProd2,
+                                    isObserver: !!player.isObserver,
+                                });
                             }
+                        });
+                        // Sort: regular players alphabetically, then prod alphabetically
+                        rooms.forEach(r => {
+                            const _pl2 = roomPlayers[r].filter(x => !x.isProdMember).sort((a,b) => a.name.localeCompare(b.name));
+                            const _pr2 = roomPlayers[r].filter(x =>  x.isProdMember).sort((a,b) => a.name.localeCompare(b.name));
+                            roomPlayers[r] = [..._pl2, ..._pr2];
                         });
                         
                         updateRoomDisplays(roomCounts, roomPlayers, rooms);
@@ -4256,6 +4936,10 @@ function cancelTimer() {
         // Update Reveal Count as votes are revealed (for host)
         database.ref('game/revealedVoteDisplay').on('value', (snapshot) => {
             if (currentUser.role !== 'host') return;
+
+            // When revealedVoteDisplay is removed (null), do NOT reset the tally.
+            // Tallies persist until Reset Game or Reset All Votes.
+            if (!snapshot.val()) return;
             
             const revealedVotes = snapshot.val() || {};
             const revealCountElement = document.getElementById('reveal-count');
@@ -4271,11 +4955,7 @@ function cancelTimer() {
                 }
             }
             
-            // No votes revealed yet
-            if (Object.keys(revealCounts).length === 0) {
-                revealCountElement.innerHTML = '<div style="color: #666;">No votes revealed yet</div>';
-                return;
-            }
+            if (Object.keys(revealCounts).length === 0) return; // no data — leave tally alone
             
             // Match the updateVoteTally() style EXACTLY
             revealCountElement.innerHTML = '';
@@ -4324,8 +5004,9 @@ function cancelTimer() {
                 counts[seat] = (counts[seat] || 0) + 1;
             });
             
-            // Show section and build display
-            revoteSection.style.display = 'block';
+            // Show section only if viewer mode is off
+            const _vmOn = localStorage.getItem('viewerModeEnabled') === 'true';
+            if (!_vmOn) revoteSection.style.display = 'block';
             
             // Get players for name lookup
             const players = gameState.players || {};
@@ -4354,6 +5035,10 @@ function cancelTimer() {
 
         // Listen for SECOND VOTE REVEAL and display reveal count (HOST)
         database.ref('game/secondVoteReveal/revealedVotes').on('value', (snapshot) => {
+            // When secondVoteReveal is removed (e.g. by Check Results), do NOT
+            // clear the tally. Tallies only clear on Reset All Votes, Reset Game, or Night phase.
+            if (!snapshot.val()) return;
+
             const revealedVotes = snapshot.val() || {};
             const revealSection = document.getElementById('revote-reveal-section');
             const revealCountDiv = document.getElementById('revote-reveal-count');
@@ -4416,13 +5101,15 @@ function cancelTimer() {
                     updates['game/started'] = false;
                     updates['game/timer'] = null;
                     updates['game/firstVote'] = null;
+                    updates['game/clearTallies'] = Date.now();
                     updates['game/firstVoteReveal'] = null;
                     updates['game/circleOfTruth'] = null;
                     updates['game/circleOfTruthComplete'] = null;
                     updates['game/firstVoteEndedAnimation'] = null;
-                    updates['game/announcement'] = null;
                     updates['game/roundtableGong'] = null;
                     updates['game/lastActivity'] = Date.now();
+                    updates['game/muteAllPlayers'] = null;  // null → listener skips (false triggers unwanted unmute)
+                    updates['game/camerasOffPlayers'] = null; // null → listener skips
 
                     // Clear votes in Firebase
                     database.ref('game/firstVote/votes').remove();
@@ -4446,6 +5133,8 @@ function cancelTimer() {
 
                     // Clear tiebreaker wheel
                     database.ref('game/tiebreakerWheel').remove();
+                    database.ref('game/revealedVoteDisplay').remove();
+                    database.ref('game/autoVoteDisplay').remove();
                     
                     // Keep room limits (include turret)
                     updates['game/roomLimits'] = {
@@ -4466,58 +5155,205 @@ function cancelTimer() {
                         Object.keys(players).forEach(playerId => {
                             const player = players[playerId];
                             
-                            if (player.isHost) {
-                                // Reset host to seat A, main room, clear tabId so next load reclaims
+                            if (player.isHost && !player.isProdMember) {
+                                // Reset MAIN host — keep tabId so this tab retains
+                                // ownership of seat A after reset. Clearing tabId causes
+                                // other host.html tabs to race for the host seat.
                                 updates[`players/${playerId}/room`] = 'main';
                                 updates[`players/${playerId}/seat`] = 'A';
-                                updates[`players/${playerId}/tabId`] = null;
+                                // tabId intentionally NOT cleared — host keeps seat ownership
                                 updates[`players/${playerId}/role`] = null;
                                 updates[`players/${playerId}/status`] = 'active';
                                 updates[`players/${playerId}/readyToRevealRole`] = null;
                                 updates[`players/${playerId}/invitedTo`] = null;
                                 updates[`players/${playerId}/invitationCount`] = null;
                                 updates[`players/${playerId}/roomSeat`] = null;
+                                // audioMuted/videoMuted intentionally NOT reset.
+                            } else if (player.isProdMember) {
+                                // Prod members (seats B-J): keep seat, room, name, connection.
+                                // Same treatment as players — only clear game-state fields.
+                                updates[`players/${playerId}/role`] = null;
+                                updates[`players/${playerId}/status`] = 'active';
+                                updates[`players/${playerId}/readyToRevealRole`] = null;
+                                updates[`players/${playerId}/invitedTo`] = null;
+                                updates[`players/${playerId}/invitationCount`] = null;
+                                updates[`players/${playerId}/endGameRole`] = null;
+                                updates[`players/${playerId}/endGameReadyToRevealSmoke`] = null;
+                                updates[`players/${playerId}/endGameReadyToRevealBanish`] = null;
+                                updates[`players/${playerId}/readyToRevealEndGameRole`] = null;
                             } else {
-                                // Remove seat, role, and invitations from all players
-                                updates[`players/${playerId}/seat`] = null;
+                                // Regular players: keep seat and room, clear game-state only.
                                 updates[`players/${playerId}/role`] = null;
-                                updates[`players/${playerId}/room`] = 'main';
                                 updates[`players/${playerId}/status`] = 'active';
                                 updates[`players/${playerId}/readyToRevealRole`] = null;
                                 updates[`players/${playerId}/invitedTo`] = null;
                                 updates[`players/${playerId}/invitationCount`] = null;
-                                updates[`players/${playerId}/roomSeat`] = null;
+                                updates[`players/${playerId}/invitationPing`] = null;
+                                updates[`players/${playerId}/hostForcedMic`] = null;
+                                updates[`players/${playerId}/hostForcedCam`] = null;
                             }
                         });
                         
-                        // Clear seat assignments
-                        updates['game/seats'] = null;
+                        // Reconcile game/seats: clear any entry that has no matching
+                        // active player currently claiming that seat number.
+                        // This removes orphaned seat claims (e.g. from a crashed session)
+                        // while keeping seats that belong to connected players.
+                        database.ref('game/seats').once('value', (_seatsSnap) => {
+                            const _seats = _seatsSnap.val() || {};
+                            Object.entries(_seats).forEach(([_seatNum, _pid]) => {
+                                const _owner = players[_pid];
+                                // Keep seat if owner exists AND has this seat number.
+                                const _seatInt = parseInt(_seatNum, 10);
+                                const _ownerHasSeat = _owner &&
+                                    (String(_owner.seat) === String(_seatNum) ||
+                                     _owner.seat === _seatInt);
+                                if (!_ownerHasSeat) {
+                                    database.ref('game/seats/' + _seatNum).remove();
+                                    console.log('🧹 Reset: cleared orphaned game/seats/' + _seatNum, '(owner:', _pid, ')');
+                                }
+                            });
+                        });
                         
                         database.ref('game/endGame').remove();
+                        database.ref('game/breakfastSeatCounter').remove();
                         database.ref('game/phaseTitle').remove();
                         database.ref('game/wheel').remove();
+                        database.ref('game/roleReveal').remove();    // clear role reveal state
+                        database.ref('game/roomSeats').remove();     // clear all breakout room seat assignments
+                        database.ref('game/seatSwitch').remove();    // clear pending seat switch requests
+                        // Clear end-game fields for regular players only.
+                        // Prod members have these cleared in their own branch above.
+                        // Host fields are intentionally left (host has no endGameRole).
                         Object.keys(players).forEach((pid) => {
+                            const _p = players[pid];
+                            if (_p && (_p.isProdMember || _p.isHost)) return;
                             updates[`players/${pid}/endGameRole`]                  = null;
                             updates[`players/${pid}/endGameReadyToRevealSmoke`]    = null;
                             updates[`players/${pid}/endGameReadyToRevealBanish`]   = null;
                             updates[`players/${pid}/readyToRevealEndGameRole`]     = null;
                         });
 
-                        // Apply all updates at once
-                        // Remove all prod member player records and reset prodSeats
-                        Object.keys(players).forEach(playerId => {
-                            if (players[playerId].isProdMember) {
-                                updates['players/' + playerId] = null;
-                            }
-                        });
-                        database.ref('prodSeats').remove();
+                        // Prod member records are kept — they stay seated and connected.
+                        // prodSeats is kept intact so their seat assignments persist.
                         database.ref('game/displaySwap').remove();
 
+                        // Signal all connected pages to do a soft reset.
+                        // Prod members now receive forceReset too — they soft-reset
+                        // like players, keeping their seat and LiveKit connection.
+                        updates['game/forceReset'] = Date.now();
+                        // prodReset no longer used — prod members don't need to
+                        // clear sessionStorage since their records are preserved.
+
                         database.ref().update(updates).then(() => {
-                            console.log('✅ Game reset complete - reloading page');
-                            
-                            // Reload the page to ensure clean state (no alert)
-                            window.location.reload();
+                            console.log('✅ Game reset complete — soft reset (no page reload)');
+
+                            // ── Soft reset: main host stays connected ──────────────
+                            // Player and prod pages reload via forceReset/prodReset signals.
+                            // The main host keeps their LiveKit connection, seat video, and DOM.
+                            // We just clear the prod/player signals immediately so the HOST
+                            // doesn't accidentally pick them up if tabId ever mismatches.
+                            setTimeout(() => {
+                                database.ref('game/forceReset').remove();
+                                database.ref('game/prodReset').remove();
+                                database.ref('game/removedProdSeat').remove();
+                                console.log('🧹 Cleaned up reset signals');
+                            }, 800);
+
+                            // Clear any UI state that should reset on the host page
+                            // without a full reload:
+                            // • Re-apply lobby phase visually
+                            if (typeof window.applyPhase === 'function') window.applyPhase('lobby');
+                            // • Clear any running timer display
+                            if (window.currentTimer) {
+                                clearInterval(window.currentTimer);
+                                window.currentTimer = null;
+                            }
+                            const timerEl = document.getElementById('timer');
+                            if (timerEl) timerEl.style.display = 'none';
+                            // • Reset any Circle of Truth seat to normal size
+                            if (typeof window._resetCotSeat === 'function') {
+                                window._resetCotSeat(window._lastCotSeat);
+                            }
+                            // Also forcibly reset all seat z-indexes and transforms
+                            for (let _ci = 1; _ci <= 25; _ci++) {
+                                const _cs = document.getElementById('seat-' + _ci);
+                                if (_cs) { _cs.style.removeProperty('z-index'); _cs.style.transform = 'translate(-50%, -50%)'; }
+                            }
+                            // • Clear vote indicators from all seats
+                            for (let _si = 1; _si <= 25; _si++) {
+                                const _vi = document.getElementById('vote-' + _si);
+                                if (_vi) { _vi.textContent = ''; _vi.style.background = ''; }
+                                const _ni = document.getElementById('name-' + _si);
+                                if (_ni) {
+                                    const _isOccupied = _ni.textContent !== 'Empty';
+                                    if (_isOccupied) {
+                                        // Occupied seat: reset to standard player font.
+                                        _ni.style.background = '';
+                                        _ni.style.fontFamily = 'Arial, sans-serif';
+                                        _ni.style.fontSize   = '1.2rem';
+                                        _ni.style.color      = '#fff';
+                                        _ni.style.textAlign  = '';
+                                        _ni.style.visibility = '';
+                                        _ni.style.display    = '';
+                                    } else {
+                                        // Empty seat: remove inline font styles so
+                                        // CSS defaults apply cleanly — no resize flash.
+                                        _ni.style.fontFamily = '';
+                                        _ni.style.fontSize   = '';
+                                        _ni.style.color      = '';
+                                        _ni.style.textAlign  = '';
+                                        _ni.style.visibility = '';
+                                        _ni.style.display    = '';
+                                        _ni.style.background = '';
+                                    }
+                                    delete _ni.dataset.showingVote;
+                                }
+                            }
+                            // • Clear all vote tally DOM elements
+                            const _tallyEmpty = '<div style="color:#666;">No votes cast yet</div>';
+                            const _revealEmpty = '<div style="color:#666;">No votes revealed yet</div>';
+                            ['original-count','current-count'].forEach(id => {
+                                const _t = document.getElementById(id);
+                                if (_t) _t.innerHTML = _tallyEmpty;
+                            });
+                            ['reveal-count','revote-count','revote-reveal-count'].forEach(id => {
+                                const _t = document.getElementById(id);
+                                if (_t) _t.innerHTML = _revealEmpty;
+                            });
+                            const _rtList = document.getElementById('revote-tally-list');
+                            if (_rtList) _rtList.innerHTML = '<div style="color:#666;">No revotes cast yet</div>';
+                            // • Hide second-vote tally sections
+                            ['revote-section','second-vote-count','revote-reveal-section'].forEach(id => {
+                                const _s = document.getElementById(id);
+                                if (_s) _s.style.display = 'none';
+                            });
+                            // • Remove any floating next-player or circle-of-truth buttons
+                            ['next-player-btn','circle-truth-btn'].forEach(id => {
+                                const _b = document.getElementById(id);
+                                if (_b) _b.remove();
+                            });
+                            // • Hide any overlay panels that might be open
+                            const _panels = ['smoke-vote-overlay','banishment-reveal-overlay',
+                                'role-reveal-overlay','circle-of-truth-overlay'];
+                            _panels.forEach(id => {
+                                const _el = document.getElementById(id);
+                                if (_el) _el.style.display = 'none';
+                            });
+                            // Clear vote display markers so updatePlayerDisplay
+                            // restores pronouns (showingVote prevents the update
+                            // when name boxes were showing votes before reset).
+                            for (let _ri = 1; _ri <= 24; _ri++) {
+                                const _rn = document.getElementById('name-' + _ri);
+                                const _rp = document.getElementById('pronouns-' + _ri);
+                                if (_rn) { delete _rn.dataset.showingVote; }
+                                if (_rp) {
+                                    delete _rp.dataset.showingVote;
+                                    _rp.style.visibility = '';
+                                    _rp.style.display    = '';
+                                    _rp.style.color      = '';
+                                }
+                            }
+                            console.log('✅ Host UI reset in place — no disconnect');
                         }).catch(err => {
                             console.error('❌ Reset failed:', err);
                             alert('Reset failed: ' + err.message);
@@ -4529,6 +5365,9 @@ function cancelTimer() {
 
         // Initialize room player lists
         updateRoomPlayerLists();
+
+        // The main updateRoomPlayerLists listener handles all player changes,
+        // including host AV state — no separate listener needed here.
 
         // Listen for player reveals
         database.ref('game/firstVote/playerRevealed').on('value', (snapshot) => {
@@ -4779,7 +5618,12 @@ function cancelTimer() {
                             
                             if (nameElement && nameElement.dataset.showingVote) {
                                 delete nameElement.dataset.showingVote;
-                                nameElement.style.cssText = '';
+                                nameElement.style.fontFamily = 'Arial, sans-serif';
+                                nameElement.style.fontSize   = '1.2rem';
+                                nameElement.style.color      = '#fff';
+                                nameElement.style.textAlign  = '';
+                                nameElement.style.visibility = '';
+                                nameElement.style.display    = '';
                             }
                             if (pronounsElement && pronounsElement.dataset.showingVote) {
                                 delete pronounsElement.dataset.showingVote;
@@ -4787,6 +5631,18 @@ function cancelTimer() {
                             }
                         }
                         console.log('🧹 Cleared vote displays from name tags and seat glows for revote');
+                        
+                        // Re-apply purple glow to tied seats (cleared by loop above)
+                        setTimeout(() => {
+                            tiedSeats.forEach(seatNum => {
+                                const tiedSeat = document.getElementById('seat-' + seatNum);
+                                if (tiedSeat) {
+                                    tiedSeat.style.boxShadow = '0 0 30px 10px rgba(138, 43, 226, 0.8)';
+                                    tiedSeat.style.border = '3px solid #8A2BE2';
+                                    console.log('💜 HOST: Purple glow re-applied to seat', seatNum);
+                                }
+                            });
+                        }, 50);
                         
                         // Clear any existing revote votes
                         database.ref('game/secondVote/votes').remove();
@@ -4904,6 +5760,9 @@ function cancelTimer() {
             });
         }
     </script>
+
+    <!-- End Game: Winners Overlay -->
+    <div id="endgame-winners-names-display" style="display:none; position:fixed; top:100px; left:50%; transform:translateX(-50%); font-size:4rem; font-weight:900; text-align:center; z-index:9400; pointer-events:none; letter-spacing:0.04em; white-space:nowrap;"></div>
 
     <!-- Confirmation Modal -->
     <div class="modal" id="confirmation-modal">

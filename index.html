@@ -42,11 +42,12 @@
         function loginAsHost() {
             const password = document.getElementById('host-password').value;
             const errorElement = document.getElementById('host-error');
+            const validPasswords = window.gamePasswords.host; // array: ['SVTr3Main','SVTr3Prod']
             
-            if (password === window.gamePasswords.host) {
-                // Store role in sessionStorage
+            if (Array.isArray(validPasswords) ? validPasswords.includes(password) : password === validPasswords) {
                 sessionStorage.setItem('userRole', 'host');
-                sessionStorage.setItem('isProduction', 'false'); // Default to Main Host
+                // Store which password was used so host.html knows seated vs observer
+                sessionStorage.setItem('hostType', password === 'SVTr3Main' ? 'seated' : 'observer');
                 window.location.href = 'host.html';
             } else {
                 errorElement.textContent = 'Incorrect password';
@@ -57,9 +58,21 @@
         function loginAsPlayer() {
             const password = document.getElementById('player-password').value;
             const errorElement = document.getElementById('player-error');
-            
+
+            // Check named player passwords first (pre-populated name/pronouns)
+            const presets = window.playerPresets || {};
+            if (presets[password]) {
+                sessionStorage.setItem('userRole', 'player');
+                sessionStorage.setItem('playerPresetName',     presets[password].name     || '');
+                sessionStorage.setItem('playerPresetPronouns', presets[password].pronouns || '');
+                window.location.href = 'player.html';
+                return;
+            }
+
+            // Generic player password — shows name/pronoun modal as normal
             if (password === window.gamePasswords.player) {
-                // Store role in sessionStorage
+                sessionStorage.removeItem('playerPresetName');     // clear any stale preset
+                sessionStorage.removeItem('playerPresetPronouns');
                 sessionStorage.setItem('userRole', 'player');
                 window.location.href = 'player.html';
             } else {

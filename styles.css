@@ -2,6 +2,12 @@
    GLOBAL STYLES
    ============================================ */
 
+html {
+    width: 100%;
+    overflow-x: hidden;
+    background-color: #4D4D4D; /* fills browser chrome around the site */
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -17,10 +23,13 @@
 
 body {
     font-family: 'Arial', sans-serif;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    background: transparent;
     color: #fff;
     min-height: 100vh;
-    position: relative;
+    min-width: 100vw;
+    width: 100%;
+    /* No position:relative — avoids creating a stacking context that can
+       trap body::before behind seats or cause z-index ordering issues. */
 }
 
 /* Background image layer */
@@ -29,13 +38,14 @@ body::before {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100vh;
     background-image: url('Subversion Background.png');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    z-index: -2; /* Behind everything */
+    z-index: -2; /* Behind all content — body has no stacking context so this works */
+    pointer-events: none; /* Don't intercept clicks */
 }
 
 /* Phase overlay layer */
@@ -48,7 +58,7 @@ body::after {
     height: 100%;
     background-color: rgba(255, 255, 255, 0.3); /* Default: white overlay */
     transition: background-color 0.5s ease;
-    z-index: -1; /* Above background, but behind content */
+    z-index: -1; /* Above image (-2), below all content */
     pointer-events: none; /* Allow clicks to pass through */
 }
 
@@ -102,6 +112,8 @@ body.no-transition::after {
     text-align: center;
     max-width: 1200px;
     width: 100%;
+    position: relative; /* creates stacking context so z-index works */
+    z-index: 2; /* above body::before image (z:-2) and body::after overlay (z:-1) */
 }
 
 .game-title {
@@ -237,11 +249,11 @@ body.no-transition::after {
     left: 50% !important;
     transform: translateX(-50%) !important;
     text-align: center !important;
-    z-index: 100 !important;
+    z-index: 10000 !important;
     pointer-events: none !important;
     display: block !important; /* Force block display */
     width: auto !important;
-    z-index: 100;
+    z-index: 10000;
 }
 
 .timer-phase-display .phase-name {
@@ -263,7 +275,14 @@ body.no-transition::after {
     font-family: 'Courier New', monospace;
     /* display: block !important; REMOVED - let JavaScript control visibility */
     width: 100%;
-    z-index: 100;
+    z-index: 10000;
+}
+
+/* Breakout room label — top-left corner when in a breakout room */
+#breakout-room-label {
+    text-align: left;
+    width: max-content;
+    max-width: 40vw;
 }
 
 .host-controls {
@@ -383,6 +402,19 @@ body.no-transition::after {
 
 .video-seat.host:hover {
     box-shadow: 0 0 40px rgba(102, 126, 234, 0.7);
+}
+
+/* Production seats B/C/D — blue ring when occupied, matching host seat color */
+.video-seat.prod-seat.active {
+    border-color: #667eea;
+    border-style: solid;
+    box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+}
+
+/* Override the 80px min-size floor so JS can freely size prod seats smaller */
+.video-seat.prod-seat {
+    min-width: unset !important;
+    min-height: unset !important;
 }
 
 .video-seat.empty {
@@ -562,6 +594,11 @@ body.no-transition::after {
     display: block;
 }
 
+/* Waiting Room tab needs flex layout for full-height scrollable list */
+#waiting-room.tab-content.active {
+    display: flex;
+}
+
 .tab-content h3 {
     margin: 0 0 15px 0;
     font-size: 1.2rem;
@@ -635,6 +672,7 @@ body.no-transition::after {
     display: none;
     justify-content: center;
     align-items: center;
+    z-index: 10000 !important; /* Must beat .video-seat z-index:50 !important */
     z-index: 9999; /* Higher than everything */
 }
 
@@ -721,6 +759,18 @@ body.no-transition::after {
 }
 
 /* Responsive Design */
+/* ── Observer floating mic button ──────────────────────────────────── */
+#obs-mic-btn.av-muted #obs-mic-circle {
+    fill: rgba(200,0,0,0.35);
+    stroke: #ff4444;
+}
+#obs-mic-btn.av-muted #obs-mic-icon {
+    fill: #ff4444;
+}
+#obs-mic-btn:hover {
+    filter: brightness(1.2);
+}
+
 @media (max-width: 768px) {
     .game-title {
         font-size: 2rem;
@@ -1310,16 +1360,22 @@ body.player-ready #timer-display {
 
 /* Buttons: sit directly below the seat-label, attached to it visually */
 .seat-av-controls {
+    display: none; /* legacy container — hidden permanently; buttons now inside seat-label */
+}
+
+/* AV buttons sit as "shoulders" on the top corners of the name box */
+.seat-label .mic-btn {
     position: absolute;
-    /* Positioned by JS after label renders — initially below label */
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 5px;
-    justify-content: center;
-    z-index: 20;
-    /* top is set dynamically via JS based on label height */
-    top: calc(100% + 30px); /* default fallback: circle bottom + label gap */
+    top: -11px;
+    left: 4px;
+    display: none; /* shown by JS when it's the local player's seat */
+}
+
+.seat-label .cam-btn {
+    position: absolute;
+    top: -11px;
+    right: 4px;
+    display: none; /* shown by JS when it's the local player's seat */
 }
 .av-btn {
     background: rgba(20, 20, 20, 0.82);
@@ -1330,7 +1386,7 @@ body.player-ready #timer-display {
     height: 22px;
     padding: 0;
     cursor: pointer;
-    display: flex;
+    display: none; /* hidden by default; shown only on own seat via setupAVControls */
     align-items: center;
     justify-content: center;
     transition: background 0.15s;
@@ -1368,3 +1424,465 @@ body.player-ready #timer-display {
 .av-icon svg {
     display: block;
 }
+
+
+/* Hand raise animation */
+@keyframes handWave {
+    from { transform: translateX(-50%) rotate(-15deg); }
+    to   { transform: translateX(-50%) rotate(15deg); }
+}
+
+/* =====================================================
+   MOBILE OPTIMIZATION (≤ 600px — phones)
+   =====================================================
+   Core strategy:
+   • Tab panel → bottom drawer (horizontal tabs, slides up)
+   • Seat labels shrink, touch targets stay large enough
+   • All overlays (vote, role reveal, rooms) fill the screen
+   • Raise-hand button repositioned so it doesn't overlap seats
+   • Smoke/banishment vote buttons stack vertically
+   • No pinch-zoom (handled in viewport meta)
+   ===================================================== */
+
+@media (max-width: 600px) {
+
+    /* ── Bottom tab bar ──────────────────────────────── */
+    .tab-container {
+        right: auto;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        flex-direction: column-reverse;
+        z-index: 300;
+    }
+
+    .tab-buttons {
+        flex-direction: row;
+        border-left: none;
+        border-top: 2px solid rgba(255,255,255,0.2);
+        width: 100%;
+        height: 52px;
+        flex-shrink: 0;
+    }
+
+    .tab-button {
+        writing-mode: horizontal-tb;
+        text-orientation: mixed;
+        flex: 1;
+        min-height: unset;
+        height: 52px;
+        padding: 0 8px;
+        font-size: 0.78rem;
+        border-bottom: none;
+        border-right: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .tab-button:last-child { border-right: none; }
+
+    /* Panel slides up from the bottom bar */
+    .tab-content-panel {
+        width: 100% !important;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+
+    .tab-content-panel.open {
+        width: 100% !important;
+        min-width: unset !important;
+        max-width: 100% !important;
+        max-height: 55vh;
+        overflow-y: auto;
+        padding: 16px;
+        border-top: 2px solid rgba(255,255,255,0.2);
+        transition: max-height 0.3s ease;
+    }
+
+    /* Reserve space at bottom so seats aren't hidden */
+    .video-circle-container {
+        padding-bottom: 52px;
+    }
+
+    /* ── Seat labels — compact to prevent vertical overlap ── */
+    .seat-label,
+    body .seat-label {
+        padding: 1px 3px !important;
+        min-width: 0 !important;
+        max-width: 60px !important;
+        width: max-content !important;
+        border-radius: 3px !important;
+        gap: 0 !important;
+        overflow: hidden !important;
+        top: calc(100% + 1px) !important;
+        border-width: 1px !important;
+    }
+
+    .player-name {
+        font-size: 0.5rem !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 58px !important;
+    }
+
+    /* Hide pronouns on mobile to reduce label height and prevent overlap */
+    .player-pronouns {
+        display: none !important;
+    }
+
+    /* AV buttons on seat — slightly bigger hit area */
+    .av-btn {
+        width: 24px !important;
+        height: 20px !important;
+    }
+
+    /* ── Timer / phase display ───────────────────────── */
+    .timer-phase-display {
+        font-size: 0.8rem !important;
+        padding: 3px 10px !important;
+        top: 4px !important;
+        max-width: 70vw !important;
+    }
+
+    .timer-phase-display .phase-name {
+        font-size: 0.85rem !important;
+        letter-spacing: 0.5px !important;
+        line-height: 1.2 !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* ── Vote pill overlay ───────────────────────────── */
+    #vote-pill-overlay {
+        padding: 16px 12px !important;
+        overflow-y: auto;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        padding-top: 40px !important;
+    }
+
+    #vote-pill-title {
+        font-size: 1.4rem !important;
+        margin-bottom: 12px !important;
+    }
+
+    #vote-pills {
+        gap: 8px !important;
+        max-width: 100% !important;
+    }
+
+    #vote-pill-lock-btn {
+        width: 100% !important;
+        padding: 14px !important;
+        font-size: 1rem !important;
+    }
+
+    /* ── Smoke vote buttons (stack vertically on small screens) */
+    #smoke-vote-overlay > div:first-of-type {
+        flex-direction: column !important;
+        gap: 12px !important;
+        width: 90% !important;
+    }
+
+    #smoke-end-btn, #smoke-banish-btn {
+        min-width: unset !important;
+        width: 100% !important;
+        padding: 16px !important;
+        font-size: 1rem !important;
+    }
+
+    /* ── Banishment vote pills ───────────────────────── */
+    #banishment-vote-overlay {
+        padding: 16px 12px !important;
+        overflow-y: auto;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        padding-top: 40px !important;
+    }
+
+    #banishment-player-pills {
+        max-width: 100% !important;
+        gap: 8px !important;
+    }
+
+    #banishment-lock-btn {
+        width: 100% !important;
+        padding: 14px !important;
+    }
+
+    /* ── Reveal buttons (bottom-center floating) ─────── */
+    #endgame-smoke-reveal-btn,
+    #endgame-banish-reveal-btn,
+    #endgame-role-reveal-btn {
+        width: 90% !important;
+        bottom: 70px !important; /* above the tab bar */
+        font-size: 1rem !important;
+        padding: 14px 16px !important;
+    }
+
+    /* ── Room overlay ────────────────────────────────── */
+    #room-name-display {
+        font-size: 1.4rem !important;
+        top: 12px !important;
+    }
+
+    /* ── Modals ──────────────────────────────────────── */
+    .modal-content {
+        width: 92vw !important;
+        max-width: unset !important;
+        padding: 20px 16px !important;
+        margin: 16px auto !important;
+    }
+
+    .modal-content input[type="text"] {
+        font-size: 16px; /* prevent iOS auto-zoom on focus */
+        padding: 10px 12px;
+    }
+
+    .control-button {
+        padding: 12px 20px !important;
+        font-size: 0.95rem !important;
+    }
+
+    /* ── Observer floating mic button ────────────────── */
+    #obs-mic-btn {
+        width: 64px !important;
+        height: 64px !important;
+        top: 8px !important;
+    }
+
+    /* ── Raise hand button ───────────────────────────── */
+    #raise-hand-btn {
+        filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+    }
+    #raise-hand-btn:active {
+        transform: scale(0.94);
+    }
+    /* Raised state — golden glow */
+    #raise-hand-btn.hand-raised {
+        filter: drop-shadow(0 0 10px rgba(255,200,0,0.8));
+    }
+    /* ── Raise hand button (mobile size) ─────────────── */
+    #raise-hand-btn {
+        width: 64px !important;
+        height: 64px !important;
+        top: 8px !important;
+        /* left is set by JS — just ensure it doesn't overflow */
+    }
+
+    /* ── AV status icons (mic/cam off) ───────────────── */
+    .av-icon svg {
+        width: 9px !important;
+        height: 9px !important;
+    }
+
+    /* ── Room list in tab panel ──────────────────────── */
+    .room-list .room-item {
+        padding: 10px !important;
+        margin-bottom: 8px !important;
+    }
+
+    .room-name {
+        font-size: 0.88rem !important;
+    }
+
+    .room-count {
+        font-size: 0.78rem !important;
+    }
+}
+
+
+/* ── Landscape phones (short height ≤ 500px, not a tablet) ────────────────── */
+@media (max-height: 500px) and (max-width: 1024px) and (orientation: landscape) {
+
+    /* Move tab bar to bottom, same as portrait mobile */
+    .tab-container {
+        right: auto;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        flex-direction: column-reverse;
+        z-index: 300;
+    }
+
+    .tab-buttons {
+        flex-direction: row;
+        border-left: none;
+        border-top: 2px solid rgba(255,255,255,0.2);
+        width: 100%;
+        height: 44px;
+        flex-shrink: 0;
+    }
+
+    .tab-button {
+        writing-mode: horizontal-tb;
+        flex: 1;
+        min-height: unset;
+        height: 44px;
+        padding: 0 6px;
+        font-size: 0.72rem;
+        border-bottom: none;
+        border-right: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .tab-button:last-child { border-right: none; }
+
+    .tab-content-panel {
+        width: 100% !important;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+
+    .tab-content-panel.open {
+        width: 100% !important;
+        min-width: unset !important;
+        max-width: 100% !important;
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 12px;
+        border-top: 2px solid rgba(255,255,255,0.2);
+        transition: max-height 0.3s ease;
+    }
+
+    /* Compact seat labels to prevent overlap */
+    .seat-label,
+    body .seat-label {
+        padding: 1px 3px !important;
+        min-width: 0 !important;
+        max-width: 52px !important;
+        width: max-content !important;
+        border-radius: 3px !important;
+        gap: 0 !important;
+        overflow: hidden !important;
+        top: calc(100% + 1px) !important;
+        border-width: 1px !important;
+    }
+
+    .player-name {
+        font-size: 0.5rem !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 50px !important;
+    }
+
+    /* Hide pronouns in landscape — no vertical space */
+    .player-pronouns {
+        display: none !important;
+    }
+
+    /* Phase title compact */
+    .timer-phase-display {
+        font-size: 0.7rem !important;
+        padding: 2px 8px !important;
+        top: 4px !important;
+        max-width: 60vw !important;
+    }
+
+    .timer-phase-display .phase-name {
+        font-size: 0.75rem !important;
+        letter-spacing: 0.5px !important;
+        line-height: 1.1 !important;
+        margin-bottom: 1px !important;
+    }
+
+    /* AV buttons tiny in landscape */
+    .av-btn {
+        width: 20px !important;
+        height: 18px !important;
+    }
+
+    /* Raise hand button repositioned for landscape */
+    #raise-hand-btn {
+        width: 56px !important;
+        height: 56px !important;
+        top: 6px !important;
+    }
+}
+
+/* ── Very small phones (≤ 380px, older iPhones/Androids) ── */
+@media (max-width: 380px) {
+    .tab-button {
+        font-size: 0.65rem;
+        padding: 0 4px;
+    }
+
+    .player-name {
+        font-size: 0.58rem !important;
+    }
+
+    .seat-label {
+        min-width: 44px !important;
+        padding: 3px 4px !important;
+    }
+
+    #vote-pill-title {
+        font-size: 1.2rem !important;
+    }
+}
+
+/* ── Prevent iOS input zoom (font-size must be >= 16px) ── */
+@media (max-width: 600px) {
+    input[type="text"],
+    input[type="password"],
+    input[type="email"],
+    textarea,
+    select {
+        font-size: 16px !important; /* prevents iOS Safari zoom on focus */
+    }
+
+    /* Remove tap highlight flash on buttons/seats */
+    button, .video-seat, .room-item, .tab-button {
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation; /* disable double-tap zoom on interactive elements */
+    }
+
+    /* Ensure seats are large enough to tap comfortably */
+    .video-seat {
+        min-width: 56px !important;
+        min-height: 56px !important;
+    }
+
+    /* Prod seats are intentionally smaller on mobile — override both size floors */
+    .video-seat.prod-seat {
+        min-width: unset !important;
+        min-height: unset !important;
+    }
+}
+/* ── Audio level ring ─────────────────────────────────────────────────────
+   A full circle behind the seat that grows outward when the player speaks.
+   Positioned centered on the seat, sized to match it exactly at scale(1).
+   The rAF loop in game.js drives scale (1.0→1.7) and opacity (0→0.9).
+   Gradient: transparent center → bright yellow rim → transparent edge,
+   creating a "halo" effect that blooms behind the seat video.              */
+
+.audio-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    /* Match seat size via width/height:100% + padding to extend beyond */
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    /* Radial gradient: black/transparent at center, yellow at rim, fades out */
+    background: radial-gradient(
+        circle,
+        transparent        35%,
+        rgba(255,215,0,0.15) 55%,
+        rgba(255,200,0,0.7)  72%,
+        rgba(255,160,0,0.4)  85%,
+        transparent        100%
+    );
+    pointer-events: none;
+    z-index: 45; /* behind the seat (z-index:50) but above background */
+    opacity: 0;  /* starts invisible; JS sets opacity per audio level */
+    will-change: transform, opacity; /* GPU-composited for smooth rAF animation */
+}
+
+/* Hide ring for empty seats — no speaker, no glow */
+.video-seat.empty .audio-ring { display: none; }

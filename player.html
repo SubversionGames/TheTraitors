@@ -2,16 +2,70 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Player - Subversion: The Traitors</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+
+    <!-- Mobile AV control bar — shown when player is seated on mobile.
+         Replaces in-seat AV buttons which can be covered by adjacent seat elements. -->
+    <div id="mobile-av-bar"
+         style="display:none; position:fixed; top:8px; right:8px;
+                z-index:2000; flex-direction:column; gap:8px; align-items:center;">
+        <button id="mobile-mic-btn"
+                onclick="event.stopPropagation(); window.toggleMic && window.toggleMic();"
+                style="width:44px; height:44px; border-radius:50%; border:2px solid rgba(255,255,255,0.5);
+                       cursor:pointer; background:rgba(40,40,40,0.9); display:flex;
+                       align-items:center; justify-content:center; touch-action:manipulation;">
+            <svg viewBox="0 0 24 24" fill="white" width="20" height="20">
+                <path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+        </button>
+        <button id="mobile-cam-btn"
+                onclick="event.stopPropagation(); window.toggleCam && window.toggleCam();"
+                style="width:44px; height:44px; border-radius:50%; border:2px solid rgba(255,255,255,0.5);
+                       cursor:pointer; background:rgba(40,40,40,0.9); display:flex;
+                       align-items:center; justify-content:center; touch-action:manipulation;">
+            <svg viewBox="0 0 24 24" fill="white" width="20" height="20">
+                <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Raise Hand button — shown when player is seated, H key toggles -->
+    <div id="raise-hand-btn" onclick="toggleRaiseHand()"
+         style="display:none; position:fixed; top:30px; z-index:1500; cursor:pointer; width:80px; height:80px; transition:filter 0.2s;"
+         title="Raise Hand (H)">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;overflow:visible;">
+            <defs>
+                <path id="topArc" d="M 12,44 A 28,28 0 0,1 68,44"/>
+                <path id="botArc" d="M 12,44 A 28,28 0 0,0 68,44"/>
+            </defs>
+            <circle cx="40" cy="40" r="38" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.4)" stroke-width="2" id="raise-hand-circle"/>
+            <text font-size="13" font-weight="bold" fill="white" font-family="Arial,sans-serif">
+                <textPath href="#topArc" startOffset="50%" text-anchor="middle"
+                          id="raise-hand-top-text">RAISE</textPath>
+            </text>
+            <text x="40" y="50" text-anchor="middle" font-size="28" id="raise-hand-emoji">✋</text>
+            <text font-size="13" font-weight="bold" fill="white" font-family="Arial,sans-serif">
+                <textPath href="#botArc" startOffset="50%" text-anchor="middle"
+                          id="raise-hand-bot-text">HAND</textPath>
+            </text>
+        </svg>
+    </div>
+
     <div class="game-interface">
         <!-- Timer/Phase Display (floating, centered) -->
         <div class="timer-phase-display" id="timer-phase-display" style="display: none;">
             <div class="phase-name" id="phase-name">Waiting to Start</div>
             <div class="timer" id="timer" style="display: none;">00:00</div>
+        </div>
+
+        <!-- Breakout room name (top-left corner, shown when in a breakout room) -->
+        <div id="breakout-room-label" style="display:none; position:fixed; top:20px; left:20px; text-align:left; z-index:9999; pointer-events:none;">
+            <div id="breakout-room-name" style="font-size:2.8rem; font-weight:bold; color:#FFD700; letter-spacing:1px; text-shadow:1px 1px 3px rgba(0,0,0,0.8);"></div>
+            <div id="prod-in-room-display" style="font-size:1.4rem; font-weight:bold; color:#FFD700; margin-top:2px; min-height:1.1em; text-shadow:1px 1px 3px rgba(0,0,0,0.8);"></div>
         </div>
 
         <!-- Main Content Area -->
@@ -33,6 +87,7 @@
                         <span class="av-icon mic-off-icon" id="mic-off-A" style="display:none"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></span>
                         <span class="av-icon cam-off-icon" id="cam-off-A" style="display:none"><svg viewBox="0 0 24 24" fill="white" width="12" height="12"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg></span>
                     </div>
+                    <div class="audio-ring" id="aring-A"></div>
                 </div>
             
                 <div class="video-circle" id="video-circle">
@@ -54,8 +109,8 @@
             <div id="room-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 150; pointer-events: none;">
                 <!-- Dark backdrop that blurs main roundtable -->
                 <div id="room-backdrop" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px);"></div>
-                <!-- Room name display -->
-                <div id="room-name-display" style="position: absolute; top: 30px; left: 50%; transform: translateX(-50%); font-size: 2.5rem; font-weight: bold; color: #FFD700; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); z-index: 10; pointer-events: none;"></div>
+                <!-- Room name display — hidden; room name now shown in #breakout-room-label (top-left) -->
+                <div id="room-name-display" style="display:none;"></div>
                 <!-- Room seats container -->
                 <div id="room-seats-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
             </div>
@@ -234,8 +289,8 @@
         </div>
     </div>
 
-    <!-- Voting Modal -->
-    <div class="modal" id="voting-modal">
+    <!-- Voting Modal (legacy — kept for fallback) -->
+    <div class="modal" id="voting-modal" style="display:none;">
         <div class="modal-content">
             <h2>Cast Your Vote</h2>
             <p>Click on a player's name to vote for them.</p>
@@ -245,6 +300,16 @@
                 <button onclick="closeVotingModal()" class="control-button">Close</button>
             </div>
         </div>
+    </div>
+
+    <!-- Vote Pill Overlay: shown during first-vote and second-vote phases -->
+    <div id="vote-pill-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.93); z-index:8500; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px; box-sizing:border-box;">
+        <h2 id="vote-pill-title" style="color:#FFD700; font-size:2rem; margin-bottom:8px;">🗳️ Cast Your Vote</h2>
+        <p id="vote-pill-subtitle" style="color:#ccc; margin-bottom:24px; font-size:1rem;">Select a player to vote for. Tap again to confirm.</p>
+        <div id="vote-pill-buttons" style="display:flex; flex-wrap:wrap; gap:14px; justify-content:center; max-width:600px; margin-bottom:24px;"></div>
+        <p id="vote-pill-selection" style="color:#4CAF50; font-weight:bold; font-size:1.1rem; min-height:1.5em; margin-bottom:16px;"></p>
+        <button onclick="window.lockInPillVote && window.lockInPillVote()" id="vote-pill-lock-btn" style="padding:14px 32px; background:#4CAF50; border:none; border-radius:8px; color:white; font-weight:bold; font-size:1.1rem; cursor:pointer; opacity:0.4; pointer-events:none;">Lock In Vote</button>
+        <div id="vote-pill-locked-msg" style="display:none; margin-top:16px; color:#4CAF50; font-size:1rem;">✅ Vote locked in! Waiting for reveal...</div>
     </div>
 
     <!-- Reveal Vote Instructions Modal -->
@@ -272,10 +337,18 @@
     
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     
     <!-- Firebase Config -->
-    <script src="firebase-config.js"></script>
+    <script src="firebase-config.js">
+    </script>
+    <script>
+        firebase.auth().signInAnonymously()
+            .then(() => { console.log("🔐 Firebase: signed in anonymously"); })
+            .catch((err) => { console.warn("🔐 Firebase auth error:", err.code, err.message); });
+    </script></script>
 
     <!-- Game Logic -->
     <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
@@ -298,23 +371,37 @@
 
         // Prevent seats from showing while in waiting room - AGGRESSIVE VERSION
         function preventSeatsWhileWaiting() {
-            // Hide seats if in waiting room or awaiting name entry
-            const shouldHide = !window.currentUser || 
-                            window.currentUser.room === 'waiting' || 
-                            window.awaitingNameEntry;
-            
+            const _phase = window._currentPhase || '';
+            const _overlayActive = (_phase === 'night' || _phase === 'breakfast')
+                                && !window._breakfastSeatVisible;
+            // During lobby, players in 'waiting' just haven't picked a seat yet —
+            // they need to see the seats to choose one. Don't hide during lobby.
+            const _inLobby = (_phase === 'lobby' || _phase === '' || _phase === 'talk');
+            const _waitingNeedsHide = window.currentUser &&
+                                      window.currentUser.room === 'waiting' &&
+                                      !_inLobby;
+
+            // Hide seats if: truly needs hiding (not lobby), awaiting name, OR overlay is active
+            const shouldHide = !window.currentUser ||
+                               _waitingNeedsHide ||
+                               window.awaitingNameEntry ||
+                               _overlayActive;
+
             if (shouldHide) {
                 document.querySelectorAll('.video-seat').forEach(seat => {
-                    seat.style.display = 'none';
-                    seat.style.visibility = 'hidden';
+                    seat.style.setProperty('display', 'none', 'important');
+                    seat.style.setProperty('visibility', 'hidden', 'important');
                 });
                 const tabContainer = document.querySelector('.tab-container');
-                if (tabContainer) {
+                if (tabContainer && _overlayActive) {
+                    tabContainer.style.setProperty('display', 'none', 'important');
+                    tabContainer.style.setProperty('visibility', 'hidden', 'important');
+                } else if (tabContainer && !_overlayActive) {
                     tabContainer.style.display = 'none';
                     tabContainer.style.visibility = 'hidden';
                 }
             } else {
-                // Player is in main room - ensure seats are visible
+                // Player is in main room and no overlay — show seats
                 document.querySelectorAll('.video-seat').forEach(seat => {
                     seat.style.display = 'flex';
                     seat.style.visibility = 'visible';
@@ -376,7 +463,12 @@
         // Check current phase from Firebase FIRST, then register player
         database.ref('game/phase').once('value', (phaseSnapshot) => {
             const currentPhase = phaseSnapshot.val() || 'lobby';
-            const initialRoom = (currentPhase === 'night' || currentPhase === 'breakfast') ? 'waiting' : 'main';
+            // Host/prod members (both passwords) are never sent to waiting room.
+            // Use sessionStorage since currentUser.role isn't set correctly yet at this point.
+            const _isHostOrProd = sessionStorage.getItem('userRole') === 'host';
+            const initialRoom = (!_isHostOrProd && (currentPhase === 'night' || currentPhase === 'breakfast')) ? 'waiting' : 'main';
+            // Store on window so showWaitingRoomOverlay can use it as a reliable phase signal
+            window._initialRoom = initialRoom;
             
             console.log('🎮 Current phase:', currentPhase);
             console.log('🚪 Initial room:', initialRoom);
@@ -385,7 +477,7 @@
             window.currentUser.room = initialRoom;
             
             // Check if player already exists in Firebase first
-            database.ref('players/' + currentPlayerId).once('value', (playerSnapshot) => {
+            database.ref('players/' + currentPlayerId).once('value', async (playerSnapshot) => {
                 const existingPlayer = playerSnapshot.val();
                 
                 if (existingPlayer) {
@@ -413,16 +505,60 @@
                     }
 
                     // Session still valid - restore player state
-                    window.currentUser.name = existingPlayer.name || 'New Player';
-                    window.currentUser.pronouns = existingPlayer.pronouns || '';
+                    // But if a named password preset is waiting in sessionStorage,
+                    // override the stored name/pronouns with the preset values.
+                    // This handles players returning on a device with a stale record.
+                    const _frPresetName     = sessionStorage.getItem('playerPresetName');
+                    const _frPresetPronouns = sessionStorage.getItem('playerPresetPronouns') || '';
+                    const _frHasPreset      = !!_frPresetName;
+
+                    // Duplicate session guard for fast-restore preset
+                    if (_frHasPreset) {
+                        const _frDupFound = await new Promise(res => {
+                            database.ref('players').orderByChild('name').equalTo(_frPresetName)
+                                .once('value', snap => {
+                                    let found = false;
+                                    snap.forEach(child => {
+                                        if (child.key !== currentPlayerId &&
+                                            child.val().status === 'active' &&
+                                            (Date.now() - (child.val().lastActive || 0)) < 3600000) {
+                                            found = true;
+                                        }
+                                    });
+                                    res(found);
+                                });
+                        });
+                        if (_frDupFound) {
+                            document.body.classList.remove('player-loading');
+                            document.body.classList.add('player-ready');
+                            const _frErrDiv = document.createElement('div');
+                            _frErrDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#0a0a0f;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;';
+                            _frErrDiv.innerHTML = '<h2 style="color:#DC143C;font-size:2rem;margin-bottom:16px;">Already Signed In</h2>'
+                                + '<p style="color:#ccc;font-size:1.1rem;text-align:center;max-width:400px;">' + _frPresetName + ' is already active on another device.<br><br>Please sign out from that device first, or contact production.</p>';
+                            document.body.appendChild(_frErrDiv);
+                            return;
+                        }
+                    }
+                    if (_frHasPreset) {
+                        console.log('🎫 Fast-restore: applying preset for', _frPresetName);
+                        window.currentUser.name     = _frPresetName;
+                        window.currentUser.pronouns = _frPresetPronouns;
+                        sessionStorage.removeItem('playerPresetName');
+                        sessionStorage.removeItem('playerPresetPronouns');
+                    } else {
+                        window.currentUser.name = existingPlayer.name || 'New Player';
+                        window.currentUser.pronouns = existingPlayer.pronouns || '';
+                    }
                     window.currentUser.seat = existingPlayer.seat;
                     window.currentUser.room = existingPlayer.room || initialRoom;
                     
-                    // Update timestamp
-                    database.ref('players/' + currentPlayerId).update({
-                        lastActive: now,
-                        status: 'active'
-                    });
+                    // Update timestamp (and name/pronouns if preset overrides)
+                    const _frUpdates = { lastActive: now, status: 'active' };
+                    if (_frHasPreset) {
+                        _frUpdates.name     = _frPresetName;
+                        _frUpdates.pronouns = _frPresetPronouns;
+                    }
+                    database.ref('players/' + currentPlayerId).update(_frUpdates);
 
                     console.log('✅ Player restored: ' + existingPlayer.name + ' | Seat: ' + existingPlayer.seat);
                     
@@ -465,19 +601,63 @@
                     }
                     
                     // Hide name modal if they already have a name
+                    // Also skip it if a preset was just applied (currentUser.name was overridden)
                     const nameModal = document.getElementById('name-pronouns-modal');
-                    if (existingPlayer.name && existingPlayer.name !== 'New Player') {
+                    const _effectiveName = window.currentUser.name || existingPlayer.name;
+                    if (_effectiveName && _effectiveName !== 'New Player') {
                         nameModal.classList.remove('visible');
                         nameModal.style.display = 'none';
                         document.body.classList.remove('player-loading');
                         document.body.classList.add('player-ready');
                         
-                        if (existingPlayer.room === 'main') {
+                        // Show seats if player is in main room,
+                        // OR if they're in waiting but phase is lobby,
+                        // OR if they're a preset player with no seat/room yet
+                        //    (existingPlayer.room is null/undefined on a fresh or reset record).
+                        const _restorePhase = window._currentPhase ||
+                            sessionStorage.getItem('currentPhase') || '';
+                        const _restoreIsOverlay = _restorePhase === 'night' || _restorePhase === 'breakfast';
+                        const _needsAutoSit = _frHasPreset && !existingPlayer.seat;
+                        // Prod/host members are exempt from overlay restrictions —
+                        // they keep their seat and media connection at all times.
+                        const _restoreIsProdOrHost = existingPlayer.isProdMember || existingPlayer.isHost
+                            || sessionStorage.getItem('userRole') === 'host';
+                        // During night/breakfast: send regular players to waiting room
+                        if (_restoreIsOverlay && !_restoreIsProdOrHost) {
+                            showWaitingRoomOverlay();
+                            // Ensure they're in waiting room AND have no seat in Firebase
+                            // so they don't appear in any seat on the host's screen.
+                            const _oldSeat = existingPlayer.seat;
+                            database.ref('players/' + currentPlayerId).update({
+                                room: 'waiting',
+                                seat: null
+                            });
+                            // Also clear the game/seats entry so the seat is available
+                            if (_oldSeat) {
+                                database.ref('game/seats/' + _oldSeat).remove();
+                            }
+                            window.currentUser.room = 'waiting';
+                            window.currentUser.seat = null;
+                            console.log('🌙 Night/breakfast: restored player cleared from seat', _oldSeat, '→ waiting room');
+                        } else {
+                        const _canShowSeats = existingPlayer.room === 'main' ||
+                            (existingPlayer.room === 'waiting' && initialRoom === 'main') ||
+                            !existingPlayer.room ||
+                            _needsAutoSit;
+                        if (_canShowSeats) {
+                            // Ensure player is in main room in Firebase
+                            if (!existingPlayer.room || existingPlayer.room === 'waiting') {
+                                database.ref('players/' + currentPlayerId).update({ room: 'main' });
+                                window.currentUser.room = 'main';
+                            }
                             document.querySelectorAll('.video-seat').forEach(seat => {
                                 seat.style.display = '';
                             });
                             document.querySelector('.tab-container')?.style.setProperty('display', '', 'important');
+                            // Auto-sit preset players who have no seat yet
+                            if (_needsAutoSit) _autoSitPresetPlayer();
                         }
+                        } // end non-overlay block
                     } else {
                         nameModal.classList.add('visible');
                         document.body.classList.remove('player-loading');
@@ -496,10 +676,44 @@
                     // NEW PLAYER - Register them
                     console.log('🆕 New player - registering in Firebase');
                     
+                    // Check for a per-player password preset (name + pronouns pre-filled)
+                    const _presetName     = sessionStorage.getItem('playerPresetName');
+                    const _presetPronouns = sessionStorage.getItem('playerPresetPronouns') || '';
+                    const _hasPreset      = !!_presetName;
+
+                    // Duplicate session guard: if a preset name is already active
+                    // in Firebase under a DIFFERENT player ID, block this login.
+                    if (_hasPreset) {
+                        const _dupFound = await new Promise(res => {
+                            database.ref('players').orderByChild('name').equalTo(_presetName)
+                                .once('value', snap => {
+                                    let found = false;
+                                    snap.forEach(child => {
+                                        if (child.key !== currentPlayerId &&
+                                            child.val().status === 'active' &&
+                                            (Date.now() - (child.val().lastActive || 0)) < 3600000) {
+                                            found = true;
+                                        }
+                                    });
+                                    res(found);
+                                });
+                        });
+                        if (_dupFound) {
+                            document.body.classList.remove('player-loading');
+                            document.body.classList.add('player-ready');
+                            const _errDiv = document.createElement('div');
+                            _errDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#0a0a0f;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;';
+                            _errDiv.innerHTML = '<h2 style="color:#DC143C;font-size:2rem;margin-bottom:16px;">Already Signed In</h2>'
+                                + '<p style="color:#ccc;font-size:1.1rem;text-align:center;max-width:400px;">' + _presetName + ' is already active on another device.<br><br>Please sign out from that device first, or contact production.</p>';
+                            document.body.appendChild(_errDiv);
+                            return;
+                        }
+                    }
+
                     const playerData = {
                         id: currentPlayerId,
-                        name: 'New Player',
-                        pronouns: '',
+                        name: _hasPreset ? _presetName : 'New Player',
+                        pronouns: _hasPreset ? _presetPronouns : '',
                         seat: null,
                         room: initialRoom,
                         status: 'active',
@@ -507,6 +721,13 @@
                         joinedAt: Date.now(),
                         lastActive: Date.now()
                     };
+
+                    // Populate currentUser immediately so the rest of page load
+                    // sees the correct name (avoids 'New Player' flash)
+                    if (_hasPreset) {
+                        window.currentUser.name     = _presetName;
+                        window.currentUser.pronouns = _presetPronouns;
+                    }
                     
                     console.log('Registering player in Firebase with data:', playerData);
                     
@@ -518,26 +739,43 @@
                         database.ref('players/' + currentPlayerId).once('value', (snapshot) => {
                             console.log('✅ Verification - Player data in Firebase:', snapshot.val());
                         });
-                        
-                        // Hide all seats while entering name
-                        document.querySelectorAll('.video-seat').forEach(seat => {
-                            seat.style.display = 'none';
-                        });
-                        document.querySelector('.tab-container')?.style.setProperty('display', 'none', 'important');
-                        
-                        // Show name entry modal immediately
-                        document.getElementById('name-pronouns-modal').classList.add('visible');
-                        
-                        // Set flag that we're awaiting name entry
-                        window.awaitingNameEntry = true;
-                        
-                        // Show UI now
-                        document.body.classList.remove('player-loading');
-                        document.body.classList.add('player-ready');
-                        
-                        // Prevent seats from showing during resize
-                        window.addEventListener('resize', preventSeatsWhileWaiting);
-                        
+
+                        if (_hasPreset) {
+                            // Named password — skip the modal, show seats immediately
+                            console.log('🎫 Preset player loaded:', _presetName, '/', _presetPronouns);
+                            sessionStorage.removeItem('playerPresetName');
+                            sessionStorage.removeItem('playerPresetPronouns');
+                            const _nameModal = document.getElementById('name-pronouns-modal');
+                            if (_nameModal) { _nameModal.classList.remove('visible'); _nameModal.style.display = 'none'; }
+                            document.body.classList.remove('player-loading');
+                            document.body.classList.add('player-ready');
+                            // Auto-sit into lowest available seat,
+                            // but ONLY if the game is not in night/breakfast phase.
+                            // During overlay phases, player waits in waiting room.
+                            // Use initialRoom (set from Firebase before this code ran) —
+                            // window._currentPhase may not be set yet on first load.
+                            // initialRoom === 'waiting' precisely when phase is night/breakfast.
+                            if (initialRoom !== 'waiting') {
+                                _autoSitPresetPlayer();
+                            } else {
+                                // Night/breakfast: show overlay, do NOT join LiveKit or claim seat
+                                showWaitingRoomOverlay();
+                                console.log('🌙 Night/breakfast phase — holding preset player in waiting room');
+                            }
+                            document.querySelector('.tab-container')?.style.setProperty('display', '', 'important');
+                            window.addEventListener('resize', preventSeatsWhileWaiting);
+                        } else {
+                            // Generic password — show the name/pronoun modal as normal
+                            document.querySelectorAll('.video-seat').forEach(seat => {
+                                seat.style.display = 'none';
+                            });
+                            document.querySelector('.tab-container')?.style.setProperty('display', 'none', 'important');
+                            document.getElementById('name-pronouns-modal').classList.add('visible');
+                            window.awaitingNameEntry = true;
+                            document.body.classList.remove('player-loading');
+                            document.body.classList.add('player-ready');
+                            window.addEventListener('resize', preventSeatsWhileWaiting);
+                        }
                         // Game start status is handled by phase-specific overlays
                     }).catch((error) => {
                         console.error('❌ Error registering player:', error);
@@ -575,32 +813,38 @@
         if (currentUser.role === 'player') {
             database.ref('game/muteAllPlayers').on('value', (snapshot) => {
                 const shouldMute = snapshot.val();
-                if (shouldMute && typeof agoraManager !== 'undefined' && agoraManager.localAudioTrack) {
-                    agoraManager.localAudioTrack.setEnabled(false);
-                    console.log('Host muted all players');
-                    
-                    // Update player's mute status in Firebase
+                const room = window._lkRoom;
+                if (!room) return;
+                const pub = room.localParticipant && [...room.localParticipant.trackPublications.values()]
+                    .find(t => t.kind === 'audio');
+                if (shouldMute) {
+                    if (pub && pub.track) pub.track.mute();
                     database.ref('players/' + currentUser.id + '/audioMuted').set(true);
-                } else if (!shouldMute && typeof agoraManager !== 'undefined' && agoraManager.localAudioTrack) {
-                    // Only unmute if they weren't individually muted
-                    database.ref('players/' + currentUser.id + '/audioMuted').once('value', (muteSnapshot) => {
-                        if (!muteSnapshot.val()) {
-                            agoraManager.localAudioTrack.setEnabled(true);
-                            console.log('Host unmuted all players');
-                        }
+                    console.log('🔇 Host muted this player');
+                } else {
+                    // Only unmute if not individually muted
+                    database.ref('players/' + currentUser.id + '/audioMuted').once('value', (snap) => {
+                        if (!snap.val() && pub && pub.track) pub.track.unmute();
                     });
+                    console.log('🔊 Host unmuted this player');
                 }
             });
-            
+
             // Listen for host camera command (ONLY if player, not host)
             database.ref('game/camerasOffPlayers').on('value', (snapshot) => {
                 const camerasOff = snapshot.val();
-                if (camerasOff && typeof agoraManager !== 'undefined' && agoraManager.localVideoTrack) {
-                    agoraManager.localVideoTrack.setEnabled(false);
-                    console.log('Host disabled all cameras');
-                } else if (!camerasOff && typeof agoraManager !== 'undefined' && agoraManager.localVideoTrack) {
-                    agoraManager.localVideoTrack.setEnabled(true);
-                    console.log('Host enabled all cameras');
+                const room = window._lkRoom;
+                if (!room) return;
+                const pub = room.localParticipant && [...room.localParticipant.trackPublications.values()]
+                    .find(t => t.kind === 'video');
+                if (camerasOff) {
+                    if (pub && pub.track) pub.track.mute();
+                    database.ref('players/' + currentUser.id + '/videoMuted').set(true);
+                    console.log('📷 Host turned off this camera');
+                } else {
+                    if (pub && pub.track) pub.track.unmute();
+                    database.ref('players/' + currentUser.id + '/videoMuted').set(false);
+                    console.log('📷 Host turned on this camera');
                 }
             });
         }
@@ -702,12 +946,12 @@
             database.ref('game/roomLimits/' + roomId).once('value', (snapshot) => {
                 const limit = snapshot.val() || 24;
                 
-                // Count current players in room
+                // Count current PLAYERS in room (prod/host don't count toward limit)
                 database.ref('players').once('value', (playersSnapshot) => {
                     let count = 0;
                     playersSnapshot.forEach((child) => {
                         const player = child.val();
-                        if (player.room === roomId) {
+                        if (player.room === roomId && !player.isProdMember && !player.isHost) {
                             count++;
                         }
                     });
@@ -717,9 +961,31 @@
                         return;
                     }
                     
-                    // Join room
-                    database.ref('players/' + currentUser.id + '/room').set(roomId);
+                    // Join room — batch room + roomSeat clear into one atomic write
+                    // so the room watcher never sees room=kitchen with a stale roomSeat.
+                    // Always read roomSeat from Firebase in case memory is stale (post-refresh).
+                    const _prevRoom = currentUser.room;
+                    const _prevRoomSeat = currentUser.roomSeat;
+                    if (_prevRoom && _prevRoom !== 'main' && _prevRoom !== 'waiting') {
+                        if (_prevRoomSeat) {
+                            database.ref('game/roomSeats/' + _prevRoom + '/' + _prevRoomSeat).remove();
+                        } else {
+                            // Memory was stale — read Firebase to clear the real seat
+                            database.ref('players/' + currentUser.id + '/roomSeat').once('value', (rs) => {
+                                const _fbRoomSeat = rs.val();
+                                if (_fbRoomSeat) database.ref('game/roomSeats/' + _prevRoom + '/' + _fbRoomSeat).remove();
+                            });
+                        }
+                    }
                     currentUser.room = roomId;
+                    currentUser.roomSeat = null; // clear in memory immediately
+                    const _roomUpdates = {};
+                    _roomUpdates['players/' + currentUser.id + '/room'] = roomId;
+                    _roomUpdates['players/' + currentUser.id + '/roomSeat'] = null;
+                    if (roomId !== 'main' && currentUser.seat) {
+                        _roomUpdates['game/seats/' + currentUser.seat] = null;
+                    }
+                    database.ref().update(_roomUpdates);
                     updatePlayerRoomDisplay();
                     
                     // Switch Agora audio/video channel
@@ -774,51 +1040,57 @@
             });
         }
         
-        // Helper function to assign a new room seat
+        // Helper function to assign a new room seat using atomic transactions
+        // to prevent two players from claiming the same seat simultaneously.
         function assignNewRoomSeat(roomId, seatLimit) {
-            // Get all players currently in this room
-            database.ref('players').once('value', (snapshot) => {
-                const occupiedSeats = new Set();
-                
-                // Find which seats are taken in this room
-                snapshot.forEach((child) => {
-                    const player = child.val();
-                    if (player.room === roomId && player.roomSeat) {
-                        occupiedSeats.add(player.roomSeat);
-                    }
-                });
-                
-                // Find first available seat (1 to seatLimit)
-                let assignedSeat = null;
-                for (let i = 1; i <= seatLimit; i++) {
-                    if (!occupiedSeats.has(i)) {
-                        assignedSeat = i;
-                        break;
-                    }
+            // Try each seat 1..seatLimit using a Firebase transaction.
+            // A transaction is atomic: only one player can claim a seat even if
+            // two players call this at exactly the same moment.
+            function _tryClaimSeat(seatNum) {
+                if (seatNum > seatLimit) {
+                    console.warn('⚠️ No room seats available in', roomId);
+                    return;
                 }
-                
-                if (assignedSeat) {
-                    // Assign player to this room seat
+                const _seatRef = database.ref('game/roomSeats/' + roomId + '/' + seatNum);
+                _seatRef.transaction((current) => {
+                    if (current === null || current === undefined) {
+                        // Seat is free — claim it
+                        return currentUser.id;
+                    }
+                    // Seat is taken — abort transaction (return undefined)
+                    return undefined;
+                }, (error, committed, snapshot) => {
+                    if (error) {
+                        console.error('Room seat transaction error:', error);
+                        _tryClaimSeat(seatNum + 1);
+                        return;
+                    }
+                    if (!committed) {
+                        // Seat was taken — try the next one
+                        _tryClaimSeat(seatNum + 1);
+                        return;
+                    }
+                    // Successfully claimed seatNum
+                    const assignedSeat = seatNum;
                     database.ref('players/' + currentUser.id + '/roomSeat').set(assignedSeat);
-                    
+                    // Register onDisconnect to auto-clear this room seat if the player
+                    // disconnects without explicitly leaving — prevents ghost seats.
+                    database.ref('game/roomSeats/' + roomId + '/' + assignedSeat)
+                        .onDisconnect().remove();
+                    database.ref('players/' + currentUser.id + '/roomSeat')
+                        .onDisconnect().remove();
+                    console.log('✅ Room seat claimed via transaction:', roomId, 'seat', assignedSeat);
                     // Update seat label
                     setTimeout(() => {
                         const nameLabel = document.getElementById(`room-name-${assignedSeat}`);
-                        if (nameLabel) {
-                            nameLabel.textContent = currentUser.name;
-                        }
+                        if (nameLabel) nameLabel.textContent = currentUser.name;
                         const pronounsLabel = document.getElementById(`room-pronouns-${assignedSeat}`);
-                        if (pronounsLabel && currentUser.pronouns) {
-                            pronounsLabel.textContent = currentUser.pronouns;
-                        }
+                        if (pronounsLabel && currentUser.pronouns) pronounsLabel.textContent = currentUser.pronouns;
                     }, 100);
-                    
-                    console.log(`🪑 Auto-assigned to room seat ${assignedSeat} in ${roomId}`);
-                } else {
-                    console.log(`⚠️ Room ${roomId} is full!`);
-                    showSimpleMessage('This room is full!');
-                }
-            });
+                    console.log(`🪑 Room seat ${assignedSeat} claimed in ${roomId}`);
+                });
+            }
+            _tryClaimSeat(1);
         }
 
         function updatePlayerRoomDisplay() {
@@ -870,6 +1142,13 @@
                     const ro = document.getElementById('room-overlay');
                     if (ro) ro.style.display = 'none';
                     if (typeof window.hideRoomOverlay === 'function') window.hideRoomOverlay();
+                    // Hide breakout room label when back in main/waiting
+                    const _brl = document.getElementById('breakout-room-label');
+                    if (_brl) _brl.style.display = 'none';
+                    if (window._prodInRoomListener) {
+                        database.ref('players').off('value', window._prodInRoomListener);
+                        window._prodInRoomListener = null;
+                    }
                     console.log('🚪 Room changed to:', room, '— room overlay hidden');
                     if (room === 'waiting') {
                         window.justAcceptedInvite = false;
@@ -883,6 +1162,13 @@
                                 if (ph === 'night') {
                                     console.log('🌙 Night phase — showing night overlay');
                                     showWaitingRoomOverlay();
+                                } else if (ph === 'breakfast') {
+                                    // Breakfast: ensure breakfast overlay is visible
+                                    console.log('🍳 Breakfast phase — ensuring overlay visible after room→waiting');
+                                    const _bfEl = document.getElementById('breakfast-overlay');
+                                    if (_bfEl) { _bfEl.classList.add('visible'); _bfEl.style.display = 'flex'; }
+                                    const _nightEl = document.getElementById('night-overlay');
+                                    if (_nightEl) { _nightEl.classList.remove('visible'); _nightEl.style.display = 'none'; }
                                 }
                             });
                         }
@@ -891,6 +1177,43 @@
                     database.ref('game/roomLimits/' + room).once('value', (limitSnap) => {
                         const limit = limitSnap.val() || 5;
                         showRoomOverlay(room, limit);
+                    });
+                    // Show breakout room name below the timer
+                    const _roomNames = {
+                        kitchen:'Kitchen', library:'Library', living:'Living Room',
+                        courtyard:'Courtyard', bathroom:'Bathroom', gym:'Gym', turret:'The Turret'
+                    };
+                    const _brl = document.getElementById('breakout-room-label');
+                    const _brn = document.getElementById('breakout-room-name');
+                    if (_brn) _brn.textContent = _roomNames[room] || room;
+                    // Show in top-left corner (position is fixed in CSS/HTML)
+                    if (_brl) _brl.style.display = 'block';
+                    // Watch for prod members joining/leaving this breakout room
+                    if (window._prodInRoomListener) {
+                        database.ref('players').off('value', window._prodInRoomListener);
+                    }
+                    const _watchRoom = room;
+                    window._prodInRoomListener = database.ref('players').on('value', (_pSnap) => {
+                        const _pEl = document.getElementById('prod-in-room-display');
+                        if (!_pEl) return;
+                        const _prodNames = [];
+                        _pSnap.forEach((_child) => {
+                            const _pl = _child.val();
+                            if (_pl.isProdMember && _pl.room === _watchRoom && _pl.name) {
+                                _prodNames.push(_pl.name);
+                            }
+                        });
+                        if (_prodNames.length === 1) {
+                            _pEl.textContent = _prodNames[0] + ' is here.';
+                        } else if (_prodNames.length === 2) {
+                            _pEl.textContent = _prodNames[0] + ' and ' + _prodNames[1] + ' are here.';
+                        } else if (_prodNames.length > 2) {
+                            const _last = _prodNames[_prodNames.length - 1];
+                            const _rest = _prodNames.slice(0, -1).join(', ');
+                            _pEl.textContent = _rest + ', and ' + _last + ' are here.';
+                        } else {
+                            _pEl.textContent = '';
+                        }
                     });
                 }
             }
@@ -1000,11 +1323,25 @@
                 });
             }
             
-            // Handle Night Phase - send to waiting room
+            // Handle Night Phase - send to waiting room and clear seat
+            // Host and prod members (both passwords) are never sent to waiting room.
             if (phase === 'night') {
-                // Only send to waiting if not in turret
-                if (currentUser.room !== 'turret') {
-                    database.ref('players/' + currentUser.id + '/room').set('waiting');
+                const _isHostOrProdPhase = currentUser.role === 'host' || currentUser.isHost ||
+                    currentUser.isProdMember || sessionStorage.getItem('userRole') === 'host';
+                if (_isHostOrProdPhase) {
+                    // Host/prod: do nothing — they stay where they are
+                    console.log('🌙 Night phase: host/prod not sent to waiting room');
+                } else if (currentUser.room !== 'turret') {
+                    // Only send regular players to waiting if not in turret
+                    const _nightUpdates = {};
+                    _nightUpdates['players/' + currentUser.id + '/room'] = 'waiting';
+                    _nightUpdates['players/' + currentUser.id + '/seat'] = null;
+                    if (currentUser.seat) {
+                        _nightUpdates['game/seats/' + currentUser.seat] = null;
+                    }
+                    database.ref().update(_nightUpdates);
+                    currentUser.seat = null;
+                    currentUser.room = 'waiting';
                     showWaitingRoomOverlay();
                 }
             }
@@ -1026,45 +1363,85 @@
                 
                 // Move player to waiting room if they're not the host
                 if (!currentUser.isHost && currentUser.role !== 'host') {
-                    console.log('Moving player to waiting room for breakfast');
+                    console.log('🍳 Breakfast phase — muting player, keeping seat');
                     
                     // Cancel any pending auto-seat assignment from previous Breakfast
                     if (window.autoSeatTimer) {
                         clearTimeout(window.autoSeatTimer);
                         window.autoSeatTimer = null;
-                        console.log('🍳 Cancelled previous auto-seat timer');
                     }
-                    
-                    // Clear seat and move to waiting room
-                    const updates = {};
-                    updates['players/' + currentUser.id + '/room'] = 'waiting';
-                    updates['players/' + currentUser.id + '/seat'] = null;
-                    
-                    // Also clear from game/seats
-                    if (currentUser.seat) {
-                        updates['game/seats/' + currentUser.seat] = null;
-                    }
-                    
-                    database.ref().update(updates);
-                    
-                    currentUser.room = 'waiting';
-                    currentUser.seat = null;
                     
                     // Clear the invite flag to ensure overlay shows on repeat Breakfast phases
                     window.justAcceptedInvite = false;
-                    
-                    console.log('🍳 Player moved to waiting room and seat cleared');
+                    window._breakfastSeatVisible = false;
                 }
                 
-                if (!currentUser.isHost) {
+                // Exclude host/prod from breakfast seat-hiding and overlay
+                const _bfIsHostOrProd = currentUser.role === 'host' || currentUser.isHost ||
+                    currentUser.isProdMember || sessionStorage.getItem('userRole') === 'host';
+                if (!_bfIsHostOrProd) {
+                    // If this player is already seated in main room during breakfast
+                    // (they accepted the invite), don't re-show the overlay.
+                    const _bfAlreadySeated = currentUser.seat && currentUser.room === 'main'
+                        && window._breakfastSeatVisible;
+                    if (_bfAlreadySeated) {
+                        console.log('🍳 Breakfast phase re-fire: player already seated, skipping overlay');
+                    } else {
                     const roB = document.getElementById('room-overlay');
                     if (roB) { roB.style.display = 'none'; }
-                    const breakfastOverlay = document.getElementById('breakfast-overlay');
-                    if (breakfastOverlay) { breakfastOverlay.classList.add('visible'); }
+                    
+                    // Hide seats and overlay synchronously FIRST — before any Firebase
+                    // write triggers the players listener, which would create a visible
+                    // flash (seats briefly visible between lobby→breakfast transition).
+                    document.querySelectorAll('.video-seat').forEach(seat => {
+                        seat.style.setProperty('display', 'none', 'important');
+                        seat.style.setProperty('visibility', 'hidden', 'important');
+                    });
+                    const roB2 = document.querySelector('.tab-container');
+                    if (roB2) { roB2.style.setProperty('display', 'none', 'important'); }
+
+                    // Show breakfast overlay — use setTimeout to run AFTER all
+                    // synchronous hide calls in this event loop tick have completed.
+                    function _showBreakfastOverlay() {
+                        const _bfOv = document.getElementById('breakfast-overlay');
+                        if (_bfOv) {
+                            _bfOv.classList.add('visible');
+                            _bfOv.style.display = 'flex';
+                        }
+                        // Always ensure night overlay is hidden
+                        const _bfNightOv = document.getElementById('night-overlay');
+                        if (_bfNightOv) {
+                            _bfNightOv.classList.remove('visible');
+                            _bfNightOv.style.display = 'none';
+                        }
+                    }
+                    _showBreakfastOverlay();
+                    setTimeout(_showBreakfastOverlay, 50);
+                    setTimeout(_showBreakfastOverlay, 300);
                     
                     console.log('🍳 Breakfast overlay shown');
+                    } // end !_bfAlreadySeated
                     
-                    // Hide seats and side panel
+                    // NOW write to Firebase — seats are already hidden so the
+                    // Firebase-triggered updatePlayerDisplay won't cause a flash.
+                    if (!currentUser.isHost && currentUser.role !== 'host') {
+                    database.ref('players/' + currentUser.id).update({
+                        nightMuted: true,
+                        audioMuted: true,
+                        videoMuted: true
+                    });
+                    // Mute the actual LiveKit tracks immediately
+                    if (window._lkRoom && window._lkRoom.state === 'connected') {
+                        const _lp = window._lkRoom.localParticipant;
+                        const _mp = _lp && _lp.getTrackPublication(LivekitClient.Track.Source.Microphone);
+                        const _cp = _lp && _lp.getTrackPublication(LivekitClient.Track.Source.Camera);
+                        if (_mp && !_mp.isMuted) _mp.mute();
+                        if (_cp && !_cp.isMuted) _cp.mute();
+                    }
+                    console.log('🍳 Player muted for breakfast — seat preserved');
+                    }
+
+                    // (seat hide already applied above — this block kept as reference)
                     document.querySelectorAll('.video-seat').forEach(seat => {
                         seat.style.display = 'none';
                         seat.style.visibility = 'hidden';
@@ -1090,12 +1467,21 @@
                         tabContainer.style.visibility = 'visible';
                     }
                     hideWaitingRoomOverlay();
+                    // If player has no seat and we're in an active phase, auto-assign one.
+                    // This handles players who join mid-game during talk/roundtable.
+                    if (!currentUser.seat && (phase === 'talk' || phase === 'deliberation')
+                        && currentUser.role === 'player'
+                        && currentUser.name && currentUser.name !== 'New Player') {
+                        console.log('🎯 Phase', phase, '— no seat, triggering auto-sit');
+                        if (typeof _autoSitPresetPlayer === 'function') _autoSitPresetPlayer();
+                    }
                 }
             }
             
-            // Hide waiting room overlay if not in waiting room — but NOT during night phase
-            // (during night, the overlay was just shown above and currentUser.room hasn't updated yet)
-            if (currentUser.room && currentUser.room !== 'waiting' && phase !== 'night') {
+            // Hide waiting room overlay if not in waiting room — but NOT during night or breakfast.
+            // During night/breakfast the overlay was just shown above; don't immediately clear it.
+            if (currentUser.room && currentUser.room !== 'waiting'
+                && phase !== 'night' && phase !== 'breakfast') {
                 hideWaitingRoomOverlay();
             }
         });
@@ -1113,38 +1499,71 @@
             
             snapshot.forEach((child) => {
                 const player = child.val();
-                // Only count player in room if they have a seat
-                if (player.room && roomCounts.hasOwnProperty(player.room) && player.seat) {
-                    roomCounts[player.room]++;
-                    roomPlayers[player.room].push(player.name);
+                // Include seated players AND prod/host members (who may have no numeric seat)
+                const _isProd = !!(player.isHost || player.isProdMember);
+                const _hasSeat = !!player.seat;
+                // Exclude nightMuted players — seated but not yet present in the room
+                if (player.room && roomCounts.hasOwnProperty(player.room) && (_hasSeat || _isProd) && !player.nightMuted) {
+                    // Prod/host appear in list but don't count toward limit
+                    if (!_isProd) roomCounts[player.room]++;
+                    roomPlayers[player.room].push({
+                        name:        player.name        || '?',
+                        isProd:      _isProd,
+                        isObserver:  !!player.isObserver,
+                        audioMuted:  !!player.audioMuted,
+                        videoMuted:  !!player.videoMuted
+                    });
                 }
             });
-            
+
+            // Sort: regular players alphabetically, then prod/host alphabetically
+            Object.keys(roomPlayers).forEach(room => {
+                const _pl = roomPlayers[room].filter(e => !e.isProd).sort((a,b) => a.name.localeCompare(b.name));
+                const _pr = roomPlayers[room].filter(e =>  e.isProd).sort((a,b) => a.name.localeCompare(b.name));
+                roomPlayers[room] = [..._pl, ..._pr];
+            });
+
+            // Build shared SVG icon helpers (same as host side)
+            const _micSvg = (muted) => {
+                const c = muted ? '#ff4444' : 'rgba(255,255,255,0.8)';
+                const slash = muted ? `<line x1='3' y1='3' x2='21' y2='21' stroke='#ff4444' stroke-width='2'/>` : '';
+                return `<svg viewBox='0 0 24 24' width='11' height='11' fill='none' stroke='${c}' stroke-width='2' style='display:inline;vertical-align:middle;margin-left:2px'><path d='M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z'/><path d='M19 10v2a7 7 0 0 1-14 0v-2'/><line x1='12' y1='19' x2='12' y2='23'/><line x1='8' y1='23' x2='16' y2='23'/>${slash}</svg>`;
+            };
+            const _camSvg = (muted) => {
+                const c = muted ? '#ff4444' : 'rgba(255,255,255,0.8)';
+                const slash = muted ? `<line x1='3' y1='3' x2='21' y2='21' stroke='#ff4444' stroke-width='2'/>` : '';
+                return `<svg viewBox='0 0 24 24' width='11' height='11' fill='none' stroke='${c}' stroke-width='2' style='display:inline;vertical-align:middle;margin-left:2px'><polygon points='23 7 16 12 23 17 23 7'/><rect x='1' y='5' width='15' height='14' rx='2' ry='2'/>${slash}</svg>`;
+            };
+
             // Update room limits display
             database.ref('game/roomLimits').once('value', (limitsSnapshot) => {
                 const limits = limitsSnapshot.val() || {};
-                
+
                 // Update counts
-                document.getElementById('player-count-main').textContent = `${roomCounts.main}/${limits.main || 24}`;
-                document.getElementById('player-count-kitchen').textContent = `${roomCounts.kitchen}/${limits.kitchen || 5}`;
-                document.getElementById('player-count-library').textContent = `${roomCounts.library}/${limits.library || 5}`;
-                document.getElementById('player-count-living').textContent = `${roomCounts.living}/${limits.living || 5}`;
-                document.getElementById('player-count-courtyard').textContent = `${roomCounts.courtyard}/${limits.courtyard || 5}`;
-                document.getElementById('player-count-bathroom').textContent = `${roomCounts.bathroom}/${limits.bathroom || 3}`;
-                document.getElementById('player-count-gym').textContent = `${roomCounts.gym}/${limits.gym || 5}`;
-                
-                // Update player lists
+                document.getElementById('player-count-main').textContent       = `${roomCounts.main}/${limits.main || 24}`;
+                document.getElementById('player-count-kitchen').textContent    = `${roomCounts.kitchen}/${limits.kitchen || 5}`;
+                document.getElementById('player-count-library').textContent    = `${roomCounts.library}/${limits.library || 5}`;
+                document.getElementById('player-count-living').textContent     = `${roomCounts.living}/${limits.living || 5}`;
+                document.getElementById('player-count-courtyard').textContent  = `${roomCounts.courtyard}/${limits.courtyard || 5}`;
+                document.getElementById('player-count-bathroom').textContent   = `${roomCounts.bathroom}/${limits.bathroom || 3}`;
+                document.getElementById('player-count-gym').textContent        = `${roomCounts.gym}/${limits.gym || 5}`;
+
+                // Update player lists — 2-column grid, mic+cam icons, purple star for prod
                 const rooms = ['main', 'kitchen', 'library', 'living', 'courtyard', 'bathroom', 'gym'];
                 rooms.forEach(room => {
                     const playersEl = document.getElementById(`players-${room}`);
-                    if (playersEl) {
-                        if (roomPlayers[room].length === 0) {
-                            playersEl.innerHTML = '<div style="color: #666; font-size: 0.8rem;">Empty</div>';
-                        } else {
-                            playersEl.innerHTML = roomPlayers[room].map(name => 
-                                `<div style="font-size: 0.8rem; color: #ccc;">• ${name}</div>`
-                            ).join('');
-                        }
+                    if (!playersEl) return;
+                    if (roomPlayers[room].length === 0) {
+                        playersEl.innerHTML = '<div style="color:#666;font-size:0.8rem;">Empty</div>';
+                    } else {
+                        playersEl.innerHTML =
+                            `<div style='display:grid;grid-template-columns:1fr 1fr;gap:2px 6px;'>` +
+                            roomPlayers[room].map(e => {
+                                const _star   = e.isProd ? ' <span style="color:#9370DB;font-size:0.7rem;">★</span>' : '';
+                                const _camIcon = e.isObserver ? '' : _camSvg(e.videoMuted);
+                                return `<div style='color:#ccc;font-size:0.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 0;'>• ${e.name}${_star}${_micSvg(e.audioMuted)}${_camIcon}</div>`;
+                            }).join('') +
+                            `</div>`;
                     }
                 });
             });
@@ -1157,6 +1576,16 @@
        function showWaitingRoomOverlay() {
             // DEPRECATED: This function now only handles Night phase
             // Breakfast uses its own overlay directly in the phase handler
+            // During breakfast, the phase listener shows breakfast-overlay.
+            // Don't also show night-overlay — that creates two stacked overlays.
+            // Check window._initialRoom as a reliable fallback if _currentPhase not set yet.
+            const _sowPhase = window._currentPhase ||
+                sessionStorage.getItem('currentPhase') || '';
+            const _sowInitial = window._initialRoom || '';
+            if (_sowPhase === 'breakfast' || _sowInitial === 'waiting' && _sowPhase !== 'night') {
+                console.log('🍳 showWaitingRoomOverlay: breakfast — skipping night overlay');
+                return;
+            }
             if (window.justAcceptedInvite) {
                 console.log('Skipping overlay - just accepted invite');
                 window.justAcceptedInvite = false;
@@ -1283,19 +1712,19 @@
             
             let lastInvitationCount = 0;
             
-            // Listen to invitation count changes
-            database.ref('players/' + playerId + '/invitationCount').on('value', (countSnap) => {
-                const currentCount = countSnap.val() || 0;
-                
-                if (currentCount <= lastInvitationCount) {
-                    console.log('No new invitation (count:', currentCount, ')');
+            // Listen to invitationPing — fires on every invite/nudge click.
+            // Uses Date.now() timestamp so each click is a unique write,
+            // guaranteeing re-fire even when invitedTo was already 'main'.
+            database.ref('players/' + playerId + '/invitationPing').on('value', (pingSnap) => {
+                const pingVal = pingSnap.val();
+                if (!pingVal) {
+                    console.log('No invitation ping yet');
                     return;
                 }
-                
-                lastInvitationCount = currentCount;
-                console.log('New invitation detected! Count:', currentCount);
-                
-                // Get the invitation details
+
+                console.log('New invitation detected! Ping:', pingVal);
+
+                // Get the invitation details directly from invitedTo
                 database.ref('players/' + playerId + '/invitedTo').once('value', (inviteSnap) => {
                     const invitedTo = inviteSnap.val();
                     
@@ -1435,7 +1864,10 @@
                         
                         // Join the turret
                         database.ref('players/' + window.currentUser.id + '/room').set('turret');
-                        
+                        // Release main room seat
+                        if (window.currentUser.seat) database.ref('game/seats/' + window.currentUser.seat).remove();
+                        // Clear stale roomSeat
+                        database.ref('players/' + window.currentUser.id + '/roomSeat').remove();
                         // Clear invitation
                         database.ref('players/' + window.currentUser.id + '/invitedTo').remove();
                         
@@ -1463,91 +1895,108 @@
                         invitedRoom = null;
                         
                     } else if (currentPhase === 'breakfast' && invitedRoom === 'main') {
-                        // BREAKFAST PHASE: Going to Main Room
-                        console.log('🍳 Breakfast phase - accepting Main Room invitation');
+                        // BREAKFAST PHASE: Auto-assign next available seat in order
+                        console.log('🍳 Breakfast accept — claiming next available seat');
                         
-                        // Set flag to prevent overlay from re-appearing
                         window.justAcceptedInvite = true;
-
-                        // Update local state FIRST
-                        window.currentUser.room = invitedRoom;
                         window.awaitingNameEntry = false;
+                        window._breakfastSeatVisible = true;
                         
-                        // Join the invited room
-                        database.ref('players/' + window.currentUser.id + '/room').set(invitedRoom);
-                        
-                        // Clear invitation
+                        // Clear invitation immediately
                         database.ref('players/' + window.currentUser.id + '/invitedTo').remove();
                         
-                        // IMMEDIATELY hide overlays and modal
+                        // Hide breakfast overlay and modal immediately
                         const breakfastOverlay = document.getElementById('breakfast-overlay');
-                        const modal = document.getElementById('room-invite-modal');
-                        
                         if (breakfastOverlay) {
                             breakfastOverlay.classList.remove('visible');
                             breakfastOverlay.style.display = 'none';
                         }
-                        
+                        const modal = document.getElementById('room-invite-modal');
                         if (modal) {
                             modal.classList.remove('visible');
                             modal.style.display = 'none';
                         }
-                        
-                        // Show seats and regenerate
-                        setTimeout(() => {
-                            if (typeof generateVideoSeats === 'function') {
-                                generateVideoSeats();
-                            }
-                            
-                            setTimeout(() => {
-                                console.log('🎯 Showing regenerated seats');
-                                document.querySelectorAll('.video-seat').forEach(seat => {
-                                    seat.style.setProperty('display', 'flex', 'important');
-                                    seat.style.setProperty('visibility', 'visible', 'important');
-                                    seat.style.setProperty('pointer-events', 'auto', 'important');
-                                    seat.style.setProperty('opacity', '1', 'important');
-                                });
-                            }, 100);
-                        }, 500);
-                        
-                        // Show tab container
-                        setTimeout(() => {
-                            const tabContainer = document.querySelector('.tab-container');
-                            if (tabContainer) {
-                                tabContainer.style.cssText = 'display: flex !important; visibility: visible !important;';
-                            }
-                        }, 650);
 
-                        // Auto-assign seat after 10 seconds (Breakfast only)
-                        window.autoSeatTimer = setTimeout(() => {
-                            database.ref('players/' + window.currentUser.id + '/seat').once('value', (seatSnap) => {
-                                if (!seatSnap.val()) {
-                                    // Find first available seat
-                                    database.ref('game/seats').once('value', (seatsSnap) => {
-                                        const seats = seatsSnap.val() || {};
-                                        
-                                        for (let i = 2; i <= 24; i++) {
-                                            if (!seats[i]) {
-                                                database.ref('game/seats/' + i).set(window.currentUser.id);
-                                                database.ref('players/' + window.currentUser.id + '/seat').set(i);
-                                                window.currentUser.seat = i;
-                                                sessionStorage.setItem('playerSeat', i);
-                                                
-                                                const nameLabel = document.getElementById(`name-${i}`);
-                                                const pronounsLabel = document.getElementById(`pronouns-${i}`);
-                                                if (nameLabel && pronounsLabel) {
-                                                    nameLabel.textContent = window.currentUser.name || 'Player';
-                                                    pronounsLabel.textContent = window.currentUser.pronouns || '';
-                                                }
-                                                
-                                                console.log('✅ Auto-assigned to seat:', i);
-                                                break;
-                                            }
-                                        }
-                                    });
+                        // Show tab panel first so viewport stabilises
+                        const tabContainer = document.querySelector('.tab-container');
+                        if (tabContainer) tabContainer.style.cssText = 'display: flex !important; visibility: visible !important;';
+                        // Regenerate seat layout with the current post-invite viewport dimensions.
+                        // The overlay was covering the screen; showing it may have shifted
+                        // viewport height on mobile, so recalculate to avoid cramped seats.
+                        if (typeof generateVideoSeats === 'function') {
+                            setTimeout(generateVideoSeats, 50);
+                        } else {
+                        // Fallback: just make existing seats visible
+                        document.querySelectorAll('.video-seat').forEach(seat => {
+                            seat.style.setProperty('display', 'flex', 'important');
+                            seat.style.setProperty('visibility', 'visible', 'important');
+                            seat.style.setProperty('pointer-events', 'auto', 'important');
+                            seat.style.setProperty('opacity', '1', 'important');
+                        });
+                        }
+
+                        // Use a transaction on breakfastSeatCounter to get a unique sequential
+                        // seat number. First accept = 1, second = 2, etc. Atomic — no race.
+                        database.ref('game/breakfastSeatCounter').transaction((current) => {
+                            return (current || 0) + 1;
+                        }, (error, committed, snapshot) => {
+                            if (error || !committed) {
+                                console.error('🍳 Seat counter transaction failed:', error);
+                                return;
+                            }
+                            const _targetSeat = snapshot.val();
+                            console.log('🍳 Assigned breakfast seat number:', _targetSeat);
+
+                            // Claim the seat in Firebase
+                            const _claimUpdates = {};
+                            _claimUpdates['players/' + window.currentUser.id + '/seat'] = _targetSeat;
+                            _claimUpdates['players/' + window.currentUser.id + '/room'] = 'main';
+                            _claimUpdates['players/' + window.currentUser.id + '/nightMuted'] = null;
+                            _claimUpdates['players/' + window.currentUser.id + '/audioMuted'] = false;
+                            _claimUpdates['players/' + window.currentUser.id + '/videoMuted'] = false;
+                            _claimUpdates['game/seats/' + _targetSeat] = window.currentUser.id;
+                            // Set local state BEFORE the write so room watcher
+                            // fires joinLiveKitRoom with the seat already known.
+                            window.currentUser.seat = _targetSeat;
+                            window.currentUser.room = 'main';
+                            sessionStorage.setItem('playerSeat', _targetSeat);
+                            // Flag joinLiveKitRoom to override the pre-switch snapshot.
+                            // disconnectLiveKit captures the WAITING room's muted state
+                            // which would re-mute fresh tracks — this prevents that.
+                            window._breakfastReJoin = true;
+                            window._lkPreSwitchMicMuted = null; // belt-and-suspenders
+                            window._lkPreSwitchCamMuted = null;
+                            database.ref().update(_claimUpdates).then(() => {
+
+                                // Update the seat label immediately
+                                const _nameEl = document.getElementById('name-' + _targetSeat);
+                                const _pronEl = document.getElementById('pronouns-' + _targetSeat);
+                                if (_nameEl) _nameEl.textContent = window.currentUser.name || 'Player';
+                                if (_pronEl) _pronEl.textContent = window.currentUser.pronouns || '';
+
+                                // Re-run AV controls for the new seat
+                                if (typeof window.setupAVControls === 'function') {
+                                    setTimeout(() => window.setupAVControls(_targetSeat), 200);
+                                }
+
+                                console.log('✅ Breakfast seat claimed:', _targetSeat, 'room set to main');
+                                // Sync mobile AV bar to unmuted state
+                                const _mobMic = document.getElementById('mobile-mic-btn');
+                                const _mobCam = document.getElementById('mobile-cam-btn');
+                                if (_mobMic) {
+                                    _mobMic.style.background = 'rgba(40,40,40,0.9)';
+                                    _mobMic.style.borderColor = 'rgba(255,255,255,0.5)';
+                                }
+                                if (_mobCam) {
+                                    _mobCam.style.background = 'rgba(40,40,40,0.9)';
+                                    _mobCam.style.borderColor = 'rgba(255,255,255,0.5)';
+                                }
+                                // Also refresh AV icons from Firebase state
+                                if (typeof window._refreshAVIcons === 'function') {
+                                    setTimeout(window._refreshAVIcons, 500);
                                 }
                             });
-                        }, 10000);
+                        });
 
                         invitedRoom = null;
                     } else if (currentPhase === 'night' && invitedRoom === 'turret') {
@@ -1726,7 +2175,11 @@
                     banishmentVoteTieKey   = voteKey;
                     overlay.style.display  = 'flex';
                     const msg = document.getElementById('banishment-locked-msg');
-                    if (msg) msg.style.display = 'none';
+                    if (msg) {
+                        msg.style.display  = 'none';
+                        msg.textContent    = '✅ Vote locked in! Waiting for host...';
+                        msg.style.color    = '#4CAF50'; // reset to default green
+                    }
                     const display = document.getElementById('banishment-vote-display');
                     if (display) display.textContent = '';
                     const lockBtn = document.getElementById('banishment-lock-btn');
@@ -1746,7 +2199,10 @@
                                     if (pills) pills.innerHTML = '';
                                     pSnap.forEach((child) => {
                                         const player = child.val();
-                                        if (!player.seat || player.isHost || child.key === currentUser.id) return;
+                                        // Exclude self (by key AND seat), hosts, prod
+                                        if (!player.seat || player.isHost || player.isProdMember) return;
+                                        if (child.key === currentUser.id) return;
+                                        if (player.seat === currentUser.seat) return;
                                         if (!tiedSeats.includes(player.seat)) return;
                                         _addBanishPill(pills, player, voteKey);
                                     });
@@ -1758,7 +2214,10 @@
                                 if (pills) pills.innerHTML = '';
                                 pSnap.forEach((child) => {
                                     const player = child.val();
-                                    if (!player.seat || player.isHost || child.key === currentUser.id) return;
+                                    // Exclude self (by key AND seat), hosts, and prod
+                                    if (!player.seat || player.isHost || player.isProdMember) return;
+                                    if (child.key === currentUser.id) return;
+                                    if (player.seat === currentUser.seat) return;
                                     _addBanishPill(pills, player, voteKey);
                                 });
                             });
@@ -1780,7 +2239,11 @@
                     const lockBtn = document.getElementById('banishment-lock-btn');
                     if (lockBtn) lockBtn.disabled = true;
                     const msg     = document.getElementById('banishment-locked-msg');
-                    if (msg)     msg.style.display = 'none';
+                    if (msg) {
+                        msg.style.display  = 'none';
+                        msg.textContent    = '✅ Vote locked in! Waiting for host...';
+                        msg.style.color    = '#4CAF50'; // restore default green
+                    }
                     const revBtn  = document.getElementById('endgame-banish-reveal-btn');
                     if (revBtn)  revBtn.style.display = 'none';
                 }
@@ -1857,6 +2320,81 @@
                 });
             });
         }
+
+
+        // Auto-sit a preset player into the lowest available seat.
+        // Writes directly to Firebase so it works at any point in page load,
+        // independent of initializeGame's async state.
+        function _autoSitPresetPlayer(attempt) {
+            // Hard guard: never auto-sit during night or breakfast
+            const _asPhase = window._currentPhase || sessionStorage.getItem('currentPhase') || '';
+            if (_asPhase === 'night' || _asPhase === 'breakfast') {
+                console.log('🌙 _autoSitPresetPlayer blocked: overlay phase active');
+                showWaitingRoomOverlay();
+                return;
+            }
+            attempt = attempt || 0;
+            if (attempt > 80) { console.warn('⚠️ _autoSitPresetPlayer gave up'); return; }
+            const uid = window.currentUser && window.currentUser.id;
+            const name = window.currentUser && window.currentUser.name;
+            if (!uid || !name || name === 'New Player') {
+                setTimeout(() => _autoSitPresetPlayer(attempt + 1), 100);
+                return;
+            }
+            // Read game/seats once to find the lowest available seat.
+            // Also read game/phase to triple-check we're not in night/breakfast.
+            // This async callback fires after the phase listener has run,
+            // so window._currentPhase is reliable here.
+            database.ref('game/phase').once('value', (_phaseCheck) => {
+                const _livePhase = _phaseCheck.val() || '';
+                if (_livePhase === 'night' || _livePhase === 'breakfast') {
+                    console.log('🌙 _autoSitPresetPlayer: live phase check blocked seat claim:', _livePhase);
+                    showWaitingRoomOverlay();
+                    return;
+                }
+            database.ref('game/seats').once('value', (snap) => {
+                const takenSeats = snap.val() || {};
+                for (let s = 1; s <= 24; s++) {
+                    if (!takenSeats[s]) {
+                        console.log('🪑 Auto-sitting preset player in seat', s);
+                        // Claim via Firebase transaction — identical to what claimSeat does
+                        database.ref('game/seats/' + s).transaction(current => {
+                            if (current !== null) return; // seat taken — abort
+                            return uid;               // claim it
+                        }, (err, committed) => {
+                            if (!committed) {
+                                // Seat was taken by someone else — retry
+                                console.log('🪑 Seat', s, 'taken, retrying...');
+                                _autoSitPresetPlayer(attempt + 1);
+                                return;
+                            }
+                            // Seat claimed — update player record
+                            const pronouns = window.currentUser.pronouns || '';
+                            database.ref('players/' + uid).update({
+                                seat: s, room: 'main', status: 'active'
+                            });
+                            window.currentUser.seat = s;
+                            window.currentUser.room = 'main';
+                            console.log('✅ Preset player auto-sat in seat', s);
+                            // Also call window.claimSeat if available for full UI setup
+                            if (typeof window.claimSeat === 'function') {
+                                // Re-use claimSeat for full UI init (AV controls, etc.)
+                                // It will see seat is already claimed by us and proceed
+                                window.claimSeat(s, name, pronouns);
+                            }
+                        });
+                        return; // only try the first available seat
+                    }
+                }
+                console.warn('⚠️ No available seats for auto-sit');
+            }); // closes game/seats.once
+            }); // closes game/phase.once
+        }
+        // Start listening for banishment votes immediately.
+        // Both 'banishment' and 'banishmentTie' are watched from page load
+        // so the overlay appears as soon as the host starts a banishment vote.
+        listenEndGameBanishVote('banishment');
+        listenEndGameBanishVote('banishmentTie');
 
         // ============================================
         // END GAME - FINAL ROLE REVEAL (PLAYER SIDE)
@@ -2162,9 +2700,27 @@
                         console.log('=== END DEBUG ===');
                     }, 100);
                     
-                    // SHOW seats if player is in main room
-                    if (currentUser.room === 'main') {
-                        console.log('🎯 Player in main room - showing seats');
+                    // SHOW seats and auto-sit into next available seat
+                    // Guard: if player already has a seat, just close the modal — don't re-sit
+                    if (currentUser.seat) {
+                        console.log('🎯 Player already in seat', currentUser.seat, '— skipping auto-sit');
+                        document.querySelectorAll('.video-seat').forEach(seat => {
+                            seat.style.display = '';
+                            seat.style.visibility = 'visible';
+                        });
+                    } else if (currentUser.room === 'main') {
+                        // Double-check phase — by this point window._currentPhase is reliable
+                        const _subPhase = window._currentPhase ||
+                            sessionStorage.getItem('currentPhase') || '';
+                        const _subOverlay = _subPhase === 'night' || _subPhase === 'breakfast';
+                        if (_subOverlay) {
+                            // Night/breakfast: player submitted name but must wait
+                            showWaitingRoomOverlay();
+                            database.ref('players/' + currentUser.id).update({ room: 'waiting' });
+                            currentUser.room = 'waiting';
+                            console.log('🌙 Name submitted during night — held in waiting room');
+                        } else {
+                        console.log('🎯 Player in main room - showing seats and auto-sitting');
                         document.querySelectorAll('.video-seat').forEach(seat => {
                             seat.style.display = '';  // Remove display override
                             seat.style.visibility = 'visible';
@@ -2177,8 +2733,11 @@
                             tabContainer.style.visibility = 'visible';
                         }
                         
-                        console.log('✅ Seats should now be visible');
+                        console.log('✅ Seats visible — auto-sitting into next available seat');
+                        _autoSitPresetPlayer();
+                        } // end non-overlay block
                     }
+                    // (else: not in main room — seats not shown, no auto-sit needed)
 
                 }).catch(error => {
                     console.error('❌ Error updating player name:', error);
@@ -2214,6 +2773,9 @@
                         // Pre-fill with current values
                         document.getElementById('modal-name-input').value = currentUser.name || '';
                         document.getElementById('modal-pronouns-input').value = currentUser.pronouns || '';
+                        // Mark as editing so submitNameAndPronouns uses the
+                        // edit path (updates name only, no auto-sit)
+                        window.editingNamePronouns = true;
                         modal.style.display = 'flex';
                     }
                 });
@@ -2336,14 +2898,16 @@
             // Create wrapper container (does NOT rotate)
             const wrapper = document.createElement('div');
             wrapper.id = 'roundtable-animation';
+            // Size to 90% of the smaller viewport dimension so it always fits on screen
+            const _animSize = Math.min(window.innerWidth, window.innerHeight) * 0.90;
             wrapper.style.cssText = `
                 position: fixed;
                 top: 50%;
                 left: 50%;
-                width: 900px;
-                height: 900px;
-                margin-top: -450px;
-                margin-left: -450px;
+                width: ${_animSize}px;
+                height: ${_animSize}px;
+                margin-top: ${-_animSize / 2}px;
+                margin-left: ${-_animSize / 2}px;
                 z-index: 300;
                 pointer-events: none;
             `;
@@ -2351,13 +2915,14 @@
             // Stationary shield (INSIDE wrapper, does not rotate)
             const shield = document.createElement('img');
             shield.src = 'SVTr%20Shield.png';
+            const _shieldSize = _animSize * 0.875; // 87.5% of wrapper, matching original ratio
             shield.style.cssText = `
                 position: absolute;
                 top: 50%;
                 left: 50%;
                 transform: translate(-50%, -45%);
-                width: 787.5px;
-                height: 787.5px;
+                width: ${_shieldSize}px;
+                height: ${_shieldSize}px;
                 opacity: 0.75;
                 object-fit: contain;
                 z-index: 1;
@@ -2593,6 +3158,123 @@
             
             animate();
         });
+
+        // ============================================
+        // RAISE HAND SYSTEM
+        // ============================================
+        let _handRaised = false;
+        let _handPhaseOk = true; // false during night/breakfast
+
+        function _updateRaiseHandButtonPosition() {
+            const btn = document.getElementById('raise-hand-btn');
+            if (!btn) return;
+            const _isMob = window.innerWidth <= 600;
+            const leftSectionWidth = window.innerWidth * (_isMob ? 0.06 : 0.12);
+            btn.style.left = (leftSectionWidth + (_isMob ? 6 : 12)) + 'px';
+        }
+
+        function _applyHandState(raised, skipFirebase) {
+            _handRaised = raised;
+            const myId = currentUser && currentUser.id;
+            if (!skipFirebase && myId) {
+                database.ref('players/' + myId + '/handRaised').set(raised ? true : null);
+            }
+            const btn = document.getElementById('raise-hand-btn');
+            if (!btn) return;
+            const circle = btn.querySelector('#raise-hand-circle');
+            if (circle) {
+                circle.setAttribute('fill',   raised ? 'rgba(255,200,0,0.4)'  : 'rgba(255,255,255,0.15)');
+                circle.setAttribute('stroke', raised ? 'rgba(255,200,0,0.9)'  : 'rgba(255,255,255,0.4)');
+            }
+            const emoji = btn.querySelector('#raise-hand-emoji');
+            if (emoji) emoji.setAttribute('fill', raised ? '#FFD700' : 'white');
+            const topText = btn.querySelector('#raise-hand-top-text');
+            const botText = btn.querySelector('#raise-hand-bot-text');
+            if (topText) topText.setAttribute('fill', raised ? '#FFD700' : 'white');
+            if (botText) botText.setAttribute('fill', raised ? '#FFD700' : 'white');
+        }
+
+        window.toggleRaiseHand = function() {
+            if (!_handPhaseOk) return; // blocked during night/breakfast
+            if (!currentUser || !currentUser.seat) return; // must be seated
+            _applyHandState(!_handRaised);
+        };
+
+        // Show/hide and position the button when a seat is claimed
+        function _isMobileDevice() {
+            return window.innerWidth <= 600 || (window.innerHeight <= 500 && window.innerWidth <= 1024);
+        }
+        function _showRaiseHandBtn() {
+            const btn = document.getElementById('raise-hand-btn');
+            if (!btn) return;
+            _updateRaiseHandButtonPosition();
+            btn.style.display = 'block';
+            _showMobileAVBar(); // show mobile AV bar alongside raise-hand btn
+        }
+        window._showRaiseHandBtn = _showRaiseHandBtn;
+        function _hideRaiseHandBtn() {
+            const btn = document.getElementById('raise-hand-btn');
+            if (btn) btn.style.display = 'none';
+            _hideMobileAVBar();
+        }
+
+        // ── Mobile AV bar ─────────────────────────────────────────
+        function _isMobileDevice() {
+            return window.innerWidth <= 600 || (window.innerHeight <= 500 && window.innerWidth <= 1024);
+        }
+        function _showMobileAVBar() {
+            if (!_isMobileDevice()) return;
+            const bar = document.getElementById('mobile-av-bar');
+            if (bar) bar.style.display = 'flex';
+        }
+        function _hideMobileAVBar() {
+            const bar = document.getElementById('mobile-av-bar');
+            if (bar) bar.style.display = 'none';
+        }
+        function _updateMobileAVBar(micMuted, camMuted) {
+            const micBtn = document.getElementById('mobile-mic-btn');
+            const camBtn = document.getElementById('mobile-cam-btn');
+            if (micBtn) micBtn.style.background = micMuted ? 'rgba(80,80,80,0.9)' : 'rgba(220,20,60,0.85)';
+            if (camBtn) camBtn.style.background = camMuted ? 'rgba(80,80,80,0.9)' : 'rgba(30,100,200,0.85)';
+        }
+        window._showMobileAVBar   = _showMobileAVBar;
+        window._hideMobileAVBar   = _hideMobileAVBar;
+        window._updateMobileAVBar = _updateMobileAVBar;
+
+        // Reposition on resize
+        window.addEventListener('resize', _updateRaiseHandButtonPosition, { passive: true });
+
+        // H key shortcut
+        document.addEventListener('keydown', (e) => {
+            if (e.code !== 'KeyH') return;
+            // Don't fire if typing in an input
+            const tag = document.activeElement && document.activeElement.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+            window.toggleRaiseHand();
+        });
+
+        // Watch phase to block hand-raise during night/breakfast and auto-lower
+        database.ref('game/phase').on('value', (phSnap) => {
+            const ph = (phSnap.val() || '').toLowerCase();
+            const blocked = ph === 'night' || ph === 'breakfast';
+            _handPhaseOk = !blocked;
+            if (blocked && _handRaised) {
+                // Auto-lower hand when phase blocks it
+                _applyHandState(false);
+            }
+        });
+
+        // Show the button once the player has a seat (called from claimSeat path)
+        // We watch currentUser.seat via the players listener
+        database.ref('game/seats').on('value', () => {
+            // Show/hide based on whether this player is seated
+            if (currentUser && currentUser.seat && currentUser.role === 'player') {
+                _showRaiseHandBtn();
+            } else if (currentUser && currentUser.role === 'player') {
+                _hideRaiseHandBtn();
+            }
+        });
+
 
         
     </script>
